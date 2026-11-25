@@ -48,6 +48,8 @@ export interface StaticGroup {
 	readonly name: string;
 	readonly proves: string;
 	readonly pattern: RegExp;
+	/** The group looks only at the lines inside a code fence. */
+	readonly inFence?: boolean;
 }
 
 export const STATIC_GROUPS: readonly StaticGroup[] = [
@@ -55,16 +57,17 @@ export const STATIC_GROUPS: readonly StaticGroup[] = [
 		name: "A",
 		proves: "local vault paths, index files, manifest, Bases, and ShardMind state",
 		pattern:
-			/\b(work|org|perf|brain|reference|thinking|memories|templates|bases|daily)\/[A-Za-z0-9_.*<{ -]|(^|[^A-Za-z])(Home|Index|North Star|Brag Doc|People & Context|Memories|Gotchas|Patterns|Key Decisions|Skills)\.md|vault-manifest\.json|\.base\b|\.canvas\b|\.obsidian|\.shardmind/,
+			/\b(work|org|perf|brain|reference|thinking|memories|templates|bases|daily)\/[A-Za-z0-9_.*<{ -]|(^|[^A-Za-z])(Home|Index|North Star|Brag Doc|People & Context|Memories|Gotchas|Patterns|Key Decisions|Skills)\.md|vault-manifest\.json|\.base\b|\.canvas\b|\.obsidian|\.shardmind|(^|[\s"'`(=])~\//,
 	},
 	{ name: "B", proves: "wikilinks, embeds, block ids, and Dataview", pattern: /\[\[|!\[\[|\^om-|\^block-id|\bDataview\b|key:: / },
 	{ name: "C", proves: "the local search tool", pattern: /\bq[m]d\b|q[m]d-mcp|mcp__q[m]d/i },
-	{ name: "D", proves: "the om server and cross-repository memory", pattern: /om-mcp|mcp__o[m]\b|\brecall\b|promoted:|mcp_never_expose|\bom server\b|\bmemories\b/ },
+	{ name: "D", proves: "the om server and cross-repository memory", pattern: /om-mcp|mcp__o[m]|\brecall\b|promoted:|mcp_never_expose|\bom server\b|\bmemories\b/ },
 	{ name: "E", proves: "the Obsidian CLI and the Obsidian skills (the name obsidian-mind stays)", pattern: /\bobsidian\b(?!-mind)|obsidian-(cli|markdown)/i },
-	{ name: "F", proves: "git commands and the working tree", pattern: /\bgit (mv|log|diff|status|add|commit)\b|--no-merges|working tree/ },
+	{ name: "F", proves: "git commands and the working tree", pattern: /\bgit(\s+-[cC]\s+\S+)*\s+(mv|log|diff|status|add|commit)\b|--no-merges|working tree/ },
 	{ name: "G", proves: "local scripts and ShardMind", pattern: /\.claude\/scripts|charcount\.ts|tidy-fix|generate-memory-index|upgrade-plan|session-start\.ts|\bshardmind\b|MEMORY\.md/i },
 	{ name: "H", proves: "other agent products", pattern: /gem[i]ni|cod[e]x|antigravit[y]|\.gem[i]ni/i },
 	{ name: "I", proves: "agent skill lines for the local search tool and Obsidian", pattern: /^\s+-\s+(q[m]d|obsidian-[a-z-]+)\s*$/ },
+	{ name: "J", proves: "an absolute path in a code fence", pattern: /(^|[\s"'`(=])\/[A-Za-z0-9_.~-]+\/[A-Za-z0-9_.~-]/, inFence: true },
 ];
 
 export function targetFiles(root: string): SourceFile[] {
@@ -82,8 +85,12 @@ export function targetFiles(root: string): SourceFile[] {
 export function staticFindings(files: readonly SourceFile[]): Finding[] {
 	const findings: Finding[] = [];
 	for (const file of files) {
+		let inFence = false;
 		file.text.split("\n").forEach((text, index) => {
+			const isFenceLine = /^\s*(```|~~~)/.test(text);
+			if (isFenceLine) inFence = !inFence;
 			for (const group of STATIC_GROUPS) {
+				if (group.inFence === true && !inFence) continue;
 				if (group.pattern.test(text)) findings.push({ group: group.name, file: file.path, line: index + 1, text: text.trim() });
 			}
 		});
@@ -129,7 +136,9 @@ export interface Reference {
 }
 
 const BACKTICKED = /`([^`\n]+)`/g;
-const PROPERTY_REFERENCE = /^([A-Z][A-Za-z ]*[A-Za-z])\.([A-Z][^=`]*?)(?: = (.+))?$/;
+const PROPERTY_REFERENCE = /^([A-Za-z][A-Za-z ]*[A-Za-z])\.([A-Za-z][^=`]*?)(?: = (.+))?$/;
+/** A token such as `Home.md` names a file, not a property. */
+const FILE_EXTENSIONS: readonly string[] = ["md", "json", "ts", "mjs", "js", "txt", "yml", "yaml", "base", "canvas"];
 const VIEW_REFERENCE = /^([A-Z][A-Za-z ]*[A-Za-z]) > (.+)$/;
 
 export function references(text: string): Reference[] {
@@ -147,7 +156,9 @@ export function references(text: string): Reference[] {
 				continue;
 			}
 			const property = token.match(PROPERTY_REFERENCE);
-			if (property !== null) found.push({ kind: "property", database: property[1], name: (property[2] ?? "").trim(), option: property[3], line });
+			const owner = property?.[1] ?? "";
+			const knownOwner = /^[A-Z]/.test(owner) || DATABASES.some((spec) => spec.title.toLowerCase() === owner.toLowerCase());
+			if (property !== null && knownOwner && !FILE_EXTENSIONS.includes((property[2] ?? "").trim())) found.push({ kind: "property", database: property[1], name: (property[2] ?? "").trim(), option: property[3], line });
 		}
 	});
 	return found;
@@ -233,6 +244,9 @@ export function reachProblems(files: readonly SourceFile[]): Problem[] {
 	return problems;
 }
 
+/** A call that names a tool and gives `--args` with anything but the outbox substitution. */
+const INLINE_WRITE = new RegExp(`mcporter\\s+call\\s+notion\\.(notion-[a-z-]+)\\s+--args(?:\\s+|=)(?!["']?\\$\\(cat ${OUTBOX_DIR.replaceAll(".", "\\.")}/)`, "g");
+
 const OUTBOX_FORM = outboxCommand("<tool>", `${OUTBOX_DIR}/<name>.json`);
 
 /** A file that names a write tool must teach the outbox form, the only write that a hooked session can run. */
@@ -244,6 +258,13 @@ export function formProblems(files: readonly SourceFile[]): Problem[] {
 		if (writes.length > 0 && !file.text.includes(OUTBOX_FORM)) {
 			problems.push({ kind: "form", file: file.path, line: 1, name: writes.join(", "), detail: "names a write tool and does not show the outbox form" });
 		}
+		file.text.split("\n").forEach((text, index) => {
+			for (const call of text.matchAll(INLINE_WRITE)) {
+				if (NOTION_TOOLS[call[1] as NotionTool] === "write") {
+					problems.push({ kind: "form", file: file.path, line: index + 1, name: call[1] ?? "", detail: "a write tool with inline --args, which the guard denies" });
+				}
+			}
+		});
 		if (used.includes("notion-create-pages") && !file.text.includes('"allow_async": false')) {
 			problems.push({ kind: "form", file: file.path, line: 1, name: "notion-create-pages", detail: 'does not show "allow_async": false' });
 		}

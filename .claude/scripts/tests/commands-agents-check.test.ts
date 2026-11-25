@@ -60,10 +60,28 @@ describe("static groups", () => {
 		["H", `Read the ${OTHER_PRODUCT} transcripts.`],
 		["I", "  - obsidian-markdown"],
 		["I", `  - ${SEARCH_TOOL}`],
+		["A", "Read ~/notes/Plan first."],
+		["A", "Open `~/vault`."],
+		["D", `Call ${MEMORY_SERVER}_remember.`],
+		["F", "Run git  mv on the note."],
+		["F", "Run git\tmv on the note."],
+		["F", "Run git -C vault mv a b."],
+		["F", "Run git -C /x -c a=b log."],
 	];
 	for (const [group, text] of samples) {
 		test(`group ${group} finds: ${text}`, () => assert.ok(groupsOf(text).includes(group), groupsOf(text).join(",")));
 	}
+
+	test("group J finds an absolute path inside a code fence and nowhere else", () => {
+		assert.deepEqual(groupsOf("```sh\ncat /Users/someone/notes.md\n```"), ["J"]);
+		assert.deepEqual(groupsOf("~~~\nls /tmp/out\n~~~"), ["J"]);
+		assert.deepEqual(groupsOf("Prose names /usr/local/bin outside a fence."), []);
+		assert.deepEqual(groupsOf("```\nok\n```\ncat /usr/local/bin"), []);
+	});
+
+	test("a code fence without an absolute path has no hit", () => {
+		assert.deepEqual(groupsOf("```sh\nmcporter call notion.notion-fetch --args '{\"id\":\"a/b\"}' --output json\n```"), []);
+	});
 
 	test("the name obsidian-mind is allowed", () => {
 		assert.deepEqual(groupsOf("The root page is named obsidian-mind."), []);
@@ -165,6 +183,14 @@ describe("link problems", () => {
 		assert.ok(propertyNames(competencies).has("Evidence"));
 	});
 
+	test("a lowercase property or database name is reported", () => {
+		assert.deepEqual(kinds("`Work.status` `work.Status` `Perf docs.quarter`"), ["property:Work.status", "database:work", "property:Perf docs.quarter"]);
+	});
+
+	test("a file name or a command in backticks is not a reference", () => {
+		assert.deepEqual(kinds("`Home.md` `notion-map.json` `mcporter call notion.notion-fetch --args '{}'`"), []);
+	});
+
 	test("an empty option list accepts any value", () => {
 		assert.deepEqual(kinds("`Work.Quarter = Q1-2026`"), []);
 	});
@@ -199,6 +225,18 @@ describe("form problems", () => {
 			formProblems([file("Use notion-update-page to change the row.")]).map((p) => p.detail),
 			["names a write tool and does not show the outbox form"],
 		);
+	});
+
+	test("a write tool with inline --args is reported, also in a file that shows the outbox form", () => {
+		const inline = (call: string): string[] => formProblems([file(`${outbox}\n${call}`)]).map((p) => `${p.line}:${p.name}:${p.detail}`);
+		const detail = "a write tool with inline --args, which the guard denies";
+		assert.deepEqual(inline("mcporter call notion.notion-update-page --args '{\"page_id\":\"x\"}'"), [`2:notion-update-page:${detail}`]);
+		assert.deepEqual(inline("mcporter  call  notion.notion-update-page   --args={}"), [`2:notion-update-page:${detail}`]);
+		assert.deepEqual(inline("mcporter call notion.notion-update-page --args \"$(cat other.json)\""), [`2:notion-update-page:${detail}`]);
+	});
+
+	test("the outbox form and an inline read are not reported", () => {
+		assert.deepEqual(formProblems([file(`${outbox}\nmcporter call notion.notion-update-page --args "$(cat .claude/state/outbox/x.json)"\nmcporter call notion.notion-fetch --args '{"id":"x"}' --output json`)]), []);
 	});
 
 	test("a read tool needs no outbox form", () => {
