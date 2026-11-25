@@ -5,7 +5,7 @@
 
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { NOTION_TOOLS, OUTBOX_DIR, bashCommand, decide, namesNotion, outboxCommand, parseCommand, readCommand } from "../lib/notion-write.ts";
+import { NOTION_TOOLS, OUTBOX_DIR, bashCommand, decide, isNotionCommand, outboxCommand, parseCommand, readCommand } from "../lib/notion-write.ts";
 import type { Host } from "../lib/notion-write.ts";
 import { VERIFIER_CASES } from "./notion-guard-cases.ts";
 import { CAPTURED_POST_TOOL_USE, CAPTURED_PRE_TOOL_USE } from "./notion-write-payloads.ts";
@@ -92,13 +92,13 @@ describe("the commands of the verifier", () => {
 		});
 	}
 
-	test("of the 28 commands that passed the guard that looked for a write, one still passes", () => {
+	test("of the 28 commands that passed the guard that looked for a write, two still pass", () => {
 		const bypasses = VERIFIER_CASES.filter(([id, , passedDetection]) => passedDetection && !id.startsWith("ctl-"));
 		assert.equal(bypasses.length, 28);
-		// A script file holds the call, so the command text does not name Notion.
+		// A script file holds the call, and base64 hides the word mcporter, so neither command text names it.
 		assert.deepEqual(
 			bypasses.filter(([, kind]) => kind !== "refused").map(([id]) => id),
-			["script-file"],
+			["script-file", "base64-eval"],
 		);
 	});
 });
@@ -198,15 +198,7 @@ describe("a command that names Notion in another form", () => {
 		["--server and --tool", `mcporter call --server notion --tool notion-create-pages --args '{}'`],
 		["a server word and a tool word", `mcporter call notion notion-create-pages --args '{}'`],
 		["a URL selector", `mcporter call https://mcp.notion.com/mcp.notion-create-pages --args '{}'`],
-		["a call to another server", "mcporter call slack.post_message channel:general text:hello"],
-		["the tool list of the server", "mcporter list notion --schema"],
-		["the login of the server", "mcporter auth notion"],
-		["a search for mcporter", "rg mcporter .claude/scripts"],
-		["a commit message that names mcporter", `git commit -m "docs: show the mcporter form"`],
 		["a here-document that quotes the write command", `gh pr create --body "$(cat <<'EOF'\n## Usage\nmcporter call notion.notion-create-pages --args '{}'\nEOF\n)"`],
-		["a call of the Notion API", "curl -X POST https://api.notion.com/v1/pages -d @page.json"],
-		["a link to a Notion page", "open https://www.notion.so/abc"],
-		["a comment", "ls # notion.notion-create-pages"],
 	];
 	for (const [label, command] of FORM) {
 		test(`${label} is denied with the two forms`, () => {
@@ -295,26 +287,35 @@ describe("arguments that the guard cannot read", () => {
 	});
 });
 
-describe("the text that names Notion", () => {
-	const NAMED: ReadonlyArray<readonly [string, string]> = [
-		["mcporter as a word", "mcporter --version"],
-		["mcporter in a path", "/usr/local/bin/mcporter --version"],
-		["mcporter as name@version", "npx -y mcporter@0.17.1 --version"],
-		["mcporter in upper case", "MCPORTER --version"],
-		["mcporter with quotes inside the word", `mcpor''ter call noti""on notion-create-pages`],
-		["mcporter with a backslash inside the word", "mcpor\\ter call x"],
-		["mcporter across a line continuation", "mcpor\\\nter call x"],
-		["the selector", "$RUNNER call notion.notion-create-pages"],
-		["the selector in upper case", "$RUNNER call NOTION.notion-create-pages"],
-		["the selector with quotes inside", `$RUNNER call 'notion'.'notion-create-pages'`],
-		["the selector in a here-document", "sh <<EOF\n$RUNNER call notion.notion-create-pages\nEOF"],
-		["the runtime folder", `node ${RUNTIME}/cli.js call --server notion --tool notion-create-pages`],
+describe("the text that makes a Notion command", () => {
+	const NOTION: ReadonlyArray<readonly [string, string]> = [
+		["mcporter and notion as words", "mcporter call notion.notion-fetch"],
+		["mcporter in a path", "/usr/local/bin/mcporter call notion.notion-fetch"],
+		["mcporter as name@version", "npx -y mcporter@0.17.1 call notion.notion-fetch"],
+		["mcporter in upper case", "MCPORTER call notion.notion-fetch"],
+		["notion in upper case", "mcporter call NOTION.notion-create-pages"],
+		["notion in title case", "mcporter call Notion.notion-create-pages"],
+		["notion as the word of a flag value", "mcporter call --server notion --tool notion-create-pages"],
+		["notion as the word of a list", "mcporter list notion --http-url https://example.com"],
+		["notion in a URL", "mcporter call https://mcp.notion.com/mcp.notion-create-pages"],
+		["notion in a package name", `mcporter call --stdio "npx -y @notionhq/notion-mcp-server" --tool x`],
+		["notion in the tool name", "mcporter call other.notion-like-tool"],
+		["quotes inside both words", `mcpor''ter call noti""on notion-create-pages`],
+		["a backslash inside mcporter", "mcpor\\ter call notion.x"],
+		["a line continuation inside mcporter", "mcpor\\\nter call notion.x"],
+		["a line continuation inside notion", "mcporter call noti\\\non.x"],
+		["the words in a here-document", "sh <<EOF\nmcporter call notion.notion-create-pages\nEOF"],
+		["the words in a variable that holds a command", "X='mcporter call notion.notion-create-pages'; eval $X"],
+		["the runtime folder and no other word", `node ${RUNTIME}/dist/index.js`],
+		["the runtime folder with Notion", `node ${RUNTIME}/cli.js call --server notion --tool notion-create-pages`],
 		["the runtime folder with quotes", `node "/usr/local/lib/node_modules/pkg-1"/dist/index.js`],
+		["the runtime folder in an import", `node -e 'import("${RUNTIME}/dist/index.js")'`],
+		["the runtime folder with a slack server", `node -e 'import("${RUNTIME}/dist/index.js").then((m) => m.createRuntime().then((r) => r.callTool("slack", "x", {})))'`],
 	];
-	for (const [label, command] of NAMED) {
-		test(`${label} names Notion`, () => {
-			assert.equal(namesNotion(command, [RUNTIME]), true, command);
-			assert.equal(refusal(command, hostOf({}, [RUNTIME])), "form", command);
+	for (const [label, command] of NOTION) {
+		test(`${label} make a Notion command`, () => {
+			assert.equal(isNotionCommand(command, [RUNTIME]), true, command);
+			assert.notEqual(parseCommand(command, hostOf({}, [RUNTIME])).kind, "other", command);
 		});
 	}
 
@@ -323,23 +324,86 @@ describe("the text that names Notion", () => {
 		["an empty command", ""],
 		["a file name that starts with notion-", "cat notion-map.json"],
 		["a script of this repository", "node --experimental-strip-types .claude/scripts/guard-notion-write.ts"],
-		["the word notion with no dot", "echo notion"],
+		["the word notion with no mcporter", "echo notion"],
+		["a selector with no mcporter", "$RUNNER call notion.notion-create-pages"],
+		["a call of the Notion API", "curl -X POST https://api.notion.com/v1/pages -d @page.json"],
+		["a link to a Notion page", "open https://www.notion.so/abc"],
+		["a comment that names a tool", "ls # notion.notion-create-pages"],
 		["a read of the outbox", `cat ${OUTBOX}`],
 		["a script file that holds the call", `bash ${OUTBOX_DIR}/run.sh`],
 		["a variable that builds the word", "m=mcp; ${m}orter call $SELECTOR"],
 		["a folder beside the runtime folder", "ls /usr/local/lib/node_modules/pkg-1"],
+		["mcporter alone", "mcporter --version"],
+		["mcporter in a path", "/usr/local/bin/mcporter --version"],
+		["mcporter in upper case", "MCPORTER --version"],
+		["mcporter with a backslash", "mcpor\\ter call x"],
+		["a call to Slack", "mcporter call slack.post_message channel:general text:hello"],
+		["a call to Jira with JSON", `mcporter call jira.get_issue --args '{"key":"A-1"}' --output json`],
+		["a call to Grafana", "mcporter call grafana.query_prometheus expr:up"],
+		["the tool list of another server", "mcporter list slack --schema"],
+		["a search for mcporter", "rg mcporter .claude/scripts"],
+		["a commit message that names mcporter", `git commit -m "docs: show the mcporter form"`],
 	];
 	for (const [label, command] of OTHER) {
-		test(`${label} does not name Notion, so it passes`, () => {
+		test(`${label} is not a Notion command, so it passes`, () => {
+			assert.equal(isNotionCommand(command, [RUNTIME]), false, command);
 			assert.deepEqual(parseCommand(command, hostOf({}, [RUNTIME])), { kind: "other" }, command);
 			assert.deepEqual(decide({ kind: "other" }), { kind: "pass" });
 		});
 	}
 
-	test("the runtime folder names Notion only on a machine that has it", () => {
-		const command = `node ${RUNTIME}/cli.js call --server notion --tool notion-create-pages`;
+	test("the runtime folder makes a Notion command only on a machine that has it", () => {
+		const command = `node ${RUNTIME}/cli.js call --server slack --tool x`;
 		assert.equal(parseCommand(command, hostOf({})).kind, "other");
 		assert.equal(parseCommand(command, hostOf({}, [""])).kind, "other");
+		assert.equal(parseCommand(command, hostOf({}, [RUNTIME])).kind, "refused");
+	});
+
+	test("a command that names Notion in an argument of another server is a Notion command", () => {
+		assert.equal(refusal(`mcporter call slack.x --args "$(echo notion)"`), "form");
+	});
+});
+
+describe("the tool list and the sign-in of the Notion server", () => {
+	const INSPECT = [
+		"mcporter list notion",
+		"mcporter list notion --schema",
+		"mcporter list notion --output json",
+		"mcporter list notion --schema --output json",
+		"mcporter auth notion",
+		"  mcporter  auth  notion\n",
+	];
+	for (const command of INSPECT) {
+		test(`${JSON.stringify(command)} passes`, () => {
+			assert.deepEqual(parse(command), { kind: "inspect" });
+			assert.deepEqual(decide(parse(command)), { kind: "pass" });
+		});
+	}
+
+	const DENIED = [
+		["a flag that the form does not list", "mcporter list notion --http-url https://example.com"],
+		["a second server", "mcporter list notion slack"],
+		["the options in the other order", "mcporter list notion --output json --schema"],
+		["an output format other than json", "mcporter list notion --output text"],
+		["the --json flag", "mcporter list notion --json"],
+		["a reset of the credentials", "mcporter auth notion --reset"],
+		["a stdio server", `mcporter auth --stdio "node x.js" notion`],
+		["a second command", "mcporter list notion; mcporter call notion.notion-update-page"],
+		["a pipe", "mcporter list notion | jq ."],
+		["a redirect", "mcporter auth notion > /tmp/x"],
+		["a server name in upper case", "mcporter list NOTION"],
+		["another server after a Notion word", "mcporter list slack # notion"],
+	] as const;
+	for (const [label, command] of DENIED) {
+		test(`${label} is denied`, () => assert.equal(refusal(command), "form", command));
+	}
+
+	test("the denial shows both forms, and the parser accepts each", () => {
+		const reason = denial("mcporter list notion --verbose");
+		for (const shown of ["mcporter list notion --schema --output json", "mcporter auth notion"]) {
+			assert.ok(reason.includes(`   ${shown}`), reason);
+			assert.equal(parse(shown).kind, "inspect");
+		}
 	});
 });
 

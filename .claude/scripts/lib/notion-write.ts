@@ -3,12 +3,19 @@
  *
  * Claude Code reaches Notion through `mcporter`, so a Notion call is a shell
  * command string. No parser can find each write in shell text. So the guard
- * does not look for a write. It takes each command that names Notion, and it
- * passes only the two forms below. A hook can read the tool and the arguments
- * of each form.
+ * does not look for a write. It takes each command that names `mcporter` and
+ * Notion, and it passes only the forms below. A hook can read the tool and the
+ * arguments of each form. A command that names `mcporter` and not Notion is a
+ * call to another server, and the guard ignores it.
  *
  * A write: `mcporter call notion.<tool> --args "$(cat <outbox file>)"`
  * A read:  `mcporter call notion.<read tool> --args '<JSON object>' --output json`
+ * Also:    `mcporter list notion [--schema] [--output json]` and `mcporter auth notion`
+ *
+ * The match for the word `notion` is a text match. A command that hides the
+ * word on purpose (base64, a variable) passes. That is outside the threat
+ * model, which covers a cooperative agent. The `Hook stamp` audit flags such
+ * a write after the fact.
  */
 
 export type ToolClass = "read" | "write";
@@ -105,15 +112,18 @@ export const outboxCommand = (tool: string, outbox: string): string => `mcporter
 /** A read with inline arguments. `args` is the text of one JSON object with no single quote. */
 export const readCommand = (tool: string, args: string): string => `mcporter call notion.${tool} --args '${args}' --output json`;
 
-const NOTION_TEXT = ["mcporter", "notion."];
 
 /** Quote characters cannot split a name, and the match ignores case, because macOS finds `MCPORTER` too. */
 const bare = (text: string): string => text.replace(/\\\n|['"\\]/g, "").toLowerCase();
 
-/** Whether `command` names Notion anywhere in its text, also in a quoted string or a here-document. */
-export const namesNotion = (command: string, runtimePaths: readonly string[]): boolean => {
+/**
+ * Whether `command` is a Notion command, also when its text is in a quoted string or a here-document.
+ * It names the runtime folder of `mcporter`, because the runtime reaches each server. Or it names
+ * `mcporter` and the word `notion`.
+ */
+export const isNotionCommand = (command: string, runtimePaths: readonly string[]): boolean => {
 	const text = bare(command);
-	return [...NOTION_TEXT, ...runtimePaths.map(bare)].some((name) => name !== "" && text.includes(name));
+	return runtimePaths.map(bare).some((folder) => folder !== "" && text.includes(folder)) || (text.includes("mcporter") && text.includes("notion"));
 };
 
 const OUTBOX_ARGS = String.raw`"\$\(cat +(\.claude\/state\/outbox\/[A-Za-z0-9][A-Za-z0-9._-]*\.json)\)"`;
@@ -124,6 +134,8 @@ const INLINE_ARGS = String.raw`'(\{[^']*\})'`;
  * `tool:<name>` argument or a `--tool` flag replace the tool of the selector.
  */
 const FORM = new RegExp(String.raw`^mcporter +call +notion\.([A-Za-z0-9_-]+)(?: +--args +(?:${OUTBOX_ARGS}|${INLINE_ARGS}))?( +--output +(?:json|text|markdown|raw))?$`);
+/** Neither form changes Notion data. `auth` signs in, and `list` reads the tool list of the server. */
+const INSPECT_FORM = /^mcporter +(?:list +notion(?: +--schema)?(?: +--output +json)?|auth +notion)$/;
 
 export type JsonObject = { readonly [key: string]: unknown };
 
@@ -138,6 +150,7 @@ type ArgsProblem = "missing" | "not-json" | "not-object";
 
 export type ParsedCommand =
 	| { readonly kind: "other" }
+	| { readonly kind: "inspect" }
 	| { readonly kind: "read"; readonly tool: ToolOf<"read">; readonly args: JsonObject; readonly outbox: string | null }
 	| { readonly kind: "write"; readonly tool: ToolOf<"write">; readonly args: JsonObject; readonly outbox: string }
 	| ({ readonly kind: "refused" } & Refusal);
@@ -163,9 +176,10 @@ function jsonObject(text: string | null): JsonObject | ArgsProblem {
 	return value === null || typeof value !== "object" || Array.isArray(value) ? "not-object" : (value as JsonObject);
 }
 
-/** Classify a `Bash` command. A command that names Notion is a call in one of the two forms, or it is refused. */
+/** Classify a `Bash` command. A Notion command is in one of the forms of the allow list, or it is refused. */
 export function parseCommand(command: string, host: Host): ParsedCommand {
-	if (!namesNotion(command, host.runtimePaths)) return { kind: "other" };
+	if (!isNotionCommand(command, host.runtimePaths)) return { kind: "other" };
+	if (INSPECT_FORM.test(command.trim())) return { kind: "inspect" };
 
 	const [, name, outbox = null, inline = "{}", output] = FORM.exec(command.trim()) ?? [];
 	if (name === undefined) return { kind: "refused", cause: "form" };
@@ -197,17 +211,21 @@ const READ_STEPS = [
 	`   A read can also take its arguments from an outbox file: --args "$(cat ${PLACEHOLDER})"`,
 ].join("\n");
 
+const INSPECT_STEPS = ["   mcporter list notion --schema --output json", "   mcporter auth notion"];
+
 function refusalReason(refusal: Refusal): string {
 	const source = "outbox" in refusal && refusal.outbox !== null ? `The outbox file ${refusal.outbox}` : "The inline --args value";
 	switch (refusal.cause) {
 		case "form":
 			return [
-				"The command names `mcporter`, its runtime, or `notion.`, and it is not in a form that the hooks can check.",
-				"Use one of the two forms exactly, with no other command, pipe, redirect, variable, or flag.",
+				"The command names `mcporter` and Notion, or the runtime folder of `mcporter`, and it is not in a form that the hooks can check.",
+				"Use one of the forms exactly, with no other command, pipe, redirect, variable, or flag.",
 				"A write:",
 				writeSteps("<tool>"),
 				"A read:",
 				READ_STEPS,
+				"The tool list, with `--schema` and `--output json` as options, and the sign-in:",
+				...INSPECT_STEPS,
 			].join("\n");
 		case "unknown-tool":
 			return `The tool table of the guard does not list ${refusal.tool}. Use a tool of NOTION_TOOLS in .claude/scripts/lib/notion-write.ts.`;
@@ -226,6 +244,7 @@ function refusalReason(refusal: Refusal): string {
 export function decide(parsed: ParsedCommand): Decision {
 	switch (parsed.kind) {
 		case "other":
+		case "inspect":
 		case "read":
 			return { kind: "pass" };
 		case "refused":

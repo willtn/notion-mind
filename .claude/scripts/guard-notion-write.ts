@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
- * PreToolUse hook on `Bash`. It denies each command that names Notion and is
- * not in a form of the allow list (lib/notion-write.ts).
+ * PreToolUse hook on `Bash`. It denies each command that names `mcporter` and
+ * Notion, or the runtime folder of `mcporter`, and is not in a form of the
+ * allow list (lib/notion-write.ts).
  *
  * It prints nothing for each other command, so the permission rules of the
  * session still decide. It makes no Notion call.

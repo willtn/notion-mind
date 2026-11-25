@@ -99,14 +99,34 @@ describe("guard-notion-write, no output", () => {
 	test("a read with arguments from an outbox file passes", () => assertSilent(bash(outboxCommand("notion-search", `${OUTBOX_DIR}/query.json`))));
 	test("a command that does not name Notion passes", () => assertSilent(bash("npm test")));
 	test("a tool other than Bash passes", () => assertSilent({ ...CAPTURED_PRE_TOOL_USE, tool_name: "Write" }));
+	test("the tool list of the Notion server passes", () => assertSilent(bash("mcporter list notion --schema")));
+	test("the tool list of the Notion server as JSON passes", () => assertSilent(bash("mcporter list notion --schema --output json")));
+	test("the sign-in of the Notion server passes", () => assertSilent(bash("mcporter auth notion")));
+});
+
+describe("guard-notion-write, a command that names mcporter and not Notion", () => {
+	const OTHER_SERVER: ReadonlyArray<readonly [string, string]> = [
+		["a call to Slack", "mcporter call slack.post_message --args '{}'"],
+		["a call to Jira", "mcporter call jira.search_issues"],
+		["a call to Grafana with no JSON", "mcporter call grafana.query_prometheus expr:up"],
+		["a search for mcporter", "rg mcporter"],
+		["a commit message that names mcporter", `git commit -m "fix mcporter path"`],
+		["the tool list of another server", "mcporter list slack --schema"],
+	];
+	for (const [label, command] of OTHER_SERVER) test(`${label} passes`, () => assertSilent(bash(command)));
+
+	test("a call to another server with an argument that names Notion is denied", () => {
+		assert.match(denialOf(bash(`mcporter call slack.x --args "$(echo notion)"`)), /^Notion command denied\./);
+	});
 });
 
 describe("guard-notion-write, the runtime folder of mcporter", () => {
 	let bin = "";
+	let dist = "";
 	let command = "";
 
 	before(() => {
-		const dist = join(project, "store", "pkg-1", "dist");
+		dist = join(project, "store", "pkg-1", "dist");
 		bin = join(project, "bin");
 		mkdirSync(dist, { recursive: true });
 		mkdirSync(bin);
@@ -117,7 +137,12 @@ describe("guard-notion-write, the runtime folder of mcporter", () => {
 	});
 
 	test("a command that names the runtime folder of the executable on PATH is denied", { skip: process.platform === "win32" && "symlinks need a privilege on Windows" }, () => {
-		assert.match(denialOf(bash(command), SCRIPT, { PATH: bin }), /names `mcporter`, its runtime, or `notion\.`/);
+		assert.match(denialOf(bash(command), SCRIPT, { PATH: bin }), /names `mcporter` and Notion, or the runtime folder of `mcporter`/);
+	});
+
+	test("a command that names the runtime folder and not Notion is denied", { skip: process.platform === "win32" && "symlinks need a privilege on Windows" }, () => {
+		const reason = denialOf(bash(`node -e 'import("${dist}/index.js")'`), SCRIPT, { PATH: bin });
+		assert.match(reason, /^Notion command denied\./);
 	});
 
 	test("the same command passes on a machine with no mcporter on PATH", () => assertSilent(bash(command), { PATH: elsewhere }));

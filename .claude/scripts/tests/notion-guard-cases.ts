@@ -72,7 +72,7 @@ export const VERIFIER_CASES: readonly GuardCase[] = [
 	["time-prefix", "refused", false, "time mcporter call notion.notion-create-pages --args '{\"allow_async\":false,\"pages\":[]}'"],
 	["eval", "refused", false, "eval \"mcporter call notion.notion-create-pages --args '{\"allow_async\":false,\"pages\":[]}'\""],
 	["eval-concat", "refused", false, "eval \"mcpo\"\"rter call notion.notion-create-pages --args '{\"allow_async\":false,\"pages\":[]}'\""],
-	["base64-eval", "refused", true, "eval \"$(echo bWNwb3J0ZXI= | base64 -d) call notion.notion-create-pages --args '{\"allow_async\":false,\"pages\":[]}'\""],
+	["base64-eval", "other", true, "eval \"$(echo bWNwb3J0ZXI= | base64 -d) call notion.notion-create-pages --args '{\"allow_async\":false,\"pages\":[]}'\""],
 	["newline-continuation", "refused", false, "mcporter call \\\nnotion.notion-create-pages --args '{\"allow_async\":false,\"pages\":[]}'"],
 	["comment-trick", "refused", false, "# x\nmcporter call notion.notion-create-pages --args '{\"allow_async\":false,\"pages\":[]}'"],
 	["quoted-tool-split", "refused", false, "mcporter call 'notion'.'notion-create-pages' --args '{\"allow_async\":false,\"pages\":[]}'"],
