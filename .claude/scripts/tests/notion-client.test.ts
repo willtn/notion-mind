@@ -193,6 +193,16 @@ describe("createNotionClient", () => {
 		assert.deepEqual(calls, [0, 0, 61_000]);
 	});
 
+	test("a view query that fails with the status 429 in its message is a rate limit with the 10 s default, and the same error with a different status is a tool error", () => {
+		// The code and the message are from the error text of a live run. The other fields of the reply were not captured.
+		const limited = text('{"code":"validation_error","message":"Failed to execute query: Something went wrong. (429)"}', true);
+		assert.deepEqual(classifyReply(limited), { kind: "rate_limited", waitMs: 10_000 });
+		const other = text('{"code":"validation_error","message":"Failed to execute query: Something went wrong. (400)"}', true);
+		assert.deepEqual(classifyReply(other), { kind: "error", code: "tool_error", message: "validation_error: Failed to execute query: Something went wrong. (400)" });
+		const content = text('{"text":"<content>The log says: Something went wrong. (429)</content>"}');
+		assert.equal(classifyReply(content).kind, "ok");
+	});
+
 	test("a rate limit with no seconds in the reply waits the 10 s default", async () => {
 		const noSeconds = text('{"name":"APIResponseError","code":"rate_limited","status":429,"headers":{},"body":"{}","message":"Rate limited."}', true);
 		assert.deepEqual(classifyReply(noSeconds), { kind: "rate_limited", waitMs: 10_000 });

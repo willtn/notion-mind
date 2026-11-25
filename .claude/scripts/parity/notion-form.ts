@@ -398,16 +398,20 @@ const CALLS_OF_A_RUN: Readonly<Record<HookName, number>> = {
 };
 
 const WINDOW_MS = 60_000;
-/** Below the plan limit of 180 calls in 60 s, which all runs of one login share. */
-const CALLS_IN_A_WINDOW = 150;
+/**
+ * Below the limit of the view queries, which is lower than the plan limit
+ * of 180 calls in 60 s. Measured: about 150 view queries in each 60 s got
+ * 429 replies after the first minute, and about 80 in 60 s got none.
+ */
+const CALLS_IN_A_WINDOW = 70;
 /** The writer made at most this number of calls before the first scenario (measured: about 95 for a new `now`). */
 const CALLS_OF_THE_WRITER = 100;
 
 /**
  * Holds a scenario until its calls fit in the 60 s window. Each hook run is
  * a new process with its own client, so no client sees the calls of the
- * runs before it. Without the wait, 19 Stop runs make about 190 calls in
- * less than a minute, and Notion limits the rate.
+ * runs before it. Without the wait, 19 Stop runs make about 190 view
+ * queries in less than a minute, and Notion limits the rate.
  */
 function requestPacer(): (calls: number) => void {
 	const started: { readonly at: number; readonly calls: number }[] = [{ at: Date.now(), calls: CALLS_OF_THE_WRITER }];
