@@ -394,6 +394,10 @@ describe("the tool list and the sign-in of the Notion server", () => {
 		["a pipe", "mcporter list notion | jq ."],
 		["a redirect", "mcporter auth notion > /tmp/x"],
 		["a server name in upper case", "mcporter list NOTION"],
+		["a server name that starts with notion", "mcporter list notionx"],
+		["a command before the tool list", "cd /tmp && mcporter list notion --schema"],
+		["a command before the sign-in", "true; mcporter auth notion"],
+		["an environment prefix", "FOO=1 mcporter auth notion"],
 		["another server after a Notion word", "mcporter list slack # notion"],
 	] as const;
 	for (const [label, command] of DENIED) {
