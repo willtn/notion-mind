@@ -49,6 +49,7 @@ describe("hardWrappedParagraphs — structure is never counted", () => {
 		["a fence inside a blockquote", ["> Run this:", "> ```sh", "> one", "> two", "> ```"]],
 		["prose, then a blockquote: two blocks", ["**A question?**", "> An answer on one line.", "Back in prose."]],
 		["bold-led items, one per line", ["**1. First question?** Detail.", "**2. Second question?** More."]],
+		["multi-digit ordered list items", ["10. First item", "11. Second item"]],
 	];
 	for (const [name, lines] of clean) {
 		test(name, () => assert.deepEqual(at(...lines), []));

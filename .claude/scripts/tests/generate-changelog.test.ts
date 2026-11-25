@@ -123,6 +123,10 @@ describe("normalizeVersion", () => {
 	test("5.2.3 (no v) → 5.2.3", () => {
 		assert.equal(normalizeVersion("5.2.3"), "5.2.3");
 	});
+	test("multi-digit major and minor parts are kept", () => {
+		assert.equal(normalizeVersion("10.12.0"), "10.12.0");
+		assert.equal(normalizeVersion("v10.12"), "10.12.0");
+	});
 });
 
 describe("bumpPluginJsonVersion", () => {
