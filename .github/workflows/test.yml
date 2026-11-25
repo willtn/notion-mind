@@ -12,6 +12,12 @@ on:
       - '.claude/settings.json'
       - '.github/scripts/**'
       - 'vault-manifest.json'
+      - 'notion-map.example.json'
+      # The docs and prompt checks read these files.
+      - 'AGENTS.md'
+      - '.claude/rules/**'
+      - '.claude/commands/**'
+      - '.claude/agents/**'
       - '.github/workflows/test.yml'
   pull_request:
     paths:
@@ -23,6 +29,12 @@ on:
       - '.claude/settings.json'
       - '.github/scripts/**'
       - 'vault-manifest.json'
+      - 'notion-map.example.json'
+      # The docs and prompt checks read these files.
+      - 'AGENTS.md'
+      - '.claude/rules/**'
+      - '.claude/commands/**'
+      - '.claude/agents/**'
       - '.github/workflows/test.yml'
 
 jobs:
@@ -35,6 +47,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The parity harness runs the hooks of the reference commit fae7be4.
+          # A shallow clone does not hold it, and the harness tests then skip.
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
@@ -49,13 +65,11 @@ jobs:
         working-directory: .claude/scripts
         run: npm test
 
-      # A test that writes outside its temp dir is a bug wherever it lands, but
-      # the release job is where it becomes the user's problem: it zipped the
-      # working tree, so residue shipped inside the vault (v8.1.1 and v8.3.0 both
-      # carried `Z:/definitely/not/here.jsonl`). The zip now comes from the tag,
-      # which makes residue harmless — this makes it VISIBLE, at the source, on
-      # the OS that produced it. Untracked output from a test run is never
-      # expected; node_modules and the CI-only typecheck deps are gitignored.
+      # A test that writes outside its temp dir is a bug wherever it lands.
+      # Releases v8.1.1 and v8.3.0 shipped such residue in the vault zip
+      # (`Z:/definitely/not/here.jsonl`). The release has no zip now, but the
+      # residue still dirties the clone of each contributor. This step shows it
+      # at the source, on the OS that made it.
       - name: No test wrote outside its temp dir
         shell: bash
         run: |

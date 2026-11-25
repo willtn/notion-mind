@@ -8,9 +8,6 @@
 !.claude/
 .claude/settings.local.json
 
-# Session logs (local transcripts)
-thinking/session-logs/
-
 # Node typecheck deps (CI + local dev only; runtime is zero-deps)
 node_modules/
 .claude/scripts/node_modules/
@@ -28,7 +25,8 @@ node_modules/
 .claude/scripts/.stop-handoff/
 
 # Local state outside the note store. The outbox holds the JSON arguments of a
-# Notion write until the write hook removes them.
+# Notion write until the write hook removes them. The PreCompact hook keeps
+# its transcript backups in session-logs/.
 .claude/state/
 
 # The Notion IDs of the content model, written by notion-setup.ts. The
