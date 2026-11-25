@@ -37,7 +37,19 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Write|Edit",
+        "matcher": "Write|Edit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node --disable-warning=ExperimentalWarning --experimental-strip-types \"$(r=\"${CLAUDE_PROJECT_DIR:-.}\"; d=\"$r\"; while [ ! -f \"$d/vault-manifest.json\" ] && p=\"$(dirname \"$d\")\" && [ \"$d\" != \"$p\" ]; do d=\"$p\"; done; [ -f \"$d/vault-manifest.json\" ] || d=\"$r\"; printf %s \"$d\")/.claude/scripts/validate-write.ts\"",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "Bash",
         "hooks": [
           {
             "type": "command",

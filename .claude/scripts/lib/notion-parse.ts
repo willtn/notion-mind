@@ -202,6 +202,44 @@ export function parsePage(reply: NotionReply): LivePage {
 	};
 }
 
+/** Where a fetched page is: the data source of a row, and each page and database above it. */
+export interface Ancestors {
+	/** The `collection://` URL of the data source, for a row. */
+	readonly dataSource: string | undefined;
+	/** The ID of each page and database above the page, nearest first. */
+	readonly ids: readonly string[];
+}
+
+export interface NotePage extends LivePage {
+	/** The properties in the argument form: `Tags`, `date:Date:start`. A page that is not a row has only `title`. */
+	readonly properties: Readonly<Record<string, unknown>>;
+	readonly ancestors: Ancestors;
+}
+
+/** A page from `notion-fetch` with its properties and its place, for a hook that reads one note. */
+export function parseNotePage(reply: NotionReply): NotePage {
+	const text = body(reply);
+	const page = parsePage(reply);
+	const path = text.match(/<ancestor-path>\n?([\s\S]*?)\n?<\/ancestor-path>/)?.[1] ?? "";
+	const raw = text.match(/<properties>\n([\s\S]*?)\n<\/properties>/)?.[1];
+	let properties: unknown = {};
+	if (raw !== undefined) {
+		try {
+			properties = JSON.parse(raw);
+		} catch {
+			throw bad("the properties of a page", raw);
+		}
+	}
+	return {
+		...page,
+		properties: isRecord(properties) ? properties : {},
+		ancestors: {
+			dataSource: path.match(/<parent-data-source url="(collection:\/\/[0-9a-f-]{36})"/)?.[1],
+			ids: [...path.matchAll(/<(?:parent|ancestor-\d+)-(?:page|database) url="([^"]+)"/g)].map((match) => notionId(match[1] ?? "")),
+		},
+	};
+}
+
 function refs(list: unknown, what: string, text: string): PageRef[] {
 	if (!Array.isArray(list)) throw bad(what, text);
 	return list.filter(isRecord).map((item) => {
