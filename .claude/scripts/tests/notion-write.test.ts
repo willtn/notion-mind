@@ -198,6 +198,7 @@ describe("a command that names Notion in another form", () => {
 		["--server and --tool", `mcporter call --server notion --tool notion-create-pages --args '{}'`],
 		["a server word and a tool word", `mcporter call notion notion-create-pages --args '{}'`],
 		["a URL selector", `mcporter call https://mcp.notion.com/mcp.notion-create-pages --args '{}'`],
+		["a search for mcporter in a file with notion in its path", "rg -c mcporter .claude/scripts/lib/notion-write.ts"],
 		["a here-document that quotes the write command", `gh pr create --body "$(cat <<'EOF'\n## Usage\nmcporter call notion.notion-create-pages --args '{}'\nEOF\n)"`],
 	];
 	for (const [label, command] of FORM) {
