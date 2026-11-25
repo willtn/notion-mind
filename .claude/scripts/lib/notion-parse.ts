@@ -202,12 +202,17 @@ export function parsePage(reply: NotionReply): LivePage {
 	};
 }
 
-/** Where a fetched page is: the data source of a row, and each page and database above it. */
+/**
+ * Where a fetched page is. Only a row has an `<ancestor-path>` (measured):
+ * a page under the root and a page under a page have an empty one.
+ */
 export interface Ancestors {
 	/** The `collection://` URL of the data source, for a row. */
 	readonly dataSource: string | undefined;
-	/** The ID of each page and database above the page, nearest first. */
+	/** The ID of each page and database above a row, nearest first. A page that is not a row has none. */
 	readonly ids: readonly string[];
+	/** The `path` field of the reply: the titles above the page from the top, joined with ` / `. It has no IDs. A top-level page has none. */
+	readonly path: string;
 }
 
 export interface NotePage extends LivePage {
@@ -236,6 +241,7 @@ export function parseNotePage(reply: NotionReply): NotePage {
 		ancestors: {
 			dataSource: path.match(/<parent-data-source url="(collection:\/\/[0-9a-f-]{36})"/)?.[1],
 			ids: [...path.matchAll(/<(?:parent|ancestor-\d+)-(?:page|database) url="([^"]+)"/g)].map((match) => notionId(match[1] ?? "")),
+			path: isRecord(reply.json) ? str(reply.json["path"]) : "",
 		},
 	};
 }

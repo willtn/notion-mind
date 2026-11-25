@@ -71,16 +71,32 @@ const sameId = (a: string, b: string): boolean => {
 const databaseOf = (map: NotionMap, matches: (database: NotionMap["databases"][DatabaseKey]) => boolean): DatabaseKey | undefined =>
 	(Object.keys(map.databases) as DatabaseKey[]).find((key) => matches(map.databases[key]));
 
-/** The place of a fetched page. */
+/**
+ * True when the `path` of a fetch starts at the root. A fetch names no
+ * parent ID for a page that is not a row, so the titles are the only
+ * signal that reaches a page under a page (measured). A title is not an ID:
+ * a top-level page with the title of the root gives a wrong yes, and a root
+ * that someone renamed gives a wrong no until the map is made again.
+ */
+const pathStartsAtRoot = (path: string, map: NotionMap): boolean => path === map.root.title || path.startsWith(`${map.root.title} / `);
+
+/**
+ * The place of a fetched page. A row is known by its data source, and by the
+ * IDs above it. Each other page is known by the `path` of the fetch.
+ */
 export function placeOf(page: Pick<NotePage, "id">, ancestors: Ancestors, map: NotionMap): Place {
 	const dataSource = ancestors.dataSource;
 	const database = dataSource === undefined ? undefined : databaseOf(map, (entry) => sameId(entry.data_source, dataSource));
 	if (database !== undefined) return { kind: "row", database };
-	if (!ancestors.ids.some((id) => sameId(id, map.root.id))) return { kind: "outside" };
+	if (!ancestors.ids.some((id) => sameId(id, map.root.id)) && !pathStartsAtRoot(ancestors.path, map)) return { kind: "outside" };
 	return Object.values(map.pages).some((entry) => sameId(entry.id, page.id)) ? { kind: "scaffold" } : { kind: "page" };
 }
 
-/** The place of a new page from the `parent` argument, or `null` when only a fetch can tell. */
+/**
+ * The place of a new page from the `parent` argument, or `null` when only a
+ * fetch can tell: a parent that is a page or a database that the map does
+ * not name can be at any depth below the root, or outside it.
+ */
 function placeOfParent(parent: unknown, map: NotionMap): Place | null {
 	if (!isRecord(parent)) return { kind: "outside" };
 	const { data_source_id: dataSource, database_id: databaseId, page_id: pageId } = parent;
@@ -91,12 +107,12 @@ function placeOfParent(parent: unknown, map: NotionMap): Place | null {
 				? databaseOf(map, (entry) => sameId(entry.id, databaseId))
 				: undefined;
 	if (database !== undefined) return { kind: "row", database };
-	if (typeof pageId !== "string") return { kind: "outside" };
-	const known = [map.root, ...Object.values(map.pages)].some((entry) => sameId(entry.id, pageId));
+	if (typeof pageId !== "string" && typeof dataSource !== "string" && typeof databaseId !== "string") return { kind: "outside" };
+	const known = typeof pageId === "string" && [map.root, ...Object.values(map.pages)].some((entry) => sameId(entry.id, pageId));
 	return known ? { kind: "page" } : null;
 }
 
-/** The place that a create call or an update call writes to, or `null` for each other tool and for a parent that the map does not name. */
+/** The place that a create call or an update call writes to, or `null` for each other tool and for a create under a parent that the map does not name. */
 export async function targetPlace(call: NotionCall, map: NotionMap, fetchPage: (id: string) => Promise<NotePage>): Promise<Place | null> {
 	if (call.tool === "notion-create-pages") return placeOfParent(call.args["parent"], map);
 	const id = call.args["page_id"];
@@ -130,10 +146,12 @@ const text = (value: unknown): string => (typeof value === "string" ? value : ""
  * counts, and the same findings. The outbox content of a create is not
  * the stored body: Notion moves a leading `# <title>` into the title,
  * changes `**bold**` to `<b>`, and changes `*` bullets to `-` (measured).
+ * `place` is the place that the arguments of a create name, when they name
+ * one by ID, and else the place that the fetch tells.
  */
-function noteOfPage(page: NotePage, map: NotionMap, changed: boolean): WrittenNote {
+function noteOfPage(page: NotePage, map: NotionMap, changed: boolean, place: Place | null = null): WrittenNote {
 	const { id, url, title, properties } = page;
-	return { id, url, title, place: placeOf(page, page.ancestors, map), properties, body: writtenForm(page.content), changed };
+	return { id, url, title, place: place ?? placeOf(page, page.ancestors, map), properties, body: writtenForm(page.content), changed };
 }
 
 /** The notes of a done write. A tool that writes no note content gives none. */
@@ -148,7 +166,8 @@ export async function writtenNotes(call: NotionCall, map: NotionMap, fetchPage: 
 	const requested = Array.isArray(call.args["pages"]) ? call.args["pages"].filter(isRecord) : [];
 	const made = isRecord(call.reply) && Array.isArray(call.reply["pages"]) ? call.reply["pages"].filter(isRecord) : [];
 	if (made.length !== requested.length) throw new Error(`The reply of notion-create-pages names ${made.length} pages for ${requested.length} pages of ${call.outbox}.`);
-	return Promise.all(made.map(async (reply) => noteOfPage(await fetchPage(text(reply["id"]) || text(reply["url"])), map, true)));
+	const place = placeOfParent(call.args["parent"], map);
+	return Promise.all(made.map(async (reply) => noteOfPage(await fetchPage(text(reply["id"]) || text(reply["url"])), map, true, place)));
 }
 
 /** The values that a create call puts in each select and multi-select of `properties`, for `ensureSelectOptions`. */

@@ -223,10 +223,34 @@ describe("validate-write: the pages that get no check (VW-04, VW-05)", () => {
 			"notion-fetch": { byId: { [id]: fetchedPage({ id, title: "Draft", properties: { title: "Draft" }, content: long, under }) } },
 		});
 		const outside = write(args, made(id), { replies: fetched([{ id: parent, title: "Private" }]) });
-		const inside = write(args, made(id), { replies: fetched([{ id: parent, title: "Drafts" }, { id: map.root.id, title: "root" }]) });
+		const inside = write(args, made(id), { replies: fetched([{ id: parent, title: "Drafts" }, map.root]) });
 		assert.equal(outside.stdout, "");
 		assert.match(inside.context?.additionalContext ?? "", /The page is not a row of a note database/);
 		assert.deepEqual([outside.calls.length, inside.calls.length], [1, 1]);
+	});
+
+	test("a plain page directly under the root gets the finding after a create and after an update, with an empty ancestor path", () => {
+		const id = nextId();
+		const replies: FakeReplies = {
+			"notion-update-page": OK,
+			"notion-fetch": { byId: { [id]: fetchedPage({ id, title: "Draft", properties: { title: "Draft" }, content: long, under: [map.root] }) } },
+		};
+		const afterCreate = write({ parent: { page_id: map.root.id }, allow_async: false, pages: [{ properties: { title: "Draft" }, content: long }] }, made(id), { replies });
+		const afterUpdate = write({ page_id: id, command: "update_content", content_updates: [{ old_str: "a", new_str: "b" }] }, OK, { tool: "notion-update-page", replies });
+		for (const run of [afterCreate, afterUpdate]) assert.match(run.context?.additionalContext ?? "", /The page is not a row of a note database/);
+	});
+
+	test("a plain page under a plain page under the root gets the finding after an update, and a page under a top-level page does not", () => {
+		const id = nextId();
+		const fetched = (under: readonly { id: string; title: string }[]): FakeReplies => ({
+			"notion-update-page": OK,
+			"notion-fetch": { byId: { [id]: fetchedPage({ id, title: "Draft", properties: { title: "Draft" }, content: long, under }) } },
+		});
+		const args = { page_id: id, command: "update_content", content_updates: [{ old_str: "a", new_str: "b" }] };
+		const inside = write(args, OK, { tool: "notion-update-page", replies: fetched([{ id: nextId(), title: "Drafts" }, map.root]) });
+		const outside = write(args, OK, { tool: "notion-update-page", replies: fetched([{ id: nextId(), title: "Elsewhere" }]) });
+		assert.match(inside.context?.additionalContext ?? "", /The page is not a row of a note database/);
+		assert.equal(outside.stdout, "");
 	});
 
 	test("a write tool that writes no note content prints nothing, makes no Notion call, and deletes the outbox file", () => {

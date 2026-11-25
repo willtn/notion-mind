@@ -99,9 +99,11 @@ export function fakeMap(): { readonly map: NotionMap; readonly nextId: () => str
 
 /**
  * The reply of `notion-fetch` for a page, in the shape of a live reply
- * (measured on a row of the Work database and on a page under the root).
- * `rowOf` is the database of a row. `under` has the page above the page
- * and each page above that one, nearest first.
+ * (measured on a row of the Work database, on a page under the root, and on
+ * a page under a page). `rowOf` is the database of a row. `under` has the
+ * page above the page and each page above that one, nearest first. Only a
+ * row has an `<ancestor-path>`. Each page has the `path` field, which has
+ * titles and no IDs, and a top-level page has none.
  */
 export function fetchedPage(page: {
 	readonly id: string;
@@ -112,11 +114,15 @@ export function fetchedPage(page: {
 	readonly under: readonly { readonly id: string; readonly title: string }[];
 }): string {
 	const url = fakeUrl(page.id);
-	const above = [...(page.rowOf === undefined ? [] : [{ id: page.rowOf.id, title: page.rowOf.title, kind: "database" }]), ...page.under.map((entry) => ({ ...entry, kind: "page" }))];
-	const path = [
-		...(page.rowOf === undefined ? [] : [`<parent-data-source url="${page.rowOf.data_source}" name="${page.rowOf.title}"/>`]),
-		...above.map((entry, index) => `<${page.rowOf === undefined && index === 0 ? "parent" : `ancestor-${index + 2}`}-${entry.kind} url="${fakeUrl(entry.id)}" title="${entry.title}"/>`),
-	];
+	const above = page.rowOf === undefined ? [] : [{ id: page.rowOf.id, title: page.rowOf.title, kind: "database" }, ...page.under.map((entry) => ({ ...entry, kind: "page" }))];
+	const path =
+		page.rowOf === undefined
+			? []
+			: [
+					`<parent-data-source url="${page.rowOf.data_source}" name="${page.rowOf.title}"/>`,
+					...above.map((entry, index) => `<ancestor-${index + 2}-${entry.kind} url="${fakeUrl(entry.id)}" title="${entry.title}"/>`),
+				];
+	const titles = [...page.under.map((entry) => entry.title).reverse(), ...(page.rowOf === undefined ? [] : [page.rowOf.title])];
 	const text = [
 		`Here is the result of "fetch" for the Page with URL ${url} as of 2026-11-25T15:22:02.605Z:`,
 		`<page url="${url}">`,
@@ -132,5 +138,5 @@ export function fetchedPage(page: {
 		"</content>",
 		"</page>",
 	].join("\n");
-	return JSON.stringify({ metadata: { type: "page" }, title: page.title, url: `${url}?pvs=204`, text });
+	return JSON.stringify({ metadata: { type: "page" }, title: page.title, url: `${url}?pvs=204`, text, ...(titles.length === 0 ? {} : { path: titles.join(" / ") }) });
 }

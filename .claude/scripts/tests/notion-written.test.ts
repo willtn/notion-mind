@@ -112,21 +112,38 @@ describe("the notes of a create call", () => {
 	});
 
 	test("a page under the root page or under a page of the setup is a page outside the databases", async () => {
-		for (const parent of [map.root.id, map.pages.home.id]) {
+		for (const [parent, under] of [[map.root.id, [map.root]], [map.pages.home.id, [map.pages.home, map.root]]] as const) {
 			const id = nextId();
-			const { fetchPage } = storing(new Map([[id, { title: "Draft", stored: "Body" }]]), { under: [{ id: parent, title: "Above" }, map.root] });
+			const { fetchPage } = storing(new Map([[id, { title: "Draft", stored: "Body" }]]), { under });
 			const [note] = await writtenNotes(created({ parent: { page_id: parent }, pages: [{ properties: { title: "Draft" }, content: "Body" }] }, [{ id }]), map, fetchPage);
 			assert.deepEqual([note?.place, note?.title], [{ kind: "page" }, "Draft"]);
 		}
 	});
 
-	test("a page under a page that the map does not name has its ancestors give the place", async () => {
+	test("a create names its parent by ID, so the titles of the fetch do not decide a page under the root", async () => {
+		const id = nextId();
+		const { fetchPage } = storing(new Map([[id, { title: "Draft", stored: "Body" }]]), { under: [{ id: map.root.id, title: "A title that the map does not have" }] });
+		const [note] = await writtenNotes(created({ parent: { page_id: map.root.id }, pages: [{ properties: { title: "Draft" }, content: "Body" }] }, [{ id }]), map, fetchPage);
+		assert.deepEqual(note?.place, { kind: "page" });
+	});
+
+	test("a page under a page that the map does not name has the titles of the fetch give the place, at each depth", async () => {
 		const id = nextId();
 		const parent = nextId();
 		const call = created({ parent: { page_id: parent }, pages: [{ properties: { title: "Draft" }, content: "Body" }] }, [{ id }]);
-		const placeUnder = async (ancestors: readonly { id: string; title: string }[]) => (await writtenNotes(call, map, storing(new Map([[id, { title: "Draft", stored: "Body" }]]), { under: ancestors }).fetchPage))[0]?.place;
-		assert.deepEqual(await placeUnder([{ id: parent, title: "Drafts" }, { id: map.root.id, title: "root" }]), { kind: "page" });
+		const placeUnder = async (above: readonly { id: string; title: string }[]) => (await writtenNotes(call, map, storing(new Map([[id, { title: "Draft", stored: "Body" }]]), { under: above }).fetchPage))[0]?.place;
+		assert.deepEqual(await placeUnder([{ id: parent, title: "Drafts" }, map.root]), { kind: "page" });
+		assert.deepEqual(await placeUnder([{ id: parent, title: "Deep" }, { id: nextId(), title: "Drafts" }, map.root]), { kind: "page" });
 		assert.deepEqual(await placeUnder([{ id: parent, title: "Private" }]), { kind: "outside" });
+		assert.deepEqual(await placeUnder([{ id: parent, title: "Deep" }, { id: nextId(), title: "Private" }]), { kind: "outside" });
+	});
+
+	test("a page in a database that the map does not name is placed by the fetch, and not by the parent argument", async () => {
+		const id = nextId();
+		const other = { id: nextId(), data_source: `collection://${nextId()}`, title: "Other" };
+		const call = created({ parent: { data_source_id: other.data_source }, pages: [{ properties: { Name: "Row" }, content: "Body" }] }, [{ id }]);
+		const { fetchPage } = storing(new Map([[id, { title: "Row", stored: "Body" }]]), { rowOf: other as typeof map.databases.work, under: [map.root] });
+		assert.deepEqual((await writtenNotes(call, map, fetchPage))[0]?.place, { kind: "page" });
 	});
 
 	test("a call with no parent writes outside the root", async () => {
@@ -216,19 +233,42 @@ describe("the note of an update call", () => {
 
 describe("the place of a fetched page", () => {
 	const page = (id: string) => ({ id });
+	const fetched = async (pageId: string, where: { rowOf?: typeof map.databases.work; under: readonly { id: string; title: string }[] }) =>
+		parseNotePage(reply(fetchedPage({ id: pageId, title: "Page", properties: { title: "Page" }, content: "", ...where }))).ancestors;
 
-	test("a row of a database of the map, by its data source", () => {
-		assert.deepEqual(placeOf(page(nextId()), { dataSource: map.databases.knowledge.data_source, ids: [map.databases.knowledge.id, map.root.id] }, map), { kind: "row", database: "knowledge" });
+	test("a row of a database of the map, by its data source", async () => {
+		assert.deepEqual(placeOf(page(nextId()), await fetched(nextId(), { rowOf: map.databases.knowledge, under: [map.root] }), map), { kind: "row", database: "knowledge" });
 	});
 
-	test("a row of a database that the map does not name is a page under the root, or outside it", () => {
-		const other = `collection://${nextId()}`;
-		assert.deepEqual(placeOf(page(nextId()), { dataSource: other, ids: [nextId(), map.root.id] }, map), { kind: "page" });
-		assert.deepEqual(placeOf(page(nextId()), { dataSource: other, ids: [nextId()] }, map), { kind: "outside" });
+	test("a row of a database that the map does not name is a page under the root, or outside it", async () => {
+		const other = { id: nextId(), data_source: `collection://${nextId()}`, title: "Other" } as typeof map.databases.work;
+		assert.deepEqual(placeOf(page(nextId()), await fetched(nextId(), { rowOf: other, under: [map.root] }), map), { kind: "page" });
+		assert.deepEqual(placeOf(page(nextId()), await fetched(nextId(), { rowOf: other, under: [{ id: nextId(), title: "Private" }] }), map), { kind: "outside" });
 	});
 
-	test("a page of the setup under the root", () => {
-		assert.deepEqual(placeOf(page(map.pages.home.id), { dataSource: undefined, ids: [map.root.id] }, map), { kind: "scaffold" });
+	test("a page directly under the root has an empty ancestor path, and the root title in its path", async () => {
+		const ancestors = await fetched(nextId(), { under: [map.root] });
+		assert.deepEqual(ancestors.ids, []);
+		assert.deepEqual(placeOf(page(nextId()), ancestors, map), { kind: "page" });
+	});
+
+	test("a page under a page under the root has an empty ancestor path, and the root title at the start of its path", async () => {
+		const ancestors = await fetched(nextId(), { under: [{ id: nextId(), title: "Drafts" }, map.root] });
+		assert.deepEqual(ancestors.ids, []);
+		assert.deepEqual(placeOf(page(nextId()), ancestors, map), { kind: "page" });
+	});
+
+	test("a page under a page outside the root, and a top-level page, are outside", async () => {
+		assert.deepEqual(placeOf(page(nextId()), await fetched(nextId(), { under: [{ id: nextId(), title: "Elsewhere" }] }), map), { kind: "outside" });
+		assert.deepEqual(placeOf(page(nextId()), await fetched(nextId(), { under: [] }), map), { kind: "outside" });
+	});
+
+	test("a title that only starts with the root title is not the root", async () => {
+		assert.deepEqual(placeOf(page(nextId()), await fetched(nextId(), { under: [{ id: nextId(), title: `${map.root.title} copy` }] }), map), { kind: "outside" });
+	});
+
+	test("a page of the setup under the root", async () => {
+		assert.deepEqual(placeOf(page(map.pages.home.id), await fetched(map.pages.home.id, { under: [map.root] }), map), { kind: "scaffold" });
 	});
 });
 
@@ -237,13 +277,18 @@ describe("a fetch reply as a note page", () => {
 		const id = nextId();
 		const page = parseNotePage(reply(fetchedPage({ id, title: "A Row", properties: { Name: "A Row", Tags: ["a"] }, content: "Body", rowOf: map.databases.work, under: [map.root] })));
 		assert.deepEqual(page.properties, { Name: "A Row", Tags: ["a"] });
-		assert.deepEqual(page.ancestors, { dataSource: map.databases.work.data_source, ids: [map.databases.work.id, map.root.id] });
+		assert.deepEqual(page.ancestors, { dataSource: map.databases.work.data_source, ids: [map.databases.work.id, map.root.id], path: `${map.root.title} / ${map.databases.work.title}` });
 		assert.equal(page.content.trim(), "Body");
 	});
 
-	test("a page under a page has no data source, and its parent is the first ancestor", () => {
-		const page = parseNotePage(reply(fetchedPage({ id: nextId(), title: "Draft", properties: { title: "Draft" }, content: "", under: [map.root] })));
-		assert.deepEqual(page.ancestors, { dataSource: undefined, ids: [map.root.id] });
+	test("a page under a page has no data source and no ancestor IDs, and its path has the titles above it", () => {
+		const page = parseNotePage(reply(fetchedPage({ id: nextId(), title: "Draft", properties: { title: "Draft" }, content: "", under: [{ id: nextId(), title: "Drafts" }, map.root] })));
+		assert.deepEqual(page.ancestors, { dataSource: undefined, ids: [], path: `${map.root.title} / Drafts` });
+	});
+
+	test("a top-level page has no path", () => {
+		const page = parseNotePage(reply(fetchedPage({ id: nextId(), title: "Top", properties: { title: "Top" }, content: "", under: [] })));
+		assert.deepEqual(page.ancestors, { dataSource: undefined, ids: [], path: "" });
 	});
 
 	test("properties that are not JSON are an error at this boundary", () => {
