@@ -86,6 +86,28 @@ describe("validate-write — skip rules (silent exit, no stdout)", () => {
 		assert.equal(code, 0);
 		assert.equal(stdout.trim(), "");
 	});
+	test("skips real unframed files inside the vault, and flags a plain note beside them", () => {
+		const body = "No frontmatter here\n" + "x".repeat(300);
+		const skipped = [
+			"code.ts",
+			"README.md",
+			"README.ja.md",
+			"CHANGELOG.md",
+			".claude/commands/foo.md",
+			"templates/Work Note.md",
+			"thinking/draft.md",
+		];
+		for (const rel of skipped) {
+			const full = join(TMP_DIR, rel);
+			mkdirSync(dirname(full), { recursive: true });
+			writeFileSync(full, body);
+			const { stdout, code } = runOn(full);
+			assert.equal(code, 0, rel);
+			assert.equal(stdout.trim(), "", `${rel} is skipped`);
+		}
+		const control = runOn(makeMd(body, "skip-control.md"));
+		assert.match(control.stdout, /Missing YAML frontmatter/, "the control: a plain note is flagged");
+	});
 	test("a note outside the vault warns nothing, and the same note inside the vault warns", () => {
 		const body = "No frontmatter here\n" + "x".repeat(300);
 		const inside = runOn(makeMd(body, "inside-control.md"));
@@ -275,6 +297,57 @@ describe("phantom-edge policy result (#117)", () => {
 					r.classification === "ticket-id-wikilink",
 			),
 		);
+	});
+});
+
+describe("validate-write — event name and write-time cluster hint", () => {
+	test("hookEventName echoes the input event name", () => {
+		const path = makeMd("No frontmatter here\n" + "x".repeat(300), "event.md");
+		for (const name of ["PostToolUse", "CustomWriteEvent"]) {
+			const { stdout, code } = runScript({
+				hook_event_name: name,
+				tool_input: { file_path: path },
+			});
+			assert.equal(code, 0);
+			const parsed = JSON.parse(stdout) as {
+				hookSpecificOutput: { hookEventName: string };
+			};
+			assert.equal(parsed.hookSpecificOutput.hookEventName, name);
+		}
+	});
+
+	test("a loose note that joins a topic cluster in work/active gets the cluster hint", () => {
+		const vault = mkdtempSync(join(tmpdir(), "validate-write-cluster-"));
+		try {
+			const active = join(vault, "work", "active");
+			mkdirSync(active, { recursive: true });
+			const note = (title: string) => {
+				const path = join(active, `${title}.md`);
+				writeFileSync(path, "---\ndate: 2026-01-01\ndescription: d\ntags: [work-note]\n---\nShort.");
+				return path;
+			};
+			const target = note("Payments Migration");
+			note("Payments Rollout");
+			note("Alpha Roadmap");
+			note("Beta Retrospective");
+			const { stdout, code } = spawnHook(SCRIPT, { tool_input: { file_path: target } }, { CLAUDE_PROJECT_DIR: vault });
+			assert.equal(code, 0);
+			const parsed = JSON.parse(stdout) as {
+				hookSpecificOutput: {
+					additionalContext: string;
+					policyResults?: Array<{ policy_id: string; classification: string }>;
+				};
+			};
+			assert.match(parsed.hookSpecificOutput.additionalContext, /sharing "payments"/);
+			assert.match(parsed.hookSpecificOutput.additionalContext, /Payments Rollout\.md/);
+			assert.ok(
+				parsed.hookSpecificOutput.policyResults?.some(
+					(r) => r.policy_id === "topic-cluster" && r.classification === "ungrouped-cluster",
+				),
+			);
+		} finally {
+			rmTemp(vault);
+		}
 	});
 });
 
