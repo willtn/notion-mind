@@ -107,15 +107,7 @@ jobs:
 
           **Requirements:** [Obsidian](https://obsidian.md), [Node 22+ LTS](https://nodejs.org), and [Claude Code](https://claude.ai/code)
 
-          **Install via [ShardMind](https://github.com/breferrari/shardmind) (recommended — wizard, optional modules, managed upgrades):**
-
-          ```bash
-          npm install -g shardmind
-          mkdir my-vault && cd my-vault
-          shardmind install github:breferrari/obsidian-mind
-          ```
-
-          **Or clone directly:**
+          **Clone:**
 
           ```bash
           git clone https://github.com/breferrari/obsidian-mind.git
@@ -138,12 +130,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add CHANGELOG.md vault-manifest.json
-          # Match the script's ENOENT tolerance: forks without `.shardmind/`
-          # have nothing to stage, and `git add` on a missing path would
-          # fail the workflow.
-          if [ -f .shardmind/shard.yaml ]; then
-            git add .shardmind/shard.yaml
-          fi
           if [ -f .claude/skills/obsidian-mind/.claude-plugin/plugin.json ]; then
             git add .claude/skills/obsidian-mind/.claude-plugin/plugin.json
           fi
@@ -168,10 +154,8 @@ jobs:
       - name: Tag the release commit
         run: |
           # Point the tag at the version-bump commit so the tagged tree carries
-          # its own version (shard.yaml + vault-manifest.json). ShardMind reads
-          # the manifest `version:` as the shard's identity and `shardmind
-          # update` keys off it, so a tag whose tree lags its name mislabels
-          # installs and can misdetect updates. -f / --force handles the
+          # its own version (plugin.json + vault-manifest.json), so a tag whose
+          # tree lags its name mislabels the release. -f / --force handles the
           # push:tags trigger, where a human-pushed tag already points at the
           # pre-bump commit; we move it forward to the bump commit. (Tag pushes
           # via GITHUB_TOKEN don't re-trigger this workflow.)
@@ -200,19 +184,7 @@ jobs:
             exit 1
           fi
 
-          # shard.yaml is optional — forks without ShardMind omit it, and the
-          # commit step / generate-changelog.ts are ENOENT-tolerant. Verify it
-          # only when present so this step stays consistent with that invariant.
-          if git cat-file -e "$VERSION:.shardmind/shard.yaml" 2>/dev/null; then
-            shard=$(git show "$VERSION:.shardmind/shard.yaml" | sed -n 's/^version:[[:space:]]*//p' | head -1)
-            echo "shard.yaml=$shard"
-            if [ "$shard" != "$want" ]; then
-              echo "::error::Tagged shard.yaml version=$shard, expected $want"
-              exit 1
-            fi
-          fi
-
-          # The mod's plugin.json carries the template's version too (optional, like shard.yaml).
+          # The mod's plugin.json carries the template's version too (optional).
           plugin_path=".claude/skills/obsidian-mind/.claude-plugin/plugin.json"
           if git cat-file -e "$VERSION:$plugin_path" 2>/dev/null; then
             plugin=$(git show "$VERSION:$plugin_path" | sed -n 's/.*"version":[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)

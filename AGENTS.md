@@ -30,10 +30,6 @@ Personal Obsidian vault -- an external brain for work notes, decisions, performa
 | `thinking/` | Scratchpad for drafts and reasoning | Named `YYYY-MM-DD-topic.md` |
 | `templates/` | Obsidian templates | `Work Note.md`, `Decision Record.md`, etc. |
 
-## Obsidian CLI
-
-Need a CLI command? See `.claude/rules/obsidian-cli.md`, or run `obsidian help`.
-
 ## Commands
 
 Commands live in `.claude/commands/` — agent-agnostic markdown with YAML frontmatter. `brain/Skills.md` is the catalog.

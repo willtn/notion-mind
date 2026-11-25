@@ -7,19 +7,14 @@
 
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
 	classifyCommit,
 	generateSection,
 	normalizeVersion,
-	toFingerprintKey,
-	pickMarkers,
-	findLatestOpenFingerprint,
-	compareFingerprintKeys,
 	bumpPluginJsonVersion,
-	bumpShardYamlVersion,
 	PLUGIN_JSON,
 	insertChangelogSection,
 } from "../../../.github/scripts/generate-changelog.ts";
@@ -130,125 +125,6 @@ describe("normalizeVersion", () => {
 	});
 });
 
-describe("toFingerprintKey", () => {
-	test("drops .0 patch for minor releases", () => {
-		assert.equal(toFingerprintKey("5.0.0"), "v5.0");
-		assert.equal(toFingerprintKey("v5.0"), "v5.0");
-		assert.equal(toFingerprintKey("5.0"), "v5.0");
-	});
-	test("preserves non-zero patch", () => {
-		assert.equal(toFingerprintKey("5.1.2"), "v5.1.2");
-		assert.equal(toFingerprintKey("v3.4.1"), "v3.4.1");
-	});
-	test("double-digit components survive", () => {
-		assert.equal(toFingerprintKey("10.12.0"), "v10.12");
-	});
-});
-
-describe("pickMarkers", () => {
-	const GLOBS = [
-		"AGENTS.md",
-		".mcp.json",
-		".claude/**",
-		".example/**",
-		".github/scripts/generate-changelog.ts",
-		"templates/**",
-	];
-
-	test("returns at most `limit` entries (default 3)", () => {
-		const added = [
-			"AGENTS.md",
-			".example/hooks.json",
-			".mcp.json",
-			"templates/New.md",
-			".claude/commands/new.md",
-		];
-		const picked = pickMarkers(added, GLOBS);
-		assert.equal(picked.length, 3);
-	});
-
-	test("filters out files not covered by infrastructure globs", () => {
-		const added = ["work/active/project.md", "brain/MyGotchas.md", ".mcp.json"];
-		assert.deepEqual(pickMarkers(added, GLOBS), [".mcp.json"]);
-	});
-
-	test("skips tests/, lib/, node_modules/, and .github/", () => {
-		const added = [
-			".claude/scripts/tests/new.test.ts",
-			".claude/scripts/lib/internal.ts",
-			".claude/scripts/node_modules/whatever.js",
-			".github/workflows/new.yml",
-			".mcp.json",
-		];
-		assert.deepEqual(pickMarkers(added, GLOBS), [".mcp.json"]);
-	});
-
-	test("skips package.json and tsconfig.json (excluded from release zip)", () => {
-		// release.yml explicitly excludes .claude/scripts/{package,tsconfig}.json
-		// from the published zip. Using them as fingerprint markers would break
-		// version detection for zip-install users.
-		const added = [
-			".claude/scripts/package.json",
-			".claude/scripts/tsconfig.json",
-			".mcp.json",
-		];
-		assert.deepEqual(pickMarkers(added, GLOBS), [".mcp.json"]);
-	});
-
-	test("skips .test.ts files even outside a tests/ dir", () => {
-		const added = [".claude/scripts/manifest-check.test.ts", ".mcp.json"];
-		assert.deepEqual(pickMarkers(added, GLOBS), [".mcp.json"]);
-	});
-
-	test("custom limit is respected", () => {
-		const added = ["AGENTS.md", ".mcp.json", ".example/hooks.json"];
-		assert.equal(pickMarkers(added, GLOBS, 2).length, 2);
-	});
-
-	test("returns empty when nothing qualifies", () => {
-		assert.deepEqual(pickMarkers(["work/foo.md", "README.ja.md"], GLOBS), []);
-	});
-
-	test("prefers shallow (root-level) paths over deep subdirectory paths", () => {
-		// Regression test for the original heuristic, which walked alphabetically
-		// and picked .claude/scripts/* over .mcp.json. Root-level files are
-		// more meaningful markers; they should rank first.
-		const added = [
-			".claude/scripts/charcount.ts",
-			".claude/scripts/classify-message.ts",
-			".claude/scripts/package.json",
-			".mcp.json",
-		];
-		const picked = pickMarkers(added, GLOBS);
-		assert.equal(picked[0], ".mcp.json", "root-level .mcp.json should rank first");
-	});
-
-	test("prefers singletons in their parent dir over bulk-added siblings", () => {
-		// At the same depth, a file with fewer siblings-in-this-diff is a
-		// more distinctive marker. `a/rare.md` is alone under `a/`; `b/` has
-		// three files, so b's entries rank after a's.
-		const globs = ["**"];
-		const added = [
-			"b/mass1.md",
-			"b/mass2.md",
-			"b/mass3.md",
-			"a/rare.md",
-		];
-		const picked = pickMarkers(added, globs, 1);
-		assert.deepEqual(picked, ["a/rare.md"]);
-	});
-
-	test("falls back to alphabetical order when depth and sibling count tie", () => {
-		const globs = ["*.md"];
-		const added = ["zebra.md", "alpha.md", "mango.md"];
-		assert.deepEqual(pickMarkers(added, globs), [
-			"alpha.md",
-			"mango.md",
-			"zebra.md",
-		]);
-	});
-});
-
 describe("bumpPluginJsonVersion", () => {
 	const FIXTURE = JSON.stringify({ name: "obsidian-mind", version: "8.6.0", description: "d", types: "./types/index.d.ts" }, null, 2) + "\n";
 
@@ -268,65 +144,6 @@ describe("bumpPluginJsonVersion", () => {
 		const plugin = JSON.parse(readFileSync(join(repo, PLUGIN_JSON), "utf-8")) as { version: string };
 		const manifest = JSON.parse(readFileSync(join(repo, "vault-manifest.json"), "utf-8")) as { version: string };
 		assert.equal(plugin.version, manifest.version, "a release bumps both; between releases they must agree");
-	});
-});
-
-describe("bumpShardYamlVersion", () => {
-	const FIXTURE = [
-		"apiVersion: v1",
-		"name: obsidian-mind",
-		"namespace: breferrari",
-		"version: 6.0.0-beta.1",
-		'description: "AI-augmented Obsidian vault"',
-		"",
-	].join("\n");
-
-	test("rewrites the top-level version line", () => {
-		const out = bumpShardYamlVersion(FIXTURE, "v6.0");
-		assert.match(out, /^version: 6\.0\.0$/m);
-		assert.doesNotMatch(out, /6\.0\.0-beta\.1/);
-	});
-
-	test("normalizes the version (v6.1 → 6.1.0)", () => {
-		const out = bumpShardYamlVersion(FIXTURE, "v6.1");
-		assert.match(out, /^version: 6\.1\.0$/m);
-	});
-
-	test("preserves surrounding lines", () => {
-		const out = bumpShardYamlVersion(FIXTURE, "v6.0");
-		assert.match(out, /^apiVersion: v1$/m);
-		assert.match(out, /^name: obsidian-mind$/m);
-		assert.match(out, /^namespace: breferrari$/m);
-		assert.match(out, /^description: /m);
-	});
-
-	test("idempotent when run twice with the same version", () => {
-		const once = bumpShardYamlVersion(FIXTURE, "v6.0");
-		const twice = bumpShardYamlVersion(once, "v6.0");
-		assert.equal(once, twice);
-	});
-
-	test("throws when no version line is present", () => {
-		const broken = "apiVersion: v1\nname: thing\n";
-		assert.throws(() => bumpShardYamlVersion(broken, "v6.0"), /version:/);
-	});
-
-	test("only rewrites the top-level version, not nested ones", () => {
-		// The regex anchors to a leftmost-column `version:`, so an indented
-		// `version:` inside a list (e.g. shardmind migrations entries) must
-		// be left alone. Use an actually-indented `version:` here, not a
-		// look-alike key like `from_version:` — the latter wouldn't match
-		// the regex regardless and so wouldn't exercise the anchor.
-		const withNested = [
-			"version: 6.0.0-beta.1",
-			"migrations:",
-			"  - version: 5.0.0",
-			"    note: keep this nested version untouched",
-		].join("\n");
-		const out = bumpShardYamlVersion(withNested, "v6.0");
-		assert.match(out, /^version: 6\.0\.0$/m);
-		assert.match(out, /^  - version: 5\.0\.0$/m);
-		assert.match(out, /note: keep this nested version untouched/);
 	});
 });
 
@@ -383,104 +200,5 @@ describe("insertChangelogSection", () => {
 	test("falls back to prepending a fresh header when none exists", () => {
 		const out = insertChangelogSection("", "## v1.0.0 — 2026-01-01\n", "v1.0.0");
 		assert.equal(out, "# Changelog\n\n## v1.0.0 — 2026-01-01\n\n");
-	});
-});
-
-describe("findLatestOpenFingerprint", () => {
-	test("returns the highest version without a missing field", () => {
-		const fp = {
-			"v3.7": { exists: ["x"], missing: ["y"] },
-			"v4.0": { exists: ["a"] },
-		};
-		assert.equal(findLatestOpenFingerprint(fp), "v4.0");
-	});
-
-	test("uses numeric component sort (v3.10 > v3.7)", () => {
-		const fp = {
-			"v3.7": { exists: ["a"] },
-			"v3.10": { exists: ["b"] },
-		};
-		assert.equal(findLatestOpenFingerprint(fp), "v3.10");
-	});
-
-	test("returns null when every entry is closed", () => {
-		const fp = {
-			"v3.7": { exists: ["a"], missing: ["b"] },
-			"v4.0": { exists: ["c"], missing: ["d"] },
-		};
-		assert.equal(findLatestOpenFingerprint(fp), null);
-	});
-
-	test("returns null when empty", () => {
-		assert.equal(findLatestOpenFingerprint({}), null);
-	});
-
-	test("single open entry is returned regardless of version", () => {
-		const fp = { v1: { exists: ["a"] } };
-		assert.equal(findLatestOpenFingerprint(fp), "v1");
-	});
-
-	test("mixed three-part + two-part versions sort correctly", () => {
-		const fp = {
-			"v3.6.0": { exists: ["a"] },
-			"v3.6": { exists: ["b"] }, // equivalent to v3.6.0 numerically
-			"v3.7": { exists: ["c"] },
-		};
-		assert.equal(findLatestOpenFingerprint(fp), "v3.7");
-	});
-});
-
-describe("version detection across the AGENTS.md release (#321)", () => {
-	// The rule /om-vault-upgrade applies to a vault with no manifest version:
-	// a fingerprint matches when every `exists` path is there and no `missing`
-	// path is; the newest match wins. Run here against the real manifest and
-	// this repo's own tree, so the entries the release depends on are pinned.
-	// Only the fingerprints up to v10.0 take part, and v10.0's own `missing`
-	// is ignored: a later release adds both, and neither changes how a v9.1
-	// or v10.0 vault is told apart.
-	type Fp = { exists: string[]; missing?: string[] };
-	const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../../..");
-	const all = (
-		JSON.parse(readFileSync(join(repoRoot, "vault-manifest.json"), "utf-8")) as { version_fingerprints: Record<string, Fp> }
-	).version_fingerprints;
-	const fingerprints: Record<string, Fp> = Object.fromEntries(
-		Object.entries(all)
-			.filter(([key]) => compareFingerprintKeys(key, "v10.0") <= 0)
-			.map(([key, fp]) => [key, key === "v10.0" ? { exists: fp.exists } : fp]),
-	);
-	/** This repo's tree, with some paths forced present or absent. */
-	const vault = (overrides: Record<string, boolean>) => (p: string) =>
-		p in overrides ? overrides[p]! : existsSync(join(repoRoot, p));
-	const detect = (has: (p: string) => boolean): string | null => {
-		let best: string | null = null;
-		for (const [key, fp] of Object.entries(fingerprints)) {
-			if (!fp.exists.every(has) || (fp.missing ?? []).some(has)) continue;
-			if (best === null || compareFingerprintKeys(key, best) > 0) best = key;
-		}
-		return best;
-	};
-	const RULES = [".claude/rules/skills.md", ".claude/rules/subagents.md", ".claude/rules/memory.md", ".claude/rules/hooks-and-mod.md"];
-	const without = (paths: readonly string[]) => Object.fromEntries(paths.map((p) => [p, false]));
-
-	test("a v10 vault reads as v10.0", () => {
-		assert.equal(detect(vault({ "CLAUDE.md": false })), "v10.0");
-	});
-
-	test("a v10 vault with a leftover CLAUDE.md (the case the upgrade guards target) still reads as v10.0", () => {
-		assert.equal(detect(vault({ "CLAUDE.md": true })), "v10.0");
-	});
-
-	test("a v9.1 vault, with CLAUDE.md and no .claude/rules/, reads as v9.1", () => {
-		assert.equal(detect(vault({ ...without(RULES), "CLAUDE.md": true })), "v9.1");
-	});
-
-	test("the newest fingerprint in the manifest is the open one, so the next release can close it", () => {
-		const newest = Object.keys(all).sort(compareFingerprintKeys).at(-1);
-		assert.equal(findLatestOpenFingerprint(all), newest);
-	});
-
-	test("v9.1 is closed by a v10.0 marker, so the two never both match", () => {
-		const v91 = all["v9.1"]!;
-		assert.ok(v91.missing?.some((p) => all["v10.0"]!.exists.includes(p)), "v9.1's missing must name a file v10.0 requires");
 	});
 });

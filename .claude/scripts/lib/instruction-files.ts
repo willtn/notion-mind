@@ -2,8 +2,7 @@
  * The vault's instruction files (#321). `AGENTS.md` is the one every agent
  * reads. A retired one left at the vault root goes wrong silently, each its
  * own way: Claude Code reads a `CLAUDE.md` in place of `AGENTS.md`. The hygiene
- * scan and `upgrade-plan` both read this list, so a file retired later is
- * retired in one place.
+ * scan reads this list, so a file retired later is retired in one place.
  */
 
 export const INSTRUCTION_FILE = "AGENTS.md";

@@ -17,8 +17,7 @@
   },
   "include": [
     "**/*.ts",
-    "../../.github/scripts/**/*.ts",
-    "../../.shardmind/hooks/**/*.ts"
+    "../../.github/scripts/**/*.ts"
   ],
   "exclude": ["node_modules"]
 }

@@ -5,7 +5,6 @@ tools: Read, Write, Edit, Grep, Glob, Bash
 model: sonnet
 maxTurns: 50
 skills:
-  - obsidian-markdown
   - qmd
 ---
 
