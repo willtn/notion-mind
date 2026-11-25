@@ -2,6 +2,12 @@
 
 Write your self-assessment for your company's review tool. Produces project impact descriptions, competency self-assessments (current level / next level), principles, and growth plan — all within character limits, fact-checked, strategically calibrated.
 
+## Notion access
+
+Read with `mcporter call notion.<tool> --args '<JSON>' --output json`. Use no pipe and no redirect. Put no single quote in the JSON. Read `notion-map.json` in the project root for the `data_source` URL and the view URLs of each database.
+
+Write in two steps. First use the `Write` tool to make `.claude/state/outbox/<name>.json` with the JSON arguments. Then run `mcporter call notion.<tool> --args "$(cat .claude/state/outbox/<name>.json)"`. `notion-create-pages` needs `"allow_async": false`.
+
 ## Usage
 
 ```
@@ -23,15 +29,15 @@ Adapt this to your company's review system. Common patterns:
 
 ### 1. Load Context
 
-Read in order:
-1. `brain/North Star.md` — current goals and focus
-2. `perf/<cycle>/Review Brief.md` — the full private review brief
-3. `perf/<cycle>/Review Brief - Manager.md` — what the manager has seen
+Read in order. Query each view with `notion-query-data-sources` and read each row with `notion-fetch`:
+1. `Page > North Star` — current goals and focus
+2. The row of `Perf docs` with `Perf docs.Type = Review brief` for the cycle (`Perf docs.Cycle`) — the full private review brief
+3. The row of `Perf docs` with `Perf docs.Type = Review artifact` for the manager brief — what the manager has seen
 4. Previous cycle review — baselines
-5. Quarterly brag notes covering the period
-6. All competency notes in `perf/competencies/`
-7. `perf/Performance Framework.md` — evaluation structure (if exists)
-8. Key work notes for submitted projects
+5. `Perf docs > Brag quarters` — the quarter rows covering the period
+6. All rows of `Competencies > Competency Map`
+7. The `Knowledge` row for the performance framework — evaluation structure (if it exists)
+8. Key `Work` rows for submitted projects
 
 ### 2. Draft Projects
 
@@ -46,8 +52,8 @@ Decide all ratings at the end together — calibrate the full picture before com
 ### 3. Draft Competencies
 
 For each competency, decide current level (Yes/No) and next level (Yes/No):
-- Read the level criteria from the competency note
-- Check each sub-criterion: is there concrete evidence?
+- Read the level criteria from the competency row
+- Check each sub-criterion: is there concrete evidence? The `Competencies.Evidence` property lists the `Work` rows that show the competency
 - If saying Yes to next level, every sub-criterion should be defensible — missing the primary criterion undermines credibility
 
 Draft text per YES answer (within your tool's character limit):
@@ -81,9 +87,9 @@ Before finalizing, review the full picture:
 
 ### 6. Quality Checks
 
-- [ ] All sections within your tool's character limit (use `node --experimental-strip-types .claude/scripts/charcount.ts <file> "<section>" "" <limit>`)
+- [ ] All sections within your tool's character limit (count: use the `Write` tool to put the section in `.claude/state/count/<name>.txt`, then run `wc -m .claude/state/count/<name>.txt`)
 - [ ] Watch for special characters (em-dashes, en-dashes) — some review tools count these as multiple characters
-- [ ] Every factual claim backed by vault evidence
+- [ ] Every factual claim backed by Notion evidence
 - [ ] No fabricated decisions ("chose X over Y" when Y was never considered)
 - [ ] No self-undermining language in next-level YES texts ("not yet at yearly scope")
 - [ ] Dates verified — check day of week before claiming "weekend work"
@@ -94,7 +100,7 @@ Before finalizing, review the full picture:
 ### 7. Fact-Check Pass
 
 Enter plan mode. For every claim:
-- Is it in the vault? Which source?
+- Is it in Notion? Which page?
 - Is it first-hand or inferred?
 - Could a reviewer challenge it with "what's your evidence?"
 - If the claim names a file, function, or flag — does it still exist?
@@ -103,13 +109,13 @@ Flag and fix anything that doesn't pass.
 
 ### 8. Save
 
-Save draft to `thinking/review-drafts.md` for copy-pasting.
-After submission, promote to `perf/<cycle>/Self-Review.md`.
+Save the draft as a row of `Work` with `Work.Type = Thinking` and the title `review-drafts`, for copy-pasting.
+After submission, promote it: create a row of `Perf docs` with `Perf docs.Type = Review artifact`, the title `Self-Review`, and `Perf docs.Cycle` set. Then set `Work.Status = completed` on the draft row.
 
 ## Tips
 
 1. **Your self-assessment anchors the conversation** — especially with a new manager who lacks independent context.
-2. **Check character counts early and often.** Use the charcount script after every draft, not after pasting.
+2. **Check character counts early and often.** Count after every draft, not after pasting.
 3. **Watch special characters** — some review tools count em-dashes and en-dashes as multiple characters.
 4. **Peer reviews feed into your ratings.** What peers write about you is visible. What you write about peers builds your reputation as a thoughtful evaluator.
 5. **Fact-check before submitting.** Plan mode for verification catches fabricated claims, wrong dates, and references that shouldn't appear in a review.

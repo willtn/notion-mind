@@ -1,8 +1,16 @@
 # Vault Audit
 
-Deep structural audit of the vault. Checks indexes, folder placement, frontmatter, links, Bases, and consistency. Fix what can be fixed, flag what needs user input.
+Deep structural audit of the Notion workspace. Checks the scaffold pages, database layout, properties, links, views, and consistency. Fix what can be fixed, flag what needs user input.
 
-**When to use**: After substantial sessions, after reorganization, or periodically to maintain vault health. For lighter end-of-session checks, use `/om-wrap-up` instead.
+**When to use**: After substantial sessions, after reorganization, or periodically to maintain workspace health. For lighter end-of-session checks, use `/om-wrap-up` instead.
+
+## Notion access
+
+Read with `mcporter call notion.<tool> --args '<JSON>' --output json`. Use no pipe and no redirect. Put no single quote in the JSON. Read `notion-map.json` in the project root for the `data_source` URL and the view URLs of each database.
+
+Write in two steps. First use the `Write` tool to make `.claude/state/outbox/<name>.json` with the JSON arguments. Then run `mcporter call notion.<tool> --args "$(cat .claude/state/outbox/<name>.json)"`.
+
+A query of a saved view (`"mode":"view"`) has no quota. A SQL query on a data source is limited on this plan, so use it only where a step says so. A read of the links of one page costs one call, so a full link scan of 500 rows takes 6 to 9 minutes. When a reply says `rate_limited`, wait for the time that it names and then go on.
 
 ## Usage
 
@@ -13,130 +21,127 @@ Deep structural audit of the vault. Checks indexes, folder placement, frontmatte
 ## Subagents
 
 This command orchestrates two subagents for deep analysis:
-- **`vault-librarian`** — orphan detection, broken links, frontmatter validation, stale notes, index consistency
-- **`cross-linker`** — finds missing wikilinks, orphan notes, broken backlinks
+- **`vault-librarian`** — orphan detection, broken links, property validation, stale rows, page consistency
+- **`cross-linker`** — finds missing links, orphan rows, broken backlinks
 
 Launch `vault-librarian` first for the structural audit, then `cross-linker` for link quality.
 
 ## Workflow
 
-### 1. Check Folder Structure
+### 1. Check Layout
 
-Verify the vault matches the expected layout:
-- `Home.md` exists at vault root
-- `bases/` contains all `.base` files (none scattered elsewhere)
-- `work/active/` contains only notes with `status: active`
-- `work/archive/2025/` and `work/archive/2026/` contain only `status: completed` notes
-- `work/incidents/` contains only notes tagged `incident`
-- `work/1-1/` contains only 1:1 meeting notes
-- `org/people/` contains only notes tagged `person`
-- `org/teams/` contains only notes tagged `team`
-- `templates/` contains only template files (with `{{placeholders}}`)
-- `thinking/` is clean (no leftover drafts that should have been promoted)
-- Nothing unexpected at vault root (allowed: `Home.md`, `AGENTS.md`, `vault-manifest.json`, `CHANGELOG.md`, `CONTRIBUTING.md`, `README.md`, `LICENSE`, `.gitignore` — no user notes)
+Verify the workspace matches the expected layout:
+- The root page "obsidian-mind" holds the seven databases (`Work`, `People`, `Teams`, `Competencies`, `Perf docs`, `Knowledge`, `Templates`) and the scaffold pages. Compare each `data_source` and view URL of `notion-map.json` with a `notion-fetch` of the database
+- Each database has its saved views (the view names of the content model)
+- `Work.Type` and `Tags` agree: a row with the `incident` tag has `Work.Type = Incident`, and a 1:1 row has `Work.Type = 1:1`
+- `Work > Active Work` holds only rows with `Work.Status = active`. `Work > Completed` holds only completed rows
+- `People` holds only people, and `Teams` holds only teams
+- `Templates` holds only template rows (with `{{placeholders}}`)
+- `Work.Type = Thinking` rows are clean (no leftover drafts that should have been promoted)
+- Nothing unexpected under the root page: each child page is in `notion-map.json`
 
-### 2. Check Indexes
+### 2. Check Pages and Views
 
-Read and verify each index file:
-- `Home.md` — do embedded Base views reference existing Bases? Are quick links valid?
-- `work/Index.md` — are active projects still active? Are completed items in the right section? Any missing notes?
-- `brain/Memories.md` — is the "Recent Context" section current? Any stale claims?
-- `org/People & Context.md` — are roles, peer selections, and project assignments current?
-- `perf/Brag Doc.md` — do PR counts and project descriptions match reality?
-- `brain/Skills.md` — are all slash commands registered? Workflows still valid?
+Read each scaffold page and verify:
+- `Page > Home` — do its linked views point at existing views? Are its quick links valid?
+- `Page > North Star` — is the Recent Context section current? Any stale claims?
+- `Page > People & Context` — are roles, peer selections, and project assignments current?
+- `Perf docs > Brag quarters` — do PR counts and project descriptions match reality?
+- The command catalog of the repository — are all slash commands registered? Workflows still valid?
 
-### 3. Check Frontmatter Completeness
+### 3. Check Property Completeness
 
-For each note type, verify required properties:
+For each row type, verify required properties:
 
-**Work notes** (`work/active/`, `work/archive/`):
-- Required: `date`, `quarter`, `description`, `status`, `tags: [work-note]`
-- Optional: `project`, `team`
+**Work rows** (`Work.Type = Work note`, or `Work.Status` completed):
+- Required: `Date`, `Work.Quarter`, `Description`, `Work.Status`, `Tags` with `work-note`
+- Optional: `Work.Project`, `Work.Team`
 
-**Incident notes** (`work/incidents/`):
-- Required: `date`, `quarter`, `description`, `tags: [work-note, incident]`
-- Required for main incident notes: `ticket`, `severity`, `role`, `status`
+**Incident rows** (`Work.Type = Incident`):
+- Required: `Date`, `Work.Quarter`, `Description`, `Tags` with `work-note` and `incident`
+- Required for main incident rows: `Work.Ticket`, `Work.Severity`, `Work.Role`, `Work.Status`
 
-**Person notes** (`org/people/`):
-- Required: `date`, `title`, `description`, `tags: [person]`
-- Optional but recommended: `team`
+**Person rows** (`People`):
+- Required: `Date`, `People.Role`, `Description`, `Tags` with `person`
+- Optional but recommended: `People.Team`
 
-**Team notes** (`org/teams/`):
-- Required: `date`, `description`, `tags: [team]`
+**Team rows** (`Teams`):
+- Required: `Date`, `Description`, `Tags` with `team`
 
-**Brain notes** (`brain/`):
-- Required: `description`, `tags: [brain]`
+**Brain rows** (`Knowledge`, `Knowledge.Type = Brain topic`):
+- Required: `Description`, `Tags` with `brain`
 
-**1:1 notes** (`work/1-1/`):
-- Required: `date`, `quarter`, `description`, `tags: [work-note]`
+**1:1 rows** (`Work.Type = 1:1`):
+- Required: `Date`, `Work.Quarter`, `Description`, `Tags` with `work-note`
 
-### 4. Check for Duplicate Tags
+### 4. Check for Duplicate Options
 
-Scan all notes for duplicate entries in the `tags` array (e.g., `tags: [person, person]`). This is a known issue — fix any found.
+`Tags` is a multi-select, so a row cannot hold one tag twice. Check the option lists of `Tags`, `Work.Project`, and `Work.Quarter` for near-duplicates (for example `person` and `People`). Merge any that you find, and ask the user first.
 
-### 5. Check Status/Folder Alignment
+### 5. Check Status and Type Alignment
 
-- Notes in `work/active/` must have `status: active`
-- Notes in `work/archive/` must have `status: completed`
-- No `status: active` notes in archive, no `status: completed` notes in active
+- Decision rows (`Work.Type = Decision`) hold `Work.Status` of `proposed`, `accepted`, or `deprecated`
+- No `Work.Status = active` row in `Work > Completed`, and no completed row in `Work > Active Work`
+- A `Work.Type = Inbox item` row has `Work.Status = inbox`
 
-### 6. Check Bases
+### 6. Check Views and Derived Properties
 
-For each `.base` file in `bases/`:
-- Do filters still match the expected notes?
-- Are templates excluded? (filters should include `!file.inFolder("templates")` where relevant)
-- Do referenced properties exist in the target notes?
-- Do formula references exist?
+For each saved view of each database:
+- Query it in view mode. Do the rows match the filters that the view should have?
+- Do the properties that it reads exist? Compare with `notion-fetch` of the database
+- Do the formulas (`Stale`, `Oversized`, `Edited outside hooks`) still return "yes" or "no"?
+
+Then refresh the derived properties. A row that was edited outside a hooked session has stale `Changed`, `Bytes`, `Open tasks`, `Open loops`, and `Hook stamp`. Read `Work > Hygiene: edited outside hooks` and the view `Hygiene: edited outside hooks` of each other database. For each row listed, make one write with `notion-update-page` and `update_properties` that sets `Description` to its current value. The write hook recomputes the derived properties and sets `Hook stamp`. Skip a row whose derived values do not change. If a row is still in the view after its write, report it to the user and do not retry. (unverified: the hook may treat a write of the same value as no change)
 
 ### 7. Check for Orphans
 
-- Are there notes in `work/active/` or `work/archive/` not linked from `work/Index.md`?
-- Are there incident notes not linked from `work/Index.md` Incidents section?
-- Are there people notes not linked from `org/People & Context.md`?
-- Are there notes without any inbound links at all? (Use `obsidian orphans` if available, or grep for `[[NoteName]]` references)
-- Are there thinking notes that should have been promoted or deleted?
+- Are there `Work` rows with `Work.Status = active` and no `Work.Project`? They are in `Work > Hygiene: loose active`
+- Are there incident rows missing from `Work > Incidents`?
+- Are there `People` rows missing from `Page > People & Context`? Its linked view lists each row
+- Are there rows without any inbound links at all? Query the data source for rows whose relation properties are all empty, then confirm each one with `notion-list-page-backlinks`:
+  `mcporter call notion.notion-list-page-backlinks --args '{"page_id":"<page URL or ID>"}' --output json`
+- Are there `Work.Type = Thinking` rows that should have been promoted or deleted?
 
 ### 8. Check Links
 
-- Scan for wikilinks that reference notes that don't exist (broken links)
-- Check that bidirectional links exist where expected (work note ↔ person, work note ↔ competency)
-- Verify `## Related` sections aren't empty on work notes
+- Scan for page mentions that point at pages that don't exist (broken links)
+- Check that the relations hold where expected (`Work.Person`, `Work.Competencies`, `Work.Decisions`). A mention in the body does not fill a relation, so set the relation too
+- Verify the `Related` sections aren't empty on work rows
 
 ### 9. Check for Stale Context
 
-- Read `brain/Memories.md` "Recent Context" — is anything outdated?
-- Read `org/People & Context.md` — any roles, teams, or relationships that changed?
-- Check `brain/Key Decisions.md`, `brain/Patterns.md`, `brain/Gotchas.md` for outdated claims
-- Check `brain/North Star.md` — does Current Focus reflect reality?
+- Read the Recent Context section of `Page > North Star`. Is anything outdated?
+- Read `Page > People & Context`. Any roles, teams, or relationships that changed?
+- Check `Page > Key Decisions`, `Page > Patterns`, `Page > Gotchas` for outdated claims
+- Check `Page > North Star`. Does Current Focus reflect reality?
 
 ### 10. Check for Mixed Context
 
-Per vault rules, each note should cover ONE concept. Flag notes that:
+Per the note rules, each row should cover ONE concept. Flag rows that:
 - Mix project work with review prep
 - Mix personal conversations with project evidence
 - Have 3+ independent sections that don't need each other
 
 ### 11. Check Claude Config
 
-- `.claude/settings.json` — are hooks well-formed and referencing correct paths?
-- `.claude/commands/` — do all commands reference correct folder structure?
-- `AGENTS.md` and `.claude/rules/` — any stale instructions that contradict current vault state?
-- No `CLAUDE.md` at the vault root: Claude Code reads it and skips `AGENTS.md` (the hygiene flags say so too)
+- `.claude/settings.json` — are hooks well-formed?
+- `.claude/commands/` and `.claude/agents/` — do all files name only databases, properties, and views that exist? The link check of the repository proves it
+- `AGENTS.md` and `.claude/rules/` — any stale instructions that contradict the current Notion layout?
+- No `CLAUDE.md` at the repository root: Claude Code reads it and skips `AGENTS.md` (the hygiene flags say so too)
 
 ### 12. Fix and Report
 
-- Fix what's clearly wrong (broken links, missing frontmatter, duplicate tags, wrong folder)
+- Fix what's clearly wrong (broken links, missing properties, wrong `Work.Type`)
 - For ambiguous issues, list them and ask the user
 - Summarize:
   - **Fixed**: issues resolved
   - **Flagged**: needs user input
-  - **Suggested**: improvements for the vault
+  - **Suggested**: improvements for the workspace
 
 ## Important
 
 - Don't delete anything without asking
-- Don't create new notes during audit — just fix existing ones
-- Preserve existing frontmatter when editing
-- If a note is in the wrong folder, move it with `git mv`
-- Update `brain/Memories.md` index if memory topics changed
-- Use parallel agents for large audits (e.g., one checking work/, one checking org/, one checking perf/)
+- Don't create new rows during audit — just fix existing ones
+- Preserve existing properties when editing
+- If a row has the wrong `Work.Type`, change the property. Do not copy the row
+- Use parallel agents for large audits (e.g., one checking `Work`, one checking `People` and `Teams`, one checking `Perf docs`)

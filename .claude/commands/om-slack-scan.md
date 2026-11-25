@@ -2,6 +2,12 @@
 
 Deep scan Slack channels and DMs for evidence involving a specific person or project. Extracts every touchpoint with timestamps for review evidence or project documentation.
 
+## Notion access
+
+Read with `mcporter call notion.<tool> --args '<JSON>' --output json`. Use no pipe and no redirect. Put no single quote in the JSON. Read `notion-map.json` in the project root for the `data_source` URL and the view URLs of each database.
+
+Write in two steps. First use the `Write` tool to make `.claude/state/outbox/<name>.json` with the JSON arguments. Then run `mcporter call notion.<tool> --args "$(cat .claude/state/outbox/<name>.json)"`.
+
 ## Usage
 
 ```
@@ -34,18 +40,20 @@ Examples:
    - Whether it's evidence of: technical work, leadership, collaboration, problem-solving, initiative
 
 5. **Organize by date** with clear headers per day. Separate:
-   - **Project evidence** → goes to the relevant work note
-   - **Review/personal context** → goes to people notes or review prep notes
-   - **Team dynamics** → goes to people notes
+   - **Project evidence** goes to the relevant `Work` row
+   - **Review/personal context** goes to the `People` row or to a `Perf docs` row for review prep
+   - **Team dynamics** goes to the `People` row
 
-6. **Flag items that need correction** in existing vault notes.
+   Find each row with `notion-search`. Add the text with `notion-update-page` and `insert_content`.
+
+6. **Flag items that need correction** in existing Notion rows.
 
 ## Important
 
-- Be meticulous — timestamps matter for evidence
+- Be meticulous. Timestamps matter for evidence
 - Capture exact quotes when they show initiative, leadership, or problem-solving
 - Note when the person was tagged by others (shows they're a go-to person)
 - Separate project work from review prep from personal conversations
-- Don't mix contexts — put data where it belongs in the vault
+- Don't mix contexts. Put data where it belongs in Notion
 - Check for threads (slack_read_thread) when a message has replies
 - Look for screen recordings, files shared, PRs linked
