@@ -38,6 +38,7 @@ import {
 	SCAFFOLD_SOURCES,
 	scaffoldBody,
 	scaffoldDescription,
+	SYNCED_SECTIONS,
 	TEMPLATES,
 	UNVERIFIED_SUFFIX,
 	viewDirectives,
@@ -66,6 +67,7 @@ import {
 	type LiveView,
 	type PageRef,
 } from "./lib/notion-parse.ts";
+import { ensureSyncedSection } from "./lib/notion-synced.ts";
 
 export interface SetupOptions {
 	readonly rootTitle: string;
@@ -79,7 +81,7 @@ export interface SetupOptions {
 	readonly sleep?: (ms: number) => Promise<void>;
 }
 
-export type CreatedKind = "page" | "database" | "property" | "option" | "view" | "row" | "probe_row";
+export type CreatedKind = "page" | "database" | "property" | "option" | "view" | "row" | "block" | "probe_row";
 
 export interface SetupResult {
 	readonly map: NotionMap;
@@ -183,7 +185,7 @@ export function probeFailures(view: ViewSpec, returned: ReadonlySet<string>): st
 const hookStamp = (now: Date): Record<string, string | number> => ({ "date:Hook stamp:start": now.toISOString(), "date:Hook stamp:is_datetime": 1 });
 
 export async function runSetup(client: NotionClient, options: SetupOptions): Promise<SetupResult> {
-	const created: Record<CreatedKind, number> = { page: 0, database: 0, property: 0, option: 0, view: 0, row: 0, probe_row: 0 };
+	const created: Record<CreatedKind, number> = { page: 0, database: 0, property: 0, option: 0, view: 0, row: 0, block: 0, probe_row: 0 };
 	const sleep = options.sleep ?? ((ms: number) => new Promise<void>((done) => setTimeout(done, ms)));
 	const record = (kind: CreatedKind, id: string, title: string): void => {
 		created[kind]++;
@@ -398,6 +400,9 @@ export async function runSetup(client: NotionClient, options: SetupOptions): Pro
 		return { ...ref(page), title: spec.title, views: await linkedViews(page, spec.linkedViews) };
 	};
 	for (const spec of PAGES) pages[spec.key] = await ensurePage(spec);
+	for (const sync of SYNCED_SECTIONS) {
+		await ensureSyncedSection(client, sync, { original: pages[sync.original].id, copy: pages[sync.copy].id }, (id, title) => record("block", id, title));
+	}
 
 	const templates: Record<string, NotionRef> = {};
 	for (const template of TEMPLATES) {

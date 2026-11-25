@@ -409,6 +409,15 @@ export const PAGES: readonly PageSpec[] = [
 	},
 ];
 
+/** A `##` section that `original` owns as a synced block and `copy` shows. `Home.md` embeds `![[North Star#Current Focus]]`. */
+export interface SyncedSection {
+	readonly section: string;
+	readonly original: PageKey;
+	readonly copy: PageKey;
+}
+
+export const SYNCED_SECTIONS: readonly SyncedSection[] = [{ section: "Current Focus", original: "north_star", copy: "home" }];
+
 export const TEMPLATES: readonly TemplateSpec[] = [
 	{ title: "Work Note", source: "template_work_note", purpose: "A work note for a project or a task.", appliesTo: "Work note" },
 	{ title: "Decision Record", source: "template_decision_record", purpose: "A decision, its options, and its consequences.", appliesTo: "Decision" },
