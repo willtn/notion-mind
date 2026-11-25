@@ -57,7 +57,7 @@ import { claimChanged } from "./lib/hint-state.ts";
 import { notionMapPath, readNotionMap, type NotionMap } from "./lib/notion-map.ts";
 import { reportKey } from "./lib/report-key.ts";
 import { resolveProjectDir } from "./lib/project-dir.ts";
-import { lazyNotion } from "./lib/write-hook.ts";
+import { lazyNotion, NOTION_BUDGET_MS } from "./lib/write-hook.ts";
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 // The last report each session was shown (lib/hint-state.ts, the same
@@ -125,7 +125,8 @@ async function scan(): Promise<HygieneReport> {
 	} catch (error) {
 		return hygieneNotRead(vaultRoot, "the Notion map file", error);
 	}
-	const notion = lazyNotion();
+	// The scan sends 9 view queries at one time. With 4 at one time it took 1.4 s, and with all at one time 0.9 to 1.1 s (measured).
+	const notion = lazyNotion(NOTION_BUDGET_MS, { concurrency: 9 });
 	const found = await scanHygiene({ call: notion.call, map, projectDir: vaultRoot, nowMs: Date.now(), watchedTypes: parseOpenLoopConfig(manifestJson).types });
 	await notion.close();
 	return found;

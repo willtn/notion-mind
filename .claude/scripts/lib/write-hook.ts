@@ -44,9 +44,9 @@ export interface Notion {
  * the wait that Notion names is inside that time. A longer wait ends the
  * call at once: after 180 requests in 10 s the named wait was 49 s, and it
  * went down by 1 s in each second (measured). `options` has the transport
- * and the clock of a test.
+ * and the clock of a test, and the number of calls at one time.
  */
-export function lazyNotion(budgetMs: number = NOTION_BUDGET_MS, options: Pick<NotionClientOptions, "transport" | "sleep" | "now"> = {}): Notion {
+export function lazyNotion(budgetMs: number = NOTION_BUDGET_MS, options: Pick<NotionClientOptions, "transport" | "sleep" | "now" | "concurrency"> = {}): Notion {
 	const deadline = Date.now() + budgetMs;
 	const sleep = (ms: number): Promise<void> => {
 		const left = deadline - Date.now();
