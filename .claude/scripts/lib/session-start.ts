@@ -74,7 +74,7 @@ export function formatInjectionSize(
  * section had before (#304).
  */
 export type BudgetSection = {
-	/** Section heading, e.g. "### Vault File Listing". Empty for preamble. */
+	/** Section heading, e.g. "### Workspace Listing". Empty for preamble. */
 	readonly header: string;
 	readonly body: string;
 	readonly priority: number;
