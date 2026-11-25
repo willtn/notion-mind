@@ -36,6 +36,8 @@ after(() => rmTemp(TMP));
 const changed = (daysAgo: number, minutes = 0): string => new Date(NOW - daysAgo * DAY - minutes * 60_000).toISOString();
 const sized = (Name: string, Bytes: number): Row => ({ Name, Bytes, Type: "Reference" });
 const loop = (Name: string, Type: string, daysAgo: number, openLoops = 1): Row => ({ Name, Type, "Open loops": openLoops, "date:Changed:start": changed(daysAgo) });
+/** A 1:1 row of the history view. The `Date` is the date of the title when `date` is absent. */
+const meeting = (Name: string, date = Name.slice(-10)): Row => ({ Name, Type: "1:1", "date:Date:start": date });
 const inbox = (Name: string, daysAgo: number): Row => ({ Name, Type: "Inbox item", "date:Changed:start": changed(daysAgo) });
 
 type Views = Readonly<Partial<Record<DatabaseKey, Readonly<Record<string, readonly Row[] | Error>>>>>;
@@ -152,12 +154,31 @@ describe("HY-04: the open loops", () => {
 		assert.deepEqual(report.openLoops, []);
 	});
 
-	test("the read of the 1:1 rows stops after the page that has a row of each person with an old 1:1", async () => {
-		const others = Array.from({ length: 250 }, (_, index) => ({ Name: `Person ${index} 2026-01-01`, Type: "1:1" }));
-		const history = [...others.slice(0, 120), { Name: "Ada Park 2026-03-01", Type: "1:1" }, ...others.slice(120), { Name: "Ada Park 2026-01-10", Type: "1:1" }];
+	test("the read of the 1:1 rows stops after the page whose last row is earlier than a row of each person with an old 1:1", async () => {
+		const others = (count: number, date: string): Row[] => Array.from({ length: count }, (_, index) => meeting(`Person ${date} ${index} ${date}`, date));
+		const history = [...others(120, "2026-04-01"), meeting("Ada Park 2026-03-01"), ...others(130, "2026-02-01"), meeting("Ada Park 2026-01-10")];
 		const { call, queried } = notion({ work: { "Hygiene: open loops": [loop("Ada Park 2026-01-10", "1:1", 60)], "1:1 History": history } });
 		const report = await scanHygiene({ call, map, projectDir: EMPTY_PROJECT, nowMs: NOW, watchedTypes: WATCHED });
-		assert.equal(queried.filter((name) => name === "work / 1:1 History").length, 2, "the second page has the later row of the person");
+		assert.equal(queried.filter((name) => name === "work / 1:1 History").length, 2, "the second page has the later row of the person, and it ends with an earlier row");
+		assert.deepEqual(report.openLoops, []);
+	});
+
+	test("two 1:1 rows of a person with one Date can be on two pages, and the later title counts", async () => {
+		const tied = "2026-01-05";
+		const others = Array.from({ length: 99 }, (_, index) => meeting(`Person ${index} 2026-03-01`, tied));
+		const history = [meeting("Ada Park 2026-01-10", tied), ...others, meeting("Ada Park 2026-02-07", tied)];
+		const { call, queried } = notion({ work: { "Hygiene: open loops": [loop("Ada Park 2026-01-10", "1:1", 60)], "1:1 History": history } });
+		const report = await scanHygiene({ call, map, projectDir: EMPTY_PROJECT, nowMs: NOW, watchedTypes: WATCHED });
+		assert.equal(queried.filter((name) => name === "work / 1:1 History").length, 2, "the first page ends in the rows of the tied Date, so the read goes on");
+		assert.deepEqual(report.openLoops, [], "the row of 2026-02-07 is the latest, and it is not an old row");
+	});
+
+	test("a 1:1 row with no Date does not stop the read, because its place in the view is not known", async () => {
+		const others = Array.from({ length: 99 }, (_, index) => ({ Name: `Person ${index} 2026-03-01`, Type: "1:1" }));
+		const history = [{ Name: "Ada Park 2026-01-10", Type: "1:1" }, ...others, { Name: "Ada Park 2026-02-07", Type: "1:1" }];
+		const { call, queried } = notion({ work: { "Hygiene: open loops": [loop("Ada Park 2026-01-10", "1:1", 60)], "1:1 History": history } });
+		const report = await scanHygiene({ call, map, projectDir: EMPTY_PROJECT, nowMs: NOW, watchedTypes: WATCHED });
+		assert.equal(queried.filter((name) => name === "work / 1:1 History").length, 2);
 		assert.deepEqual(report.openLoops, []);
 	});
 

@@ -109,6 +109,8 @@ export interface HygieneSource {
 interface ViewRow {
 	readonly title: string;
 	readonly type: string | null;
+	/** The `Date` property. The view of the 1:1 rows has the latest one first. */
+	readonly dateMs: number | null;
 	readonly changedMs: number | null;
 	readonly bytes: number | null;
 	readonly openLoops: number | null;
@@ -117,13 +119,17 @@ interface ViewRow {
 function viewRow(raw: Readonly<Record<string, unknown>>): ViewRow | null {
 	const title = raw["Name"];
 	if (typeof title !== "string" || title === "") return null;
-	const changed = raw["date:Changed:start"];
-	const changedMs = typeof changed === "string" ? Date.parse(changed) : Number.NaN;
+	const instant = (property: string): number | null => {
+		const start = raw[`date:${property}:start`];
+		const ms = typeof start === "string" ? Date.parse(start) : Number.NaN;
+		return Number.isNaN(ms) ? null : ms;
+	};
 	const number = (name: string): number | null => (typeof raw[name] === "number" ? (raw[name] as number) : null);
 	return {
 		title,
 		type: typeof raw["Type"] === "string" ? raw["Type"] : null,
-		changedMs: Number.isNaN(changedMs) ? null : changedMs,
+		dateMs: instant("Date"),
+		changedMs: instant("Changed"),
 		bytes: number("Bytes"),
 		openLoops: number("Open loops"),
 	};
@@ -142,6 +148,25 @@ export function oversizedNotes(rows: readonly ViewRow[]): OversizedNote[] {
 /** `<Person> YYYY-MM-DD` gives the person. A 1:1 row with a different title has no person. */
 export function oneOnOnePerson(title: string): string | null {
 	return title.match(/^(.+?)\s+\d{4}-\d{2}-\d{2}$/)?.[1] ?? null;
+}
+
+/**
+ * True when `seen`, the first rows of the 1:1 view, hold the latest row of
+ * each of `persons`. The view has the latest `Date` first, and the title
+ * gives the order of two rows with one `Date`. Such rows can be on two
+ * pages. So the rows are enough only when the last one is earlier than a
+ * row of each person. A row with no `Date` has no known place in the view,
+ * so it proves nothing.
+ */
+function hasLatestOfEach(seen: readonly ViewRow[], persons: ReadonlySet<string>): boolean {
+	const last = seen.at(-1)?.dateMs ?? null;
+	if (last === null) return false;
+	const newest = new Map<string, number>();
+	for (const { title, dateMs } of seen) {
+		const person = oneOnOnePerson(title);
+		if (person !== null && dateMs !== null) newest.set(person, Math.max(dateMs, newest.get(person) ?? dateMs));
+	}
+	return [...persons].every((person) => (newest.get(person) ?? last) > last);
 }
 
 /**
@@ -230,9 +255,7 @@ export async function scanHygiene({ call, map, projectDir, nowMs, watchedTypes }
 		const persons = new Set(rows.flatMap((row) => (row.type === ONE_ON_ONE_TYPE && watchedTypes.includes(ONE_ON_ONE_TYPE) ? (oneOnOnePerson(row.title) ?? []) : [])));
 		const latest = new Map<string, string>();
 		if (persons.size > 0) {
-			const personsOf = (seen: readonly ViewRow[]): Set<string> => new Set(seen.flatMap((row) => oneOnOnePerson(row.title) ?? []));
-			// The view has the latest row of a person first, so the read stops when it has a row of each person.
-			const history = await rowsOf("work", ONE_ON_ONE_VIEW, (seen) => [...persons].every((person) => personsOf(seen).has(person))).catch((error: unknown) => {
+			const history = await rowsOf("work", ONE_ON_ONE_VIEW, (seen) => hasLatestOfEach(seen, persons)).catch((error: unknown) => {
 				// Without the latest 1:1 row of each person, the list can hold a row that does not count. So the finding has no list.
 				throw new Error(`the view "${ONE_ON_ONE_VIEW}" gave no rows: ${causeOf(error)}`);
 			});
