@@ -29,7 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node --disable-warning=ExperimentalWarning --experimental-strip-types \"$(r=\"${CLAUDE_PROJECT_DIR:-.}\"; d=\"$r\"; while [ ! -f \"$d/vault-manifest.json\" ] && p=\"$(dirname \"$d\")\" && [ \"$d\" != \"$p\" ]; do d=\"$p\"; done; [ -f \"$d/vault-manifest.json\" ] || d=\"$r\"; printf %s \"$d\")/.claude/scripts/guard-notion-write.ts\"",
+            "command": "node --disable-warning=ExperimentalWarning --experimental-strip-types \"$(r=\"${CLAUDE_PROJECT_DIR:-.}\"; d=\"$r\"; while [ ! -f \"$d/vault-manifest.json\" ] && p=\"$(dirname \"$d\")\" && [ \"$d\" != \"$p\" ]; do d=\"$p\"; done; [ -f \"$d/vault-manifest.json\" ] || d=\"$r\"; printf %s \"$d\")/.claude/scripts/guard-notion-write.ts\" || printf '%s' '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"The Notion guard did not run, so it denied this Bash command. Run the PreToolUse command of .claude/settings.json in a terminal to see the error.\"}}'",
             "timeout": 5
           }
         ]
