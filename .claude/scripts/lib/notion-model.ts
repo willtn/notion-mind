@@ -451,6 +451,11 @@ export function mergeOptions(live: readonly SelectOption[], wanted: readonly str
 
 const optionList = (options: readonly SelectOption[]): string => options.map((o) => `${quote(o.name)}:${o.color}`).join(", ");
 
+/** The column type of a select or a multi-select that holds the live options and each wanted option. */
+export function selectColumn(type: "select" | "multi_select", live: readonly SelectOption[], wanted: readonly string[]): string {
+	return `${type === "select" ? "SELECT" : "MULTI_SELECT"}(${optionList(mergeOptions(live, wanted))})`;
+}
+
 /** The column type of the Notion schema language. A relation needs the data source ID of its target. */
 export function columnType(spec: PropertySpec, dataSourceOf: (key: DatabaseKey) => string, own: DatabaseKey, live: readonly SelectOption[] = []): string {
 	switch (spec.type) {
@@ -467,9 +472,8 @@ export function columnType(spec: PropertySpec, dataSourceOf: (key: DatabaseKey) 
 		case "last_edited_time":
 			return "LAST_EDITED_TIME";
 		case "select":
-			return `SELECT(${optionList(mergeOptions(live, spec.options))})`;
 		case "multi_select":
-			return `MULTI_SELECT(${optionList(mergeOptions(live, spec.options))})`;
+			return selectColumn(spec.type, live, spec.options);
 		case "formula":
 			return `FORMULA(${quote(spec.expression)})`;
 		case "rollup":
