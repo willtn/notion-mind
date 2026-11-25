@@ -182,6 +182,8 @@ export const NEUTRAL_NAMES = [
 	"{notes + counts}",
 	"{no properties}",
 	"{missing field}",
+	"{no links}",
+	"{verbatim mark}",
 ] as const;
 
 export type NeutralName = (typeof NEUTRAL_NAMES)[number];

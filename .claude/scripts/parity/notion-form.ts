@@ -355,14 +355,42 @@ export async function notionForm(
 	mapFile: string,
 	options: { readonly scriptsDir: string; readonly now: Date },
 ): Promise<HookForm> {
+	return (await notionForms(spec, mapFile, options.now))(options.scriptsDir);
+}
+
+/**
+ * The same as `notionForm`, for more than one scripts directory: the
+ * fixture is written one time, and the result gives the form that runs the
+ * hooks of a scripts directory on it.
+ */
+export async function notionForms(spec: FixtureSpec, mapFile: string, now: Date): Promise<(scriptsDir: string) => HookForm> {
 	const map = readNotionMap(mapFile);
 	const client = await createNotionClient();
 	let pages: Pages;
 	try {
-		pages = (await writeFixture(client, spec, map, { now: options.now, ...ledgerHooksOf() })).pages;
+		pages = (await writeFixture(client, spec, map, { now, ...ledgerHooksOf() })).pages;
 	} finally {
 		await client.close();
 	}
+	return (scriptsDir) => hookFormOf(spec, { scriptsDir, now, mapFile, map, pages, notionEnv: notionHookEnvironment });
+}
+
+/**
+ * The hook form for pages that exist. `notionEnv` gives the variables that
+ * let a hook process reach Notion from a tools folder of the scenario.
+ */
+export function hookFormOf(
+	spec: FixtureSpec,
+	options: {
+		readonly scriptsDir: string;
+		readonly now: Date;
+		readonly mapFile: string;
+		readonly map: NotionMap;
+		readonly pages: Pages;
+		readonly notionEnv: (dir: string) => Record<string, string>;
+	},
+): HookForm {
+	const { map, mapFile, pages } = options;
 	const context: NoteContext = { now: options.now, openLoopSections: parseOpenLoopConfig(manifestOf(spec)).sectionRe, pages };
 	const titleOfId = new Map([...pages].map(([title, page]) => [page.id, title] as const));
 	/** A hook names a page by its title, by its ID, or by a URL that ends in its ID. */
@@ -385,7 +413,7 @@ export async function notionForm(
 		return {
 			scriptsDir: options.scriptsDir,
 			projectDir,
-			env: { ...notionHookEnvironment(join(dir, "tools")), [NOTION_MAP_ENV]: projectMap },
+			env: { ...options.notionEnv(join(dir, "tools")), [NOTION_MAP_ENV]: projectMap },
 			sessionLogDir: join(projectDir, ".claude", "state", "session-logs"),
 			writePayload: (notes) => {
 				const written = notes.map((note) => {
