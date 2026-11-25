@@ -147,11 +147,15 @@ export type ActiveHygieneReport = {
 export const OPEN_LOOP_DAYS = 14;
 export const OPEN_LOOP_CAP = 5;
 const OPEN_LOOP_DEFAULT_DIRS = ["work/1-1", "work/meetings", "work/incidents"];
+/** The `Type` values of the Work rows that replace the default folders. */
+const OPEN_LOOP_DEFAULT_TYPES = ["1:1", "Inbox item", "Incident"];
 const OPEN_LOOP_DEFAULT_SECTIONS = ["action items", "what to watch"];
 const OPEN_LOOP_PHRASE = /\b(waiting on|watch for)\b/i;
 
 export type OpenLoopConfig = {
 	readonly dirs: readonly string[];
+	/** The `Type` values of the Work rows that the Notion scan watches (`open_loop_types`). */
+	readonly types: readonly string[];
 	readonly sectionRe: RegExp;
 };
 
@@ -164,6 +168,7 @@ export type OpenLoopConfig = {
  */
 export function parseOpenLoopConfig(manifestJson: string | null): OpenLoopConfig {
 	let dirs: readonly string[] = OPEN_LOOP_DEFAULT_DIRS;
+	let types: readonly string[] = OPEN_LOOP_DEFAULT_TYPES;
 	let sections: readonly string[] = OPEN_LOOP_DEFAULT_SECTIONS;
 	if (manifestJson !== null) {
 		try {
@@ -185,6 +190,11 @@ export function parseOpenLoopConfig(manifestJson: string | null): OpenLoopConfig
 				);
 				if (valid.length > 0) dirs = valid;
 			}
+			const t = parsed["open_loop_types"];
+			if (Array.isArray(t)) {
+				const valid = t.filter((x): x is string => typeof x === "string" && x.length > 0);
+				if (valid.length > 0) types = valid;
+			}
 			const s = parsed["open_loop_sections"];
 			if (
 				Array.isArray(s) &&
@@ -201,7 +211,7 @@ export function parseOpenLoopConfig(manifestJson: string | null): OpenLoopConfig
 		`^##+\\s+(${sections.map((s) => escapeRegex(s)).join("|")})`,
 		"i",
 	);
-	return { dirs, sectionRe };
+	return { dirs, types, sectionRe };
 }
 
 /**
@@ -547,7 +557,7 @@ function realPath(path: string): string | null {
  * the oversize scan never sees it, yet a user folding their additions into it
  * can push it past where Antigravity stops reading, silently.
  */
-function agentsMdPastFlag(root: string): { sizeKb: number } | null {
+export function agentsMdPastFlag(root: string): { sizeKb: number } | null {
 	try {
 		const size = statSync(join(root, INSTRUCTION_FILE)).size;
 		return size >= AGENTS_MD_FLAG_BYTES ? { sizeKb: Math.round(size / 1000) } : null;
@@ -561,7 +571,7 @@ function agentsMdPastFlag(root: string): { sizeKb: number } | null {
  * AGENTS.md the vault has not upgraded yet, and its old file still carries
  * everything.
  */
-function instructionFileFindings(root: string): Pick<ActiveHygieneReport, "leftoverInstructionFiles"> {
+export function instructionFileFindings(root: string): Pick<ActiveHygieneReport, "leftoverInstructionFiles"> {
 	if (!existsSync(join(root, INSTRUCTION_FILE))) return { leftoverInstructionFiles: [] };
 	return {
 		leftoverInstructionFiles: RETIRED_INSTRUCTION_FILES.filter((f) => existsSync(join(root, f))),
@@ -612,6 +622,16 @@ const claims = {
 	agentsMd: (sizeKb: number) => `AGENTS.md is ${sizeKb}KB`,
 };
 
+/** The claim of a retired instruction file beside AGENTS.md, and its report line. The file is local in each form of the vault. */
+export const leftoverClaim = (file: string): string => claims.leftover(file);
+export const leftoverLine = (file: string): string =>
+	`⚠️  ${claims.leftover(file)} — ${LEFTOVER_HARM[file] ?? "it is a retired instruction file; move anything you added there to AGENTS.md and delete it."}`;
+
+/** The claim of an AGENTS.md past its flag size, and its report line. */
+export const agentsMdClaim = (sizeKb: number): string => claims.agentsMd(sizeKb);
+export const agentsMdLine = (sizeKb: number): string =>
+	`⚠️  ${claims.agentsMd(sizeKb)} — Antigravity stopped reading it at ~24,000 bytes, silently (Antigravity 1.3.0, measured 2026-10-06, #321). Keep it under 23KB. Move a section an agent can safely skip to a file it reads on demand, word for word, and leave a one-line pointer; Claude Code-only additions go to .claude/rules/.`;
+
 /** The claim of every finding in `report`, in the order the formatter lists them. */
 export function hygieneClaims(report: ActiveHygieneReport): string[] {
 	const { completedInActive, ungroupedClusters, oversizedNotes, openLoops, inboxPressure, leftoverInstructionFiles, agentsMd } = report;
@@ -657,15 +677,12 @@ export function formatActiveHygiene(report: ActiveHygieneReport): string[] {
 	// conventions this vault ships in AGENTS.md, or loses what the user added.
 	for (const file of leftoverInstructionFiles) {
 		if (lines.length > 0) lines.push("");
-		const harm = LEFTOVER_HARM[file] ?? "it is a retired instruction file; move anything you added there to AGENTS.md and delete it.";
-		lines.push(`⚠️  ${claims.leftover(file)} — ${harm}`);
+		lines.push(leftoverLine(file));
 	}
 
 	if (agentsMd !== null) {
 		if (lines.length > 0) lines.push("");
-		lines.push(
-			`⚠️  ${claims.agentsMd(agentsMd.sizeKb)} — Antigravity stopped reading it at ~24,000 bytes, silently (Antigravity 1.3.0, measured 2026-10-06, #321). Keep it under 23KB. Move a section an agent can safely skip to a file it reads on demand, word for word, and leave a one-line pointer; Claude Code-only additions go to .claude/rules/.`,
-		);
+		lines.push(agentsMdLine(agentsMd.sizeKb));
 	}
 
 	if (completedInActive.length > 0) {
