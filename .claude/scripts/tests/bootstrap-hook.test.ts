@@ -1,11 +1,11 @@
 /**
  * Unit tests for the v6 bootstrap hook (.shardmind/hooks/bootstrap.ts).
  *
- * Bootstrap owns the unmanaged-artifact responsibilities — git init and the
- * QMD index — split out of the legacy post-install hook. Drives the exported
+ * Bootstrap owns the unmanaged-artifact responsibility — git init — split
+ * out of the legacy post-install hook. Drives the exported
  * `ensureGitRepo` and the default-export orchestration against synthetic
- * vaults under a per-test temp directory. The subprocess paths (`git init`,
- * `node qmd-bootstrap.ts`) get integration coverage through ShardMind's
+ * vaults under a per-test temp directory. The subprocess path (`git init`)
+ * gets integration coverage through ShardMind's
  * contract suite when it runs against this shard; here we exercise the
  * skip/gate branches that avoid spawning.
  *
@@ -56,8 +56,7 @@ describe("ensureGitRepo", () => {
 
 describe("bootstrap (default export) — orchestration gates", () => {
 	// Pre-creates `.git/` to short-circuit `ensureGitRepo` (avoiding a real
-	// `git init` subprocess) and pins `qmd_enabled: false` so `bootstrapQmd`
-	// is gated off — leaving bootstrap a no-op that must not write anything.
+	// `git init` subprocess), leaving bootstrap a no-op that must not write anything.
 	let vault: string;
 
 	beforeEach(async () => {
@@ -69,7 +68,7 @@ describe("bootstrap (default export) — orchestration gates", () => {
 		await rm(vault, { recursive: true, force: true });
 	});
 
-	function makeCtx(overrides: Partial<{ qmdEnabled: boolean }>): {
+	function makeCtx(): {
 		slot: "bootstrap";
 		vaultRoot: string;
 		values: Record<string, unknown>;
@@ -84,17 +83,15 @@ describe("bootstrap (default export) — orchestration gates", () => {
 				user_name: "Jane Engineer",
 				org_name: "Independent",
 				vault_purpose: "engineering",
-				qmd_enabled: overrides.qmdEnabled ?? false,
 			},
 			modules: {},
 			shard: { name: "obsidian-mind", version: "6.2.0" },
 		};
 	}
 
-	test("no-op when .git/ exists and qmd is disabled — writes nothing", async () => {
-		await bootstrap(makeCtx({ qmdEnabled: false }));
-		// git init skipped (HEAD absent) and qmd gated off (.qmd absent).
+	test("no-op when .git/ exists — writes nothing", async () => {
+		await bootstrap(makeCtx());
+		// git init skipped (HEAD absent).
 		await assert.rejects(readFile(join(vault, ".git", "HEAD"), "utf-8"), isENOENT);
-		await assert.rejects(readFile(join(vault, ".qmd", "config.json"), "utf-8"), isENOENT);
 	});
 });

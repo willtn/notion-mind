@@ -635,10 +635,8 @@ const KEPT_CLAUDE_VARIABLES = new Set([
 /**
  * The environment every process in the fixture runs with. The caller's other
  * Claude Code variables (a gate run from inside a session inherits them) and
- * NODE_PATH are dropped. npm's global prefix points at an empty folder, so qmd
- * does not resolve through it and session-start.ts skips its search
- * bootstrap: otherwise each throwaway vault starts a full qmd bootstrap and
- * embed that outlives the run and registers an index on the caller's machine.
+ * NODE_PATH are dropped. npm's global prefix points at an empty folder, so no
+ * globally installed tool of the caller's resolves through it.
  */
 export function fixtureEnv(vault: string, from: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
 	const kept = Object.entries(from).filter(

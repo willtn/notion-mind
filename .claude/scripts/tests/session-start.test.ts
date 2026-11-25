@@ -39,13 +39,6 @@ import {
 	formatBrainIndex,
 	stripFrontmatter,
 	hasBrainContent,
-	parseQmdIndex,
-	parseQmdMinVersion,
-	isQmdNativeAbiMismatch,
-	qmdPackageRootFromEntry,
-	resolveIndexStorePath,
-	qmdArgsWithIndex,
-	isValidQmdIndex,
 	parseInfraRootFilenames,
 	isInfraFilename,
 	isMarkdownFilename,
@@ -539,165 +532,6 @@ describe("hasBrainContent", () => {
 	});
 });
 
-describe("parseQmdIndex", () => {
-	test("extracts qmd_index when present as a non-empty string", () => {
-		const manifest = JSON.stringify({ qmd_index: "obsidian-mind" });
-		assert.equal(parseQmdIndex(manifest), "obsidian-mind");
-	});
-	test("returns null when qmd_index is an empty string", () => {
-		const manifest = JSON.stringify({ qmd_index: "" });
-		assert.equal(parseQmdIndex(manifest), null);
-	});
-	test("returns null when qmd_index is missing from the manifest", () => {
-		const manifest = JSON.stringify({ template: "obsidian-mind" });
-		assert.equal(parseQmdIndex(manifest), null);
-	});
-	test("returns null when qmd_index is not a string", () => {
-		const manifest = JSON.stringify({ qmd_index: 42 });
-		assert.equal(parseQmdIndex(manifest), null);
-	});
-	test("returns null when the manifest source is null (missing file)", () => {
-		assert.equal(parseQmdIndex(null), null);
-	});
-	test("returns null when the manifest is malformed JSON", () => {
-		assert.equal(parseQmdIndex("{ not json"), null);
-	});
-	test("returns null when the manifest parses to a non-object", () => {
-		assert.equal(parseQmdIndex('"just a string"'), null);
-	});
-	test("returns null when qmd_index contains a forward-slash path separator", () => {
-		const manifest = JSON.stringify({ qmd_index: "vault/subdir" });
-		assert.equal(parseQmdIndex(manifest), null);
-	});
-	test("returns null when qmd_index contains a backslash path separator", () => {
-		const manifest = JSON.stringify({ qmd_index: "vault\\subdir" });
-		assert.equal(parseQmdIndex(manifest), null);
-	});
-	test("returns null when qmd_index is a parent-dir escape attempt", () => {
-		const manifest = JSON.stringify({ qmd_index: "../../etc/passwd" });
-		assert.equal(parseQmdIndex(manifest), null);
-	});
-	test("returns null when qmd_index contains whitespace", () => {
-		const manifest = JSON.stringify({ qmd_index: "my vault" });
-		assert.equal(parseQmdIndex(manifest), null);
-	});
-	test("returns null when qmd_index is whitespace-only", () => {
-		const manifest = JSON.stringify({ qmd_index: "   " });
-		assert.equal(parseQmdIndex(manifest), null);
-	});
-	test("returns null when qmd_index starts with a non-alphanumeric character", () => {
-		const manifest = JSON.stringify({ qmd_index: "-leading-dash" });
-		assert.equal(parseQmdIndex(manifest), null);
-	});
-	test("accepts dash, dot, and underscore inside the name", () => {
-		const manifest = JSON.stringify({ qmd_index: "vault-a_b.2" });
-		assert.equal(parseQmdIndex(manifest), "vault-a_b.2");
-	});
-});
-
-describe("isValidQmdIndex", () => {
-	test("accepts standard names", () => {
-		assert.equal(isValidQmdIndex("obsidian-mind"), true);
-		assert.equal(isValidQmdIndex("vigil"), true);
-		assert.equal(isValidQmdIndex("vault.2_final"), true);
-	});
-	test("rejects path separators, whitespace, empty, and leading punctuation", () => {
-		assert.equal(isValidQmdIndex(""), false);
-		assert.equal(isValidQmdIndex(" "), false);
-		assert.equal(isValidQmdIndex("a b"), false);
-		assert.equal(isValidQmdIndex("a/b"), false);
-		assert.equal(isValidQmdIndex("a\\b"), false);
-		assert.equal(isValidQmdIndex("../x"), false);
-		assert.equal(isValidQmdIndex("-leading"), false);
-		assert.equal(isValidQmdIndex(".leading"), false);
-	});
-	test("rejects non-string values", () => {
-		assert.equal(isValidQmdIndex(undefined), false);
-		assert.equal(isValidQmdIndex(null), false);
-		assert.equal(isValidQmdIndex(42), false);
-		assert.equal(isValidQmdIndex({}), false);
-	});
-});
-
-describe("qmdArgsWithIndex", () => {
-	test("prepends --index <name> when an index is provided", () => {
-		assert.deepEqual(qmdArgsWithIndex("obsidian-mind", ["update"]), [
-			"--index",
-			"obsidian-mind",
-			"update",
-		]);
-	});
-	test("returns subcommand args unchanged when index is null", () => {
-		assert.deepEqual(qmdArgsWithIndex(null, ["update"]), ["update"]);
-	});
-	test("preserves multi-arg subcommand invocations", () => {
-		assert.deepEqual(
-			qmdArgsWithIndex("vault", ["query", "ShardMind", "--json"]),
-			["--index", "vault", "query", "ShardMind", "--json"],
-		);
-	});
-	test("returns a fresh array (does not mutate the input)", () => {
-		const input = ["update"];
-		const out = qmdArgsWithIndex(null, input);
-		assert.notEqual(out, input);
-		assert.deepEqual(out, input);
-	});
-});
-
-describe("isQmdNativeAbiMismatch", () => {
-	test("detects a NODE_MODULE_VERSION mismatch message", () => {
-		assert.equal(
-			isQmdNativeAbiMismatch(
-				"Error: The module '.../better_sqlite3.node'\nwas compiled against a different Node.js version using\nNODE_MODULE_VERSION 141. This version of Node.js requires\nNODE_MODULE_VERSION 147.",
-			),
-			true,
-		);
-	});
-	test("detects the ERR_DLOPEN_FAILED error code alone", () => {
-		assert.equal(isQmdNativeAbiMismatch("code: 'ERR_DLOPEN_FAILED'"), true);
-	});
-	test("returns false for unrelated stderr", () => {
-		assert.equal(isQmdNativeAbiMismatch(""), false);
-		assert.equal(isQmdNativeAbiMismatch("command not found: qmd"), false);
-	});
-});
-
-describe("qmdPackageRootFromEntry", () => {
-	test("strips dist/cli/qmd.js to return the package root", () => {
-		const root = join("/opt/homebrew/lib/node_modules", "@tobilu", "qmd");
-		const entry = join(root, "dist", "cli", "qmd.js");
-		assert.equal(qmdPackageRootFromEntry(entry), root);
-	});
-	test("returns null for a null entry", () => {
-		assert.equal(qmdPackageRootFromEntry(null), null);
-	});
-	test("returns null when the entry doesn't match the expected shape", () => {
-		assert.equal(qmdPackageRootFromEntry("/some/other/path.js"), null);
-	});
-});
-
-describe("parseQmdMinVersion", () => {
-	test("extracts a declared min version", () => {
-		assert.equal(
-			parseQmdMinVersion(JSON.stringify({ qmd_min_version: "2.0.0" })),
-			"2.0.0",
-		);
-	});
-	test("null when absent, empty, non-string, or manifest malformed", () => {
-		assert.equal(parseQmdMinVersion(JSON.stringify({})), null);
-		assert.equal(
-			parseQmdMinVersion(JSON.stringify({ qmd_min_version: "" })),
-			null,
-		);
-		assert.equal(
-			parseQmdMinVersion(JSON.stringify({ qmd_min_version: 2 })),
-			null,
-		);
-		assert.equal(parseQmdMinVersion("not json"), null);
-		assert.equal(parseQmdMinVersion(null), null);
-	});
-});
-
 describe("isMarkdownFilename", () => {
 	test("accepts lowercase .md", () => {
 		assert.equal(isMarkdownFilename("note.md"), true);
@@ -1144,7 +978,7 @@ describe("formatCollapsedDir", () => {
 	test("keeps the pre-threshold line shape verbatim", () => {
 		assert.equal(
 			formatCollapsedDir("work/archive", 42),
-			"./work/archive/ — 42 notes (listing collapsed — Glob or QMD on demand)",
+			"./work/archive/ — 42 notes (listing collapsed — Glob on demand)",
 		);
 	});
 });
@@ -1196,51 +1030,13 @@ describe("manifest budget fields", () => {
 	});
 });
 
-describe("resolveIndexStorePath", () => {
-	test("uses XDG_CACHE_HOME when set (matches qmd's own store rule)", () => {
-		assert.equal(
-			resolveIndexStorePath("my-vault", { XDG_CACHE_HOME: "/xdg/cache" }, "/home/u"),
-			join("/xdg/cache", "qmd", "my-vault.sqlite"),
-		);
-	});
-	test("falls back to ~/.cache when XDG_CACHE_HOME is unset", () => {
-		assert.equal(
-			resolveIndexStorePath("my-vault", {}, "/home/u"),
-			join("/home/u", ".cache", "qmd", "my-vault.sqlite"),
-		);
-	});
-
-	/**
-	 * qmd's getDefaultDbPath() checks INDEX_PATH first, for every index name.
-	 * Without it, the store-size check behind bootstrap-vs-update looked at a
-	 * file qmd never opens whenever INDEX_PATH was set.
-	 */
-	test("INDEX_PATH wins over everything, for any index name", () => {
-		const env = { INDEX_PATH: "/pinned/store.sqlite", XDG_CACHE_HOME: "/xdg", HOME: "/h" };
-		assert.equal(resolveIndexStorePath("my-vault", env, "/home/u"), "/pinned/store.sqlite");
-		assert.equal(resolveIndexStorePath("other", env, "/home/u"), "/pinned/store.sqlite");
-	});
-
-	test("empty values count as unset, as qmd's `||` reads them", () => {
-		assert.equal(
-			resolveIndexStorePath("v", { INDEX_PATH: "", XDG_CACHE_HOME: "", HOME: "" }, "/home/u"),
-			join("/home/u", ".cache", "qmd", "v.sqlite"),
-		);
-	});
-
-	test("home is qmd's: HOME, then USERPROFILE, then the OS home", () => {
-		assert.equal(resolveIndexStorePath("v", { HOME: "/h", USERPROFILE: "/u" }, "/os"), join("/h", ".cache", "qmd", "v.sqlite"));
-		assert.equal(resolveIndexStorePath("v", { USERPROFILE: "/u" }, "/os"), join("/u", ".cache", "qmd", "v.sqlite"));
-	});
-});
-
 describe("injectionMode", () => {
 	const cases: ReadonlyArray<readonly [unknown, "full" | "pointer"]> = [
 		["startup", "full"],
 		["clear", "full"],
 		["resume", "pointer"],
 		["compact", "pointer"],
-		[undefined, "full"], // missing source (Codex/Gemini)
+		[undefined, "full"], // missing source
 		[null, "full"],
 		[42, "full"], // non-string
 	];

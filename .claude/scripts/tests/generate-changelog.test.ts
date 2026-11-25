@@ -150,7 +150,7 @@ describe("pickMarkers", () => {
 		"AGENTS.md",
 		".mcp.json",
 		".claude/**",
-		".codex/**",
+		".example/**",
 		".github/scripts/generate-changelog.ts",
 		"templates/**",
 	];
@@ -158,7 +158,7 @@ describe("pickMarkers", () => {
 	test("returns at most `limit` entries (default 3)", () => {
 		const added = [
 			"AGENTS.md",
-			".codex/hooks.json",
+			".example/hooks.json",
 			".mcp.json",
 			"templates/New.md",
 			".claude/commands/new.md",
@@ -201,7 +201,7 @@ describe("pickMarkers", () => {
 	});
 
 	test("custom limit is respected", () => {
-		const added = ["AGENTS.md", ".mcp.json", ".codex/hooks.json"];
+		const added = ["AGENTS.md", ".mcp.json", ".example/hooks.json"];
 		assert.equal(pickMarkers(added, GLOBS, 2).length, 2);
 	});
 
@@ -463,15 +463,15 @@ describe("version detection across the AGENTS.md release (#321)", () => {
 	const without = (paths: readonly string[]) => Object.fromEntries(paths.map((p) => [p, false]));
 
 	test("a v10 vault reads as v10.0", () => {
-		assert.equal(detect(vault({ "CLAUDE.md": false, "GEMINI.md": false })), "v10.0");
+		assert.equal(detect(vault({ "CLAUDE.md": false })), "v10.0");
 	});
 
 	test("a v10 vault with a leftover CLAUDE.md (the case the upgrade guards target) still reads as v10.0", () => {
 		assert.equal(detect(vault({ "CLAUDE.md": true })), "v10.0");
 	});
 
-	test("a v9.1 vault, with CLAUDE.md and GEMINI.md and no .claude/rules/, reads as v9.1", () => {
-		assert.equal(detect(vault({ ...without(RULES), "CLAUDE.md": true, "GEMINI.md": true })), "v9.1");
+	test("a v9.1 vault, with CLAUDE.md and no .claude/rules/, reads as v9.1", () => {
+		assert.equal(detect(vault({ ...without(RULES), "CLAUDE.md": true })), "v9.1");
 	});
 
 	test("the newest fingerprint in the manifest is the open one, so the next release can close it", () => {

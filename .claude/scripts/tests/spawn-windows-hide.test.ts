@@ -2,12 +2,12 @@
  * Every process this repo's scripts start passes `windowsHide` (#390).
  *
  * On Windows, a console program started without it from a process that has no
- * console of its own (a detached worker, a hook, an MCP server) opens a
+ * console of its own (a detached worker, a hook) opens a
  * console window. Under Windows Terminal as the default terminal that is a
  * visible window per spawn: a session start once flooded the screen with them
  * (#381, #384). The flag is easy to drop and nothing else notices: the
  * behaviour only shows on a Windows desktop. So this reads the source and
- * checks every direct spawn call, the way mindframe's qmd extension does.
+ * checks every direct spawn call.
  *
  * A spawn that must share its parent's console (stdio inherited end to end)
  * goes on the allowlist with its reason; the flag couldn't hide anything
@@ -24,18 +24,7 @@ const SCRIPTS = dirname(dirname(fileURLToPath(import.meta.url)));
 const REPO = dirname(dirname(SCRIPTS));
 
 /** Spawn calls that may omit the flag, by file and a snippet of the call. */
-const ALLOWED: ReadonlyArray<{ readonly file: string; readonly call: string; readonly why: string }> = [
-	{
-		file: ".claude/scripts/om-mcp.mjs",
-		call: 'stdio: "inherit"',
-		why: "the MCP server launcher: the child IS the server and speaks over the inherited stdio",
-	},
-	{
-		file: ".claude/scripts/qmd-mcp.mjs",
-		call: 'stdio: "inherit"',
-		why: "qmd's MCP stdio server: it speaks over the inherited stdio",
-	},
-];
+const ALLOWED: ReadonlyArray<{ readonly file: string; readonly call: string; readonly why: string }> = [];
 
 const SPAWN_NAMES = ["spawnSync", "spawn", "execSync", "execFileSync", "execFile"];
 
@@ -72,10 +61,10 @@ function callText(text: string, open: number): string {
 	return text.slice(open);
 }
 
-test("every spawn in .claude/scripts and .scripts passes windowsHide, or is allowlisted with a reason", () => {
+test("every spawn in .claude/scripts passes windowsHide, or is allowlisted with a reason", () => {
 	const missing: string[] = [];
 	const allowUsed = new Set<string>();
-	for (const file of [...sources(SCRIPTS), ...sources(join(REPO, ".scripts"))]) {
+	for (const file of sources(SCRIPTS)) {
 		const rel = relative(REPO, file).replaceAll("\\", "/");
 		// Comment lines are dropped (a doc comment may quote a spawn); code lines
 		// are kept whole, since a URL inside a call holds "//".

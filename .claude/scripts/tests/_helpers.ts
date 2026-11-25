@@ -18,27 +18,12 @@
  * about timing rather than defects in what was under test: a cleanup that
  * cannot delete a temp tree, and a fixed sleep standing in for a condition.
  * Both shapes recur across suites, so the reasoning lives here once.
- *
- * Every hook that writes or stops refreshes QMD through a debounce sentinel
- * beside the scripts. A test that names no sentinel of its own gets
- * TEST_SENTINEL instead, touched before each spawn, so the real one is never
- * written. A fresh sentinel does NOT stop the refresh: it sends the trigger
- * down its trailing path, which schedules a detached worker. What stops it
- * is VAULT_QMD_REFRESH=off, which every test process carries (set by
- * `_run-tests.ts` and `_qmd-cache-guard.ts`), so no test starts a real
- * index update or leaves a worker behind (#337).
  */
 
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { rmSync } from "node:fs";
+import { basename } from "node:path";
 import { parseHookContext } from "../lib/hook-io.ts";
-import { REFRESH_SWITCH } from "../lib/qmd-refresh.ts";
-
-const SENTINEL_DIR = mkdtempSync(join(tmpdir(), "om-test-sentinel-"));
-export const TEST_SENTINEL = join(SENTINEL_DIR, ".qmd-refresh-sentinel");
-process.on("exit", () => rmSync(SENTINEL_DIR, { recursive: true, force: true }));
 import { resolve } from "node:path";
 
 export function hostPath(literal: string): string {
@@ -96,10 +81,7 @@ export function runScript(
 			: typeof stdin === "string"
 				? stdin
 				: JSON.stringify(stdin);
-	// The switch before the caller's overrides: every hook a test runs gets it,
-	// whatever this process carries, and a test can still opt back in (#337).
-	const env = { ...process.env, [REFRESH_SWITCH]: "off", QMD_REFRESH_SENTINEL: TEST_SENTINEL, ...envOverrides };
-	if (env.QMD_REFRESH_SENTINEL === TEST_SENTINEL) writeFileSync(TEST_SENTINEL, "");
+	const env = { ...process.env, ...envOverrides };
 	const proc = spawnSync(
 		process.execPath,
 		[

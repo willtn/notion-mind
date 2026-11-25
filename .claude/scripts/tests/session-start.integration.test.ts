@@ -8,7 +8,7 @@
  *
  *  - Exit code 0 on a minimal vault (no manifest, no work/active/, no git).
  *  - stderr is silent — proves the warning-suppression flag is wired
- *    correctly on this hook, not just on qmd-refresh.
+ *    correctly on this hook.
  *  - stdout contains every required section header, in order, so a
  *    regression that drops a section is caught.
  *  - openTasks emits "(no open tasks)" when work/active/ and the vault
@@ -17,9 +17,7 @@
  *  - openTasks emits a task with source attribution when work/active/
  *    contains one.
  *
- * Runs identically on Windows, macOS, and Linux. QMD's spawnSync inside
- * the hook is a graceful no-op when qmd isn't installed; when it is, the
- * incremental update against a tmp dir is fast and side-effect-free.
+ * Runs identically on Windows, macOS, and Linux.
  */
 
 import { test, describe, after, before } from "node:test";
@@ -93,23 +91,8 @@ const REQUIRED_SECTIONS = [
 	"### Vault File Listing",
 ];
 
-describe("session-start — no detached qmd refresh under the switch (#337)", () => {
-	// SessionStart always reaches its detached spawn: a resolvable qmd runs
-	// `qmd update` (or the bootstrap, against a test's empty index), and
-	// without one it falls back to a shell `qmd update`. Under
-	// VAULT_QMD_REFRESH=off it must spawn nothing. The switch comes from
-	// runScript's default, the choke point every hook a test runs goes through.
-	test("under the switch, no detached qmd is spawned", () => {
-		const { code, stderr } = spawnHook(SCRIPT, "", { CLAUDE_PROJECT_DIR: TMP_DIR, HOOK_DEBUG: "1" });
-		assert.equal(code, 0);
-		assert.match(stderr, /session-start: qmd refresh off \(VAULT_QMD_REFRESH=off\); nothing spawned/);
-	});
-});
-
 describe("session-start — the hook path prints one JSON envelope (#340)", () => {
-	// Gemini parses a hook's stdout as JSON and takes context only from
-	// hookSpecificOutput.additionalContext (per its hooks reference as of
-	// 2026-10-13, not observed); Claude Code accepts the same shape.
+	// Claude Code takes context from hookSpecificOutput.additionalContext.
 	test("stdout is exactly one SessionStart envelope, whose additionalContext carries the context and the meter", () => {
 		const { raw, code } = runHook();
 		assert.equal(code, 0);
@@ -528,8 +511,7 @@ describe("session-start — om_mod (a Claude Code mod)", () => {
 	});
 
 	test("standdown exits before every other side effect: it never reaches the project directory", () => {
-		// Every side effect but the VAULT_PATH export (the QMD preflight and
-		// spawn, the scans) comes after the chdir into the project directory. A
+		// Every side effect but the VAULT_PATH export (the scans) comes after the chdir into the project directory. A
 		// missing directory makes that chdir throw, so only a run that left
 		// before it exits clean.
 		const missing = join(TMP_DIR, "no-such-vault");

@@ -196,58 +196,6 @@ describe("a CLAUDE.md left in the vault (#321)", () => {
 		assert.equal(retiredFileReady(agents("differs"), report([]))("CLAUDE.md"), false);
 	});
 
-	test("a retired file is not deleted while .gemini/settings.json is still the user's old one", () => {
-		// The old settings name no context file, so Gemini reads GEMINI.md, and
-		// the old GEMINI.md only says "read CLAUDE.md".
-		const plan = (settings: AdoptPlan["files"][number]["classification"]): AdoptPlan => ({
-			dryRun: true,
-			files: [
-				{ path: "AGENTS.md", classification: "matches", shardHash: "h", volatile: false },
-				{ path: ".gemini/settings.json", classification: settings, shardHash: "s", volatile: false },
-			],
-		});
-		const report = (behind: string[]) => ({ behind, ahead: [], merged: [], conflicts: [], added: [], move: [], unchanged: 0 });
-		for (const file of ["CLAUDE.md", "GEMINI.md"]) {
-			assert.equal(retiredFileReady(plan("matches"), report([]))(file), true, file);
-			assert.equal(retiredFileReady(plan("differs"), report([".gemini/settings.json"]))(file), true, file);
-			assert.equal(retiredFileReady(plan("differs"), report([]))(file), false, file);
-		}
-		// A vault without the Gemini module has no settings file to wait for.
-		assert.equal(retiredFileReady({ dryRun: true, files: [plan("matches").files[0]!] }, report([]))("CLAUDE.md"), true);
-	});
-
-	test("a vault with no Gemini settings (shard-only) frees CLAUDE.md but keeps GEMINI.md, which Gemini still falls back to", () => {
-		// --apply-behind writes behind files only; a shard-only settings file
-		// arrives with the later adopt. Until then Gemini has no settings and
-		// reads GEMINI.md by default, so deleting it would cut Gemini off.
-		const plan: AdoptPlan = {
-			dryRun: true,
-			files: [
-				{ path: "AGENTS.md", classification: "matches", shardHash: "h", volatile: false },
-				{ path: ".gemini/settings.json", classification: "shard-only", shardHash: "s", volatile: false },
-			],
-		};
-		const report = { behind: [], ahead: [], merged: [], conflicts: [], added: [".gemini/settings.json"], move: [], unchanged: 0 };
-		const ready = retiredFileReady(plan, report);
-		assert.equal(ready("CLAUDE.md"), true);
-		assert.equal(ready("GEMINI.md"), false);
-		assert.deepEqual(untouchedRetiredFiles(() => "h", () => "h", ready), ["CLAUDE.md"]);
-	});
-
-	test("managed: a GEMINI.md the user edited, which ShardMind keeps as theirs, is a move, not 'unchanged'", () => {
-		// Gemini now reads AGENTS.md through .gemini/settings.json, so an edited
-		// GEMINI.md is no longer loaded: its additions would vanish silently.
-		const plan: UpdatePlan = { dryRun: true, files: [{ path: "GEMINI.md", action: "keep_as_user" }] };
-		const r = withRetiredInstructionFiles(classifyUpdate(plan, null), present(["GEMINI.md"]));
-		assert.deepEqual(r.move, ["GEMINI.md"]);
-		assert.equal(r.unchanged, 0);
-	});
-
-	test("unmanaged: a GEMINI.md still byte-identical to the base release is behind, like CLAUDE.md", () => {
-		const untouched = untouchedRetiredFiles(() => "h-template", (p) => (p === "GEMINI.md" ? "h-template" : null), () => true);
-		assert.deepEqual(untouched, ["GEMINI.md"]);
-	});
-
 	test("a CLAUDE.md the update deletes stays behind, whatever AGENTS.md is: the report says what the update does", () => {
 		// ShardMind deletes an untouched CLAUDE.md on update regardless of this
 		// report, so listing it anywhere but Behind would hide a deletion.
@@ -278,27 +226,6 @@ describe("a CLAUDE.md left in the vault (#321)", () => {
 		assert.doesNotMatch(formatUpgradeReport({ ...empty, conflicts: ["AGENTS.md"] }, "v9.1.0", "v10.0.0"), /Settle these first/);
 	});
 
-	test("while .gemini/settings.json is a conflict and a retired file is leaving, the report says to settle it first", () => {
-		// The user's old settings name no context file, so Gemini keeps reading
-		// GEMINI.md, which only points at CLAUDE.md.
-		const empty = { behind: [], ahead: [], merged: [], conflicts: [], added: [], move: [], unchanged: 0 };
-		for (const leaving of [{ behind: ["CLAUDE.md"] }, { move: ["GEMINI.md"] }]) {
-			const report = { ...empty, ...leaving, conflicts: [".gemini/settings.json"] };
-			assert.deepEqual(settleFirst(report), [".gemini/settings.json"]);
-			assert.match(formatUpgradeReport(report, "v9.1.0", "v10.0.0"), /`\.gemini\/settings\.json`[^\n]*context\.fileName/);
-		}
-		const both = { ...empty, behind: ["CLAUDE.md"], conflicts: ["AGENTS.md", ".gemini/settings.json"] };
-		assert.deepEqual(settleFirst(both), ["AGENTS.md", ".gemini/settings.json"]);
-	});
-
-	test("an AGENTS.md conflict is settled first even when GEMINI.md is the only file leaving", () => {
-		// The new settings send Gemini to AGENTS.md: if that is still the old
-		// pointer to a CLAUDE.md that is gone, Gemini reads nothing.
-		const empty = { behind: [], ahead: [], merged: [], conflicts: [], added: [], move: [], unchanged: 0 };
-		const report = { ...empty, move: ["GEMINI.md"], conflicts: ["AGENTS.md", ".gemini/settings.json"] };
-		assert.deepEqual(settleFirst(report), ["AGENTS.md", ".gemini/settings.json"]);
-	});
-
 	test("an ahead AGENTS.md is the user's edit of the current release, never the old pointer: no settle warning", () => {
 		// Ahead means the template did not change AGENTS.md between the two
 		// releases, and the release that retires CLAUDE.md does change it.
@@ -308,13 +235,13 @@ describe("a CLAUDE.md left in the vault (#321)", () => {
 		assert.doesNotMatch(formatUpgradeReport(report, "v10.0.0", "v10.1.0"), /Settle these first/);
 	});
 
-	test("the Move out text names what each retired file does wrong", () => {
+	test("the Move out text names what the retired file does wrong", () => {
 		const out = formatUpgradeReport(
-			{ behind: [], ahead: [], merged: [], conflicts: [], added: [], move: ["CLAUDE.md", "GEMINI.md"], unchanged: 0 },
+			{ behind: [], ahead: [], merged: [], conflicts: [], added: [], move: ["CLAUDE.md"], unchanged: 0 },
 			"v9.1.0",
 			"v10.0.0",
 		);
-		assert.match(out, /Gemini no longer reads GEMINI\.md/);
+		assert.match(out, /Claude Code reads CLAUDE\.md and skips AGENTS\.md/);
 	});
 
 	test("the Move out text covers an untouched CLAUDE.md and an AGENTS.md that is not the new one yet", () => {

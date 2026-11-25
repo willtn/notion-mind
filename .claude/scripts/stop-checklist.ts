@@ -1,24 +1,17 @@
 #!/usr/bin/env node
 /**
- * Conversation-boundary hook — the wrap-up checklist plus concrete
- * vault-hygiene findings, and a debounced QMD refresh so the next session
- * opens against a current index.
+ * Conversation-boundary hook: the wrap-up checklist plus concrete
+ * vault-hygiene findings.
  *
- * Where it runs is decided by where its message can be seen (#252):
+ * Claude Code calls it on Stop, which fires after EVERY response, not at the
+ * end of the session. An unconditional report there repeats unchanged drift on
+ * every turn, and a warning that never changes is one users learn to ignore
+ * (#155). So on Stop the report is shown once per session and again only when
+ * its text changes; otherwise the hook emits the empty envelope.
  *
- *  - Claude Code and Codex call it on Stop, which fires after EVERY
- *    response, not at the end of the session. An unconditional report there
- *    repeats unchanged drift on every turn, and a warning that never changes
- *    is one users learn to ignore (#155). So on Stop the report is shown
- *    once per session and again only when its text changes; otherwise the
- *    hook emits the empty envelope and only refreshes QMD.
- *  - Gemini calls it on SessionEnd, whose systemMessage it displays during
- *    shutdown. That is a last chance rather than a turn, so it always reports.
- *
- * Claude Code and Codex are deliberately NOT wired to SessionEnd: Claude Code
- * discards a SessionEnd hook's systemMessage, and Codex documents SessionEnd
- * as advisory and does not surface its systemMessage. Moving the report
- * there would turn "every turn" into "never".
+ * Claude Code is deliberately NOT wired to SessionEnd: it discards a
+ * SessionEnd hook's systemMessage. Moving the report there would turn "every
+ * turn" into "never".
  *
  * Who reads it: a Stop hook's systemMessage reaches the user and never the
  * agent, so the drift the agent is best placed to fix never reached it
@@ -26,21 +19,16 @@
  * one-line-per-section summary as the `systemMessage`, and the full report is
  * saved for the session's next prompt, where classify-message hands it to the
  * agent (why that channel: lib/stop-handoff.ts). If the report cannot be
- * saved, it goes out as Stop feedback instead: visible, but not lost (Claude
- * Code; Codex's handling of Stop feedback is unverified, lib/hook-io.ts).
- * SessionEnd and a Stop without a session_id have no next prompt to ride: the
- * user gets the full report.
+ * saved, it goes out as Stop feedback instead: visible, but not lost
+ * (lib/hook-io.ts). An event that is not Stop, and a Stop without a
+ * session_id, have no next prompt to ride: the user gets the full report.
  *
- * Output is JSON on every agent, never plain text. Codex rejects plain Stop
- * stdout, Gemini's SessionEnd contract requires a final JSON object, and
- * Claude Code otherwise files non-exempt stdout in the debug log.
- * `systemMessage` is the one user-facing field all three agents share. Both it
- * and the handed-over report are held under Claude Code's hook output cap
- * (lib/hook-io.ts).
- * The documented event name is the only branch — no agent sniffing and no
- * agent-specific argument. A field one agent spells differently is read under
- * every spelling, so it means the same thing whoever sent it and never tells
- * the agents apart (the re-entry flag below).
+ * Output is JSON, never plain text: Claude Code otherwise files non-exempt
+ * stdout in the debug log. Both `systemMessage` and the handed-over report are
+ * held under Claude Code's hook output cap (lib/hook-io.ts).
+ * The documented event name is the only branch. A field spelled two ways is
+ * read under both, so it means the same thing whoever sent it (the re-entry
+ * flag below).
  *
  * Under the template's Claude Code mod (#264, lib/om-mod.ts) the mod presents
  * the report itself: it runs this script with `om_mod: "report"` to get the
@@ -50,7 +38,7 @@
  */
 
 import { readFileSync } from "node:fs";
-import { dirname, join, resolve as resolvePath } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
 	readStdinJson,
@@ -61,14 +49,12 @@ import {
 } from "./lib/hook-io.ts";
 import { readOmMod } from "./lib/om-mod.ts";
 import { envPath } from "./lib/env-path.ts";
-import { sentinelPathFrom, triggerDebouncedRefresh } from "./lib/qmd-refresh.ts";
 import { HANDOFF_DIR, pruneHandoffs, writeHandoff } from "./lib/stop-handoff.ts";
 import { AGENT_PREFACE, FEEDBACK_PREFACE, FEEDBACK_TRAILER, MOD_PREFACE, stopSummary } from "./lib/stop-report.ts";
 import {
 	formatActiveHygiene,
 	HYGIENE_VOLATILE_FIELDS,
 	hygieneClaims,
-	parseMemoryRoot,
 	parseOpenLoopConfig,
 	scanActiveHygiene,
 } from "./lib/active-hygiene.ts";
@@ -77,12 +63,7 @@ import { claimChanged } from "./lib/hint-state.ts";
 import { reportKey } from "./lib/report-key.ts";
 import { resolveProjectDir } from "./lib/project-dir.ts";
 
-const DEBOUNCE_MS = 30_000;
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
-// See qmd-refresh.ts for the rationale behind the env override — it
-// keeps parallel test workers from racing on the shared repo sentinel.
-const SENTINEL_PATH = sentinelPathFrom(process.env, SCRIPT_DIR);
-const WORKER_PATH = resolvePath(SCRIPT_DIR, "qmd-refresh-run.ts");
 // The last report each session was shown (lib/hint-state.ts, the same
 // self-pruning, fail-open store as the classifier's hint dedupe, #107).
 // STOP_CHECKLIST_STATE routes it to a tmp path for tests.
@@ -97,14 +78,14 @@ type HookInput = {
 
 const input = await readStdinJson<HookInput>();
 // The mod presents this Stop (lib/om-mod.ts): the empty envelope, no state,
-// no handoff, no refresh. The mod's own `report` run does the refresh.
+// no handoff.
 const omMod = readOmMod(input);
 if (omMod === "standdown") {
 	writeSilentHookOutput();
 	process.exit(0);
 }
 // Re-entry (the Stop after a turn some Stop hook forced, or a secondary
-// agent's): say nothing, which keeps a forced turn from looping, spawn no second refresh,
+// agent's): say nothing, which keeps a forced turn from looping,
 // but still emit the empty envelope rather than zero bytes — see
 // writeSilentHookOutput for why "sometimes silent, sometimes JSON" is the
 // weaker contract.
@@ -144,7 +125,6 @@ const report = scanActiveHygiene(
 	Date.now(),
 	parseOpenLoopConfig(manifestJson),
 	parseInfraRootFilenames(manifestJson),
-	parseMemoryRoot(manifestJson),
 );
 const hygieneLines = formatActiveHygiene(report);
 
@@ -185,10 +165,3 @@ else if (isStop && hasSession) {
 	}
 }
 else writeSystemMessage(message);
-
-triggerDebouncedRefresh({
-	sentinelPath: SENTINEL_PATH,
-	workerPath: WORKER_PATH,
-	debounceMs: DEBOUNCE_MS,
-	logPrefix: "stop-checklist",
-});

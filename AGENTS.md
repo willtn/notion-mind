@@ -221,10 +221,6 @@ When asked to "remember" something:
 
 Debugging, "how do we usually…", "why did we decide"? Read `.claude/rules/brain-topics.md` first.
 
-## Reaching the Vault From Another Repo
-
-Connecting this vault to another repo? Read `.claude/rules/vault-from-another-repo.md`.
-
 ## Agent Guidelines
 
 ### Graph-First Thinking
@@ -255,10 +251,6 @@ When capturing data from Slack, DMs, or meetings:
 - **Review prep** (peer selection, manager strategy, brag framing) -- goes to review-related notes in `perf/` or `work/`
 - **People dynamics** (feedback, relationships, career) -- goes to `org/people/` notes
 - **Personal conversations** -- only capture if review-relevant; otherwise skip
-
-## Hooks
-
-Which hook runs on which event, for each agent: `.claude/rules/hooks-per-agent.md`.
 
 ## Write-Correctness Laws
 

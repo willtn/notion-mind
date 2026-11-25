@@ -24,9 +24,7 @@ const EVERY_FINDING: ActiveHygieneReport = {
 	oversizedNotes: [{ path: "notes/Big.md", sizeKb: 30 }],
 	openLoops: [{ path: "work/1-1/Weekly.md", ageDays: 20, openItems: 2 }],
 	inboxPressure: { count: 2, oldestDays: 9 },
-	memoryInbox: { count: 4, oldestDays: 2, namedOnly: 1 },
-	leftoverInstructionFiles: ["CLAUDE.md", "GEMINI.md"],
-	geminiSettingsBroken: true,
+	leftoverInstructionFiles: ["CLAUDE.md"],
 	agentsMd: { sizeKb: 23 },
 };
 
@@ -51,16 +49,13 @@ describe("stopSummary", () => {
 describe("hygieneClaims", () => {
 	test("every finding reduces to its claim: counts, no file lists, no instructions", () => {
 		assert.deepEqual(hygieneClaims(EVERY_FINDING), [
-			".gemini/settings.json doesn't parse",
 			"CLAUDE.md present beside AGENTS.md",
-			"GEMINI.md present beside AGENTS.md",
 			"AGENTS.md is 23KB",
 			"2 note(s) marked done but still in active/",
 			"Loose active/ notes that look like one topic",
 			`1 note(s) past the ${MONOLITH_BYTES / 1000}KB organization threshold`,
 			"1 note(s) with open follow-ups untouched 14+ days",
 			`2 raw export(s) sitting in work/meetings/ for ${INBOX_PRESSURE_DAYS}+ days`,
-			"4 cross-repo memory capture(s) awaiting review",
 		]);
 	});
 
@@ -74,7 +69,7 @@ describe("hygieneClaims", () => {
 
 	test("a clean report has no claims", () => {
 		assert.deepEqual(
-			hygieneClaims({ completedInActive: [], ungroupedClusters: [], oversizedNotes: [], openLoops: [], inboxPressure: null, memoryInbox: null, leftoverInstructionFiles: [], geminiSettingsBroken: false, agentsMd: null }),
+			hygieneClaims({ completedInActive: [], ungroupedClusters: [], oversizedNotes: [], openLoops: [], inboxPressure: null, leftoverInstructionFiles: [], agentsMd: null }),
 			[],
 		);
 	});

@@ -2,9 +2,9 @@
  * Hook config regression tests.
  *
  * These tests lock in the CWD-independent hook invocation pattern from
- * issue #45 / commit 0f36db7. Every hook command in every agent config
- * must resolve its script path through the agent's own *_PROJECT_DIR
- * env var so the hook keeps working when the invoking shell's CWD
+ * issue #45 / commit 0f36db7. Every hook command in the Claude Code config
+ * must resolve its script path through CLAUDE_PROJECT_DIR
+ * so the hook keeps working when the invoking shell's CWD
  * drifts away from the project root.
  *
  * The original failure mode: a drifted shell CWD caused relative paths
@@ -59,16 +59,6 @@ const configs: ReadonlyArray<{
 		path: ".claude/settings.json",
 		envVar: "CLAUDE_PROJECT_DIR",
 	},
-	{
-		label: "Codex CLI",
-		path: ".codex/hooks.json",
-		envVar: "CODEX_PROJECT_DIR",
-	},
-	{
-		label: "Gemini CLI",
-		path: ".gemini/settings.json",
-		envVar: "GEMINI_PROJECT_DIR",
-	},
 ];
 
 function loadConfig(relPath: string): HookConfig {
@@ -76,7 +66,7 @@ function loadConfig(relPath: string): HookConfig {
 	return JSON.parse(raw) as HookConfig;
 }
 
-/** A matcher read as a regex over the whole name, as Claude Code and Codex read it (and Gemini, for tool events). */
+/** A matcher read as a regex over the whole name, as Claude Code reads it. */
 const regex = (matcher: string, name: string) => new RegExp(`^(?:${matcher})$`).test(name);
 
 /** Whether any entry fires on `name`: one with no matcher matches everything. */
@@ -104,7 +94,7 @@ function eachNodeHookCommand(
 				if (hook.type !== "command" || typeof hook.command !== "string") continue;
 				// Only hooks that run the TS scripts are subject to the CWD-
 				// resolution rule; inline shell commands (e.g. the printf
-				// checklist used by Codex/Gemini Stop/SessionEnd) are fine.
+				// checklist) are fine.
 				if (!hook.command.includes(".claude/scripts/")) continue;
 				out.push({ event, command: hook.command });
 			}
@@ -127,45 +117,21 @@ describe("hook config — CWD-independent script resolution (issue #45)", () => 
 			});
 
 			for (const { event, command } of commands) {
-				if (envVar === "GEMINI_PROJECT_DIR") {
-					// #268: Gemini runs every hook as `powershell.exe -NoProfile -Command`
-					// on Windows (bash -c elsewhere), with the SESSION cwd as working
-					// directory and GEMINI_PROJECT_DIR set to that same cwd. So the
-					// relative path is exactly what `${GEMINI_PROJECT_DIR:-.}/` meant on
-					// POSIX — and the braced form never expanded under PowerShell. The
-					// #45 drift (a tool shell's `cd` leaking into the next hook) is a
-					// Claude Code shape: Gemini never runs hooks in a tool shell.
-					test(`${event} is a plain relative path, with no shell expansion`, () => {
-						assert.match(command, / \.claude\/scripts\/[a-z-]+\.ts$/, `${path} ${event}: ${command}`);
-						assert.ok(!command.includes("$"), `${path} ${event} must not depend on any shell's expansion: ${command}`);
-					});
-					continue;
-				}
-				if (envVar === "CLAUDE_PROJECT_DIR") {
-					// Claude Code does not update CLAUDE_PROJECT_DIR on `/cd`, so it can
-					// name a vault subfolder (#263). Its commands start from the variable
-					// and walk up to the vault root; the run test below proves they work.
-					test(`${event} walks up from \${${envVar}:-.} to the vault root (#263)`, () => {
-						assert.ok(
-							command.includes(`r="\${${envVar}:-.}"`) && command.includes("vault-manifest.json") && command.includes(")/.claude/scripts/"),
-							`${path} ${event} command must find the vault root from \${${envVar}:-.} — got:\n  ${command}`,
-						);
-					});
-				} else {
-					test(`${event} uses \${${envVar}:-.}/ prefix`, () => {
-						assert.ok(
-							command.includes(`\${${envVar}:-.}/.claude/scripts/`),
-							`${path} ${event} command must resolve scripts via \${${envVar}:-.}/ to survive CWD drift — got:\n  ${command}`,
-						);
-					});
-				}
+				// Claude Code does not update CLAUDE_PROJECT_DIR on `/cd`, so it can
+				// name a vault subfolder (#263). Its commands start from the variable
+				// and walk up to the vault root; the run test below proves they work.
+				test(`${event} walks up from \${${envVar}:-.} to the vault root (#263)`, () => {
+					assert.ok(
+						command.includes(`r="\${${envVar}:-.}"`) && command.includes("vault-manifest.json") && command.includes(")/.claude/scripts/"),
+						`${path} ${event} command must find the vault root from \${${envVar}:-.} — got:\n  ${command}`,
+					);
+				});
 
 				test(`${event} does not use a bare relative .claude/scripts/ path`, () => {
 					// A bare relative path only survives if the invoking shell's
 					// CWD is the project root — which is exactly the assumption
 					// that broke in #45 for Claude Code, whose hooks inherit a tool
-					// shell's `cd`. Codex's POSIX `command` keeps the prefix too; its
-					// Windows form and Gemini's are relative by design (#268).
+					// shell's `cd`.
 					const bareRelative = / \.claude\/scripts\//.test(command);
 					const envPrefixed = command.includes(
 						`\${${envVar}:-.}/.claude/scripts/`,
@@ -183,24 +149,17 @@ describe("hook config — CWD-independent script resolution (issue #45)", () => 
 /**
  * The checklist hook runs on the event that can actually show its message.
  *
- * Claude Code and Codex: Stop, deduped inside the script to once per session
+ * Claude Code: Stop, deduped inside the script to once per session
  * plus on change (#252). Not SessionEnd: Claude Code discards a SessionEnd
  * hook's `systemMessage` ("Claude Code discards their JSON output fields,
- * such as systemMessage" — hooks reference), and Codex documents SessionEnd
- * as advisory and leaves it out of the events whose `systemMessage` it
- * surfaces. Wiring the checklist there turns "every turn" into "never".
- *
- * Gemini CLI: SessionEnd, whose `systemMessage` is "Displayed to the user
- * during shutdown" (best effort). Gemini's per-turn event is AfterAgent, and
- * the checklist is not wired to it.
+ * such as systemMessage" — hooks reference). Wiring the checklist there turns
+ * "every turn" into "never".
  *
  * Pin the routing so a config edit cannot move the message somewhere it
  * silently disappears, or back to an undeduped per-turn surface.
  */
 const CHECKLIST_EVENT: Readonly<Record<string, string>> = {
 	"Claude Code": "Stop",
-	"Codex CLI": "Stop",
-	"Gemini CLI": "SessionEnd",
 };
 
 describe("hook config — the checklist runs where its message is shown", () => {
@@ -223,7 +182,7 @@ describe("hook config — the checklist runs where its message is shown", () => 
 			assert.match(
 				checklistHooks[0]?.command ?? "",
 				/stop-checklist\.ts"?$/,
-				`${path} must invoke stop-checklist.ts with no trailing arguments — its output contract is the same for every agent`,
+				`${path} must invoke stop-checklist.ts with no trailing arguments — its output contract takes no arguments`,
 			);
 		});
 	}
@@ -328,126 +287,7 @@ describe("hook config — Claude commands find the vault root from a subfolder (
 	}
 });
 
-/** Codex's Windows-only override for each TS hook: `commandWindows` (#268). */
-function eachCodexWindowsCommand(): Array<{ readonly event: string; readonly command: string; readonly windows: string | undefined }> {
-	const out: Array<{ event: string; command: string; windows: string | undefined }> = [];
-	for (const [event, entries] of Object.entries(loadConfig(".codex/hooks.json").hooks ?? {})) {
-		for (const entry of entries) {
-			for (const hook of entry.hooks ?? []) {
-				if (hook.type !== "command" || typeof hook.command !== "string") continue;
-				if (!hook.command.includes(".claude/scripts/")) continue;
-				out.push({ event, command: hook.command, windows: hook.commandWindows });
-			}
-		}
-	}
-	return out;
-}
-
-/**
- * #268: on Windows neither Codex nor Gemini runs hook commands through a
- * POSIX shell, so `${X_PROJECT_DIR:-.}` reached Node unexpanded (cmd) or
- * collapsed to a drive-root path (PowerShell), and no hook ever ran.
- *
- * Codex documents `commandWindows` as a Windows-only override and runs every
- * hook in the session cwd, so its Windows form is relative and its POSIX
- * `command` is untouched. Gemini has no per-OS field: one command must work
- * under PowerShell (Windows) and bash (elsewhere), so it is relative on every
- * OS — identical to what `${GEMINI_PROJECT_DIR:-.}` meant, since Gemini sets
- * that variable to the same session cwd.
- */
-describe("hook config — Codex has a Windows command for every TS hook (#268)", () => {
-	for (const { event, command, windows } of eachCodexWindowsCommand()) {
-		test(`${event}: commandWindows runs the same script by a relative path`, () => {
-			const script = /\.claude\/scripts\/([a-z-]+\.ts)/.exec(command)?.[1];
-			assert.ok(windows, `.codex/hooks.json ${event} has no commandWindows`);
-			assert.equal(
-				windows,
-				`node --disable-warning=ExperimentalWarning --experimental-strip-types .claude/scripts/${script}`,
-			);
-		});
-	}
-});
-
-/**
- * Run each command under the shell its agent really uses, from a vault root
- * whose scripts are stubs that print their name, and check the stub ran.
- *
- * - Gemini on Windows: exactly its runner's shape — `powershell.exe
- *   -NoProfile -Command "<cmd>; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }"`.
- * - Codex on Windows: its hooks docs do not name the shell, so
- *   `commandWindows` must work under both cmd.exe and PowerShell.
- * - POSIX (and Git Bash): Gemini's command and Codex's `command` under bash.
- */
-describe("hook config — Codex and Gemini commands run under their agents' shells (#268)", () => {
-	const isWin = process.platform === "win32";
-	const gemini = eachNodeHookCommand(loadConfig(".gemini/settings.json"));
-	const codex = eachCodexWindowsCommand();
-	const scripts = [...new Set([...gemini, ...codex].map(({ command }) => /\.claude\/scripts\/([a-z-]+\.ts)/.exec(command)?.[1] ?? ""))];
-
-	let vault = "";
-	before(() => {
-		vault = mkdtempSync(join(tmpdir(), "hook-config-agents-"));
-		mkdirSync(join(vault, ".claude", "scripts"), { recursive: true });
-		writeFileSync(join(vault, "vault-manifest.json"), "{}");
-		for (const s of scripts) writeFileSync(join(vault, ".claude", "scripts", s), `console.log("RAN ${s}");\n`);
-	});
-	after(() => rmSync(vault, { recursive: true, force: true }));
-
-	const ran = (r: ReturnType<typeof spawnSync>, script: string) => {
-		const out = `${r.stdout ?? ""}`;
-		assert.equal(r.status, 0, `exit ${r.status}: ${r.stderr ?? ""}${r.error?.message ?? ""}`);
-		assert.ok(out.includes(`RAN ${script}`), `the stub did not run; stdout: ${out}`);
-	};
-	const scriptIn = (command: string) => /\.claude\/scripts\/([a-z-]+\.ts)/.exec(command)?.[1] ?? "";
-	const powershell = (command: string) =>
-		spawnSync("powershell.exe", ["-NoProfile", "-Command", `${command}; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }`], {
-			cwd: vault,
-			encoding: "utf-8",
-			env: { ...process.env, GEMINI_PROJECT_DIR: vault },
-		});
-	const cmdExe = (command: string) =>
-		spawnSync(process.env["ComSpec"] ?? "cmd.exe", ["/d", "/s", "/c", command], { cwd: vault, encoding: "utf-8", windowsVerbatimArguments: true });
-	const bash = (command: string, env: NodeJS.ProcessEnv) => spawnSync("bash", ["-c", command], { cwd: vault, encoding: "utf-8", env });
-	const notWin = isWin ? false : "Windows only";
-	// Neither agent uses bash on Windows, where a bare `bash` can also be WSL's.
-	const noBash = isWin
-		? "POSIX only: on Windows these agents run PowerShell or cmd"
-		: spawnSync("bash", ["-c", "true"]).status === 0
-			? false
-			: "no bash on this machine";
-
-	for (const { event, command } of gemini) {
-		test(`Gemini ${event} under PowerShell, as Gemini runs it on Windows`, { skip: notWin }, () => {
-			ran(powershell(command), scriptIn(command));
-		});
-		test(`Gemini ${event} under bash, as Gemini runs it elsewhere`, { skip: noBash }, () => {
-			ran(bash(command, { ...process.env, GEMINI_PROJECT_DIR: vault }), scriptIn(command));
-		});
-	}
-	for (const { event, command, windows } of codex) {
-		test(`Codex ${event} commandWindows under cmd.exe`, { skip: notWin }, () => {
-			ran(cmdExe(windows ?? ""), scriptIn(command));
-		});
-		test(`Codex ${event} commandWindows under PowerShell`, { skip: notWin }, () => {
-			ran(powershell(windows ?? ""), scriptIn(command));
-		});
-		test(`Codex ${event} command under bash (POSIX, unchanged)`, { skip: noBash }, () => {
-			const env = { ...process.env };
-			delete env["CODEX_PROJECT_DIR"];
-			ran(bash(command, env), scriptIn(command));
-		});
-	}
-});
-
 describe("hook config — SessionStart fires for every source the agent documents (#352)", () => {
-	// Each agent matches SessionStart's matcher against the session's source
-	// its own way, and a matcher written for one rule silently matches nothing
-	// under another: Gemini's "startup|resume" equalled no source, so
-	// session-start never ran there.
-	// Gemini: a lifecycle matcher is an exact string, "" or "*" matching all
-	// (packages/core/src/hooks/hookPlanner.ts: matchesTrigger is
-	// matcher === trigger; gemini-cli main as of 2026-10-13).
-	const exact = (matcher: string, source: string) => ["", "*", source].includes(matcher.trim());
 	const FOUR_SOURCES = ["startup", "resume", "clear", "compact"];
 	const agents: ReadonlyArray<{
 		readonly label: string;
@@ -457,12 +297,6 @@ describe("hook config — SessionStart fires for every source the agent document
 	}> = [
 		// Claude Code: a regex over startup|resume|clear|compact (hooks reference).
 		{ label: "Claude Code", path: ".claude/settings.json", sources: FOUR_SOURCES, matches: regex },
-		// Codex: "matcher is applied to source for this event. Values are startup,
-		// resume, clear, and compact", and "The matcher field is a regex string"
-		// (developers.openai.com/codex/hooks, as of 2026-10-13).
-		{ label: "Codex CLI", path: ".codex/hooks.json", sources: FOUR_SOURCES, matches: regex },
-		// Gemini: sources startup|resume|clear (docs/hooks/reference.md).
-		{ label: "Gemini CLI", path: ".gemini/settings.json", sources: ["startup", "resume", "clear"], matches: exact },
 	];
 
 	for (const agent of agents) {
@@ -474,35 +308,14 @@ describe("hook config — SessionStart fires for every source the agent document
 			}
 		});
 	}
-
-	// Gemini's tool events (BeforeTool, AfterTool) take a regex; every other
-	// event compares its matcher exactly, so a regex there matches nothing.
-	test("Gemini CLI: no lifecycle matcher is written as a regex", () => {
-		const TOOL_EVENTS = new Set(["BeforeTool", "AfterTool"]);
-		for (const [event, entries] of Object.entries(loadConfig(".gemini/settings.json").hooks ?? {})) {
-			if (TOOL_EVENTS.has(event)) continue;
-			for (const { matcher } of entries) {
-				if (matcher === undefined) continue;
-				assert.match(matcher.trim(), /^(\*|[\w-]*)$/, `${event}'s matcher ${JSON.stringify(matcher)} is compared exactly`);
-			}
-		}
-	});
 });
 
 describe("hook config — write validation fires on each agent's own file tools (#353)", () => {
-	// validate-write runs after a file write; each agent names its file tools
-	// differently, and a matcher with another agent's names never fires.
+	// validate-write runs after a file write, and a matcher that misses the
+	// agent's file tool names never fires.
 	const agents: ReadonlyArray<{ readonly label: string; readonly path: string; readonly event: string; readonly tools: readonly string[] }> = [
 		// Claude Code: Write and Edit (hooks reference).
 		{ label: "Claude Code", path: ".claude/settings.json", event: "PostToolUse", tools: ["Write", "Edit"] },
-		// Codex: "For file edits through apply_patch, matcher values can use
-		// apply_patch, Edit, or Write" (developers.openai.com/codex/hooks, as of
-		// 2026-10-13). An apply_patch payload names its files in the patch (#354).
-		{ label: "Codex CLI", path: ".codex/hooks.json", event: "PostToolUse", tools: ["Write", "Edit", "apply_patch"] },
-		// Gemini: write_file and replace (gemini-cli
-		// tools/definitions/base-declarations.ts, as of 2026-10-13); tool-event
-		// matchers are regexes (hooks/hookPlanner.ts).
-		{ label: "Gemini CLI", path: ".gemini/settings.json", event: "AfterTool", tools: ["write_file", "replace"] },
 	];
 
 	for (const agent of agents) {

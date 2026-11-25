@@ -31,10 +31,8 @@ import {
 	namesCapped,
 	isMonolithExempt,
 	newNoteClusterCandidate,
-	parseMemoryRoot,
 	parseOpenLoopConfig,
 	scanActiveHygiene,
-	stripJsonComments,
 	walkMarkdown,
 } from "../lib/active-hygiene.ts";
 
@@ -259,194 +257,6 @@ describe("scanActiveHygiene — detectors", () => {
 		}
 	});
 
-	test("the cross-repo memory inbox is counted, nested under year and month", () => {
-		const solo = mkdtempSync(join(tmpdir(), "active-hygiene-memories-"));
-		try {
-			mkdirSync(join(solo, "memories/2026/07"), { recursive: true });
-			const a = join(solo, "memories/2026/07/a lesson.md");
-			writeFileSync(a, "captured");
-			const t = new Date(NOW - 3 * DAY_MS);
-			utimesSync(a, t, t);
-
-			// The defect this closes: every other scan here is flat, and the server
-			// writes two levels down, so a flat walk reports an empty inbox forever.
-			const found = scanActiveHygiene(solo, NOW, DEFAULTS).memoryInbox;
-			assert.ok(found !== null);
-			assert.equal(found!.count, 1);
-			assert.equal(found!.oldestDays, 3);
-		} finally {
-			rmTemp(solo);
-		}
-	});
-
-	test("a memory capture counts the moment it lands — no age threshold", () => {
-		const solo = mkdtempSync(join(tmpdir(), "active-hygiene-memories-fresh-"));
-		try {
-			mkdirSync(join(solo, "memories/2026/07"), { recursive: true });
-			writeFileSync(join(solo, "memories/2026/07/brand new.md"), "captured");
-			// Undrained because nobody has judged it, which is true immediately.
-			assert.equal(scanActiveHygiene(solo, NOW, DEFAULTS).memoryInbox?.count, 1);
-		} finally {
-			rmTemp(solo);
-		}
-	});
-
-	test("a shipped README in the memory tree is not a capture", () => {
-		const solo = mkdtempSync(join(tmpdir(), "active-hygiene-memories-readme-"));
-		try {
-			mkdirSync(join(solo, "memories/2026/07"), { recursive: true });
-			writeFileSync(join(solo, "memories/2026/07/README.md"), "how this folder works");
-			// Same permanently-unclearable trap the meetings scaffold already fixed.
-			assert.equal(scanActiveHygiene(solo, NOW, DEFAULTS).memoryInbox, null);
-		} finally {
-			rmTemp(solo);
-		}
-	});
-
-	test("a declared memory_root is honoured, and the default is not hard-coded", () => {
-		const solo = mkdtempSync(join(tmpdir(), "active-hygiene-memories-root-"));
-		try {
-			mkdirSync(join(solo, "elsewhere/2026/07"), { recursive: true });
-			writeFileSync(join(solo, "elsewhere/2026/07/a lesson.md"), "captured");
-			assert.equal(scanActiveHygiene(solo, NOW, DEFAULTS).memoryInbox, null);
-			assert.equal(
-				scanActiveHygiene(solo, NOW, DEFAULTS, [], parseMemoryRoot('{"memory_root":"elsewhere"}'))
-					.memoryInbox?.count,
-				1,
-			);
-		} finally {
-			rmTemp(solo);
-		}
-	});
-
-	// The flag has to be able to reach zero. Promotion is additive, so the entry
-	// stays; without a marker the count could only ever grow, which is the
-	// permanently-unclearable failure #155 already fixed once.
-	test("a promoted capture stops counting, so the flag can clear", () => {
-		const solo = mkdtempSync(join(tmpdir(), "active-hygiene-memories-promoted-"));
-		try {
-			mkdirSync(join(solo, "memories/2026/07"), { recursive: true });
-			const rel = "memories/2026/07/a lesson.md";
-			writeFileSync(join(solo, rel), "---\nscope: general\n---\n\n# a lesson\n");
-			assert.equal(scanActiveHygiene(solo, NOW, DEFAULTS).memoryInbox?.count, 1);
-
-			writeFileSync(
-				join(solo, rel),
-				'---\nscope: general\npromoted: "brain/Gotchas"\n---\n\n# a lesson\n',
-			);
-			assert.equal(scanActiveHygiene(solo, NOW, DEFAULTS).memoryInbox, null);
-		} finally {
-			rmTemp(solo);
-		}
-	});
-
-	/**
-	 * The gradient the count creates (#183).
-	 *
-	 * Clearing the flag and SERVING the lesson are different achievements, and a
-	 * bare marker buys the first for less work than the second. Hygiene reports
-	 * the split so the cheaper form is visible — but it must never gate on it, or
-	 * the flag stops being able to reach zero.
-	 */
-	test("a bare marker is counted as named-only, and never revives the flag", () => {
-		const solo = mkdtempSync(join(tmpdir(), "active-hygiene-memories-namedonly-"));
-		try {
-			mkdirSync(join(solo, "memories/2026/07"), { recursive: true });
-			writeFileSync(
-				join(solo, "memories/2026/07/bare.md"),
-				'---\nscope: general\npromoted: "brain/Gotchas"\n---\n\n# bare\n',
-			);
-			writeFileSync(
-				join(solo, "memories/2026/07/anchored.md"),
-				'---\nscope: general\npromoted: "brain/Gotchas#^om-a1b2c3"\n---\n\n# anchored\n',
-			);
-
-			// Both are promoted, so there is no pressure at all — the flag reaches
-			// zero exactly as before, which is the invariant #155 established.
-			assert.equal(scanActiveHygiene(solo, NOW, DEFAULTS).memoryInbox, null);
-
-			// Add one UNpromoted capture: the flag fires, and the split rides on it
-			// as a detail rather than as a second warning of its own.
-			writeFileSync(join(solo, "memories/2026/07/fresh.md"), "---\nscope: general\n---\n\n# fresh\n");
-			const inbox = scanActiveHygiene(solo, NOW, DEFAULTS).memoryInbox;
-			assert.equal(inbox?.count, 1, "only the unpromoted capture is pressure");
-			assert.equal(inbox?.namedOnly, 1, "the bare marker counts, the anchored one does not");
-
-			const text = formatActiveHygiene(scanActiveHygiene(solo, NOW, DEFAULTS)).join("\n");
-			assert.match(text, /1 already-promoted capture\(s\) here carry a bare marker/);
-		} finally {
-			rmTemp(solo);
-		}
-	});
-
-	test("quoting does not change the verdict — the writer stamps a YAML scalar", () => {
-		// The capture writer emits `promoted: 'brain/X#^id'`, and hand-promotion
-		// writes all three forms below. The count must not depend on which.
-		//
-		// This does NOT prove the quote stripping in `promotionOf`: an unstripped
-		// `"brain/G#^om-a1"` still splits at the `#` and still reads as anchored,
-		// so the verdict is identical either way. The stripping is there so the
-		// returned ref's `note` is a real path rather than `"brain/G` — which no
-		// caller reads today and every caller would assume tomorrow. What this
-		// guards is the count, across the forms actually written.
-		const solo = mkdtempSync(join(tmpdir(), "active-hygiene-memories-quoted-"));
-		try {
-			mkdirSync(join(solo, "memories/2026/07"), { recursive: true });
-			writeFileSync(join(solo, "memories/2026/07/x.md"), "---\nscope: general\n---\n\n# x\n");
-			for (const marker of ["'brain/G#^om-a1'", '"brain/G#^om-a1"', "brain/G#^om-a1"]) {
-				writeFileSync(
-					join(solo, "memories/2026/07/q.md"),
-					`---\nscope: general\npromoted: ${marker}\n---\n\n# q\n`,
-				);
-				assert.equal(
-					scanActiveHygiene(solo, NOW, DEFAULTS).memoryInbox?.namedOnly,
-					0,
-					`anchored, however quoted: ${marker}`,
-				);
-			}
-		} finally {
-			rmTemp(solo);
-		}
-	});
-
-	test("an empty or misplaced promoted marker does not silence a capture", () => {
-		const solo = mkdtempSync(join(tmpdir(), "active-hygiene-memories-badmark-"));
-		try {
-			mkdirSync(join(solo, "memories/2026/07"), { recursive: true });
-			// A bare key with no value is not a promotion record and must not hide
-			// a capture from review.
-			writeFileSync(join(solo, "memories/2026/07/x.md"), "---\npromoted:\n---\n\n# x\n");
-			assert.equal(scanActiveHygiene(solo, NOW, DEFAULTS).memoryInbox?.count, 1);
-			// Nor may the word appearing in the BODY rather than the frontmatter.
-			writeFileSync(join(solo, "memories/2026/07/y.md"), "# y\n\npromoted: brain/Thing\n");
-			assert.equal(scanActiveHygiene(solo, NOW, DEFAULTS).memoryInbox?.count, 2);
-		} finally {
-			rmTemp(solo);
-		}
-	});
-
-	test("the memory-inbox line says COPY, never delete", () => {
-		const lines = formatActiveHygiene({
-			completedInActive: [],
-			ungroupedClusters: [],
-			oversizedNotes: [],
-			openLoops: [],
-			inboxPressure: null,
-			memoryInbox: { count: 4, oldestDays: 2, namedOnly: 0 },
-			leftoverInstructionFiles: [],
-			geminiSettingsBroken: false,
-			agentsMd: null,
-		});
-		const text = lines.join("\n");
-		assert.match(text, /COPYING it/);
-		// The ANCHORED form is what the prompt must teach: a bare marker clears
-		// this very count while serving nothing, so a warning that showed only
-		// the bare form would be steering the reader to the useless one.
-		assert.match(text, /promoted: "brain\/Note#\^om-a1b2c3"/);
-		assert.match(text, /a bare `promoted: <note>` clears this count but serves nothing/);
-		assert.doesNotMatch(text, /om-intake/);
-	});
-
 	test("each previously uncapped hygiene list prints ten entries, then a count of the rest (#254)", () => {
 		const report = (n: number) =>
 			formatActiveHygiene({
@@ -455,9 +265,7 @@ describe("scanActiveHygiene — detectors", () => {
 				oversizedNotes: Array.from({ length: n }, (_, i) => ({ path: `notes/Big ${i}.md`, sizeKb: 30 })),
 				openLoops: [],
 				inboxPressure: null,
-				memoryInbox: null,
 				leftoverInstructionFiles: [],
-				geminiSettingsBroken: false,
 				agentsMd: null,
 			});
 		const atCap = report(HYGIENE_LIST_CAP);
@@ -551,9 +359,7 @@ describe("formatActiveHygiene", () => {
 			oversizedNotes: [{ path: "work/Fat.md", sizeKb: 40 }],
 			openLoops: [{ path: "work/1-1/A 2026-01-01.md", ageDays: 20, openItems: 2 }],
 			inboxPressure: null,
-			memoryInbox: null,
 			leftoverInstructionFiles: [],
-			geminiSettingsBroken: false,
 			agentsMd: null,
 		});
 		const text = lines.join("\n");
@@ -616,127 +422,6 @@ describe("leftover CLAUDE.md beside AGENTS.md (#321)", () => {
 				text,
 				/CLAUDE\.md present beside AGENTS\.md — Claude Code reads CLAUDE\.md and skips AGENTS\.md; move your additions to \.claude\/rules\/ and delete it\./,
 			);
-		});
-	});
-
-	/** Write .gemini/settings.json with the given context.fileName (or none). */
-	const geminiSettings = (root: string, fileName?: string[]): void => {
-		mkdirSync(join(root, ".gemini"), { recursive: true });
-		writeFileSync(join(root, ".gemini/settings.json"), JSON.stringify(fileName ? { context: { fileName } } : { hooks: {} }));
-	};
-
-	test("flags a GEMINI.md beside AGENTS.md once Gemini's settings point it at AGENTS.md, so GEMINI.md is never loaded", () => {
-		withFiles(["AGENTS.md", "GEMINI.md"], (root) => {
-			geminiSettings(root, ["AGENTS.md"]);
-			const report = scanActiveHygiene(root, NOW, DEFAULTS);
-			assert.deepEqual(report.leftoverInstructionFiles, ["GEMINI.md"], "a GEMINI.md is not a leftover CLAUDE.md");
-			assert.match(formatActiveHygiene(report).join("\n"), /GEMINI\.md present beside AGENTS\.md — Gemini no longer reads GEMINI\.md/);
-		});
-		withFiles(["AGENTS.md", "CLAUDE.md"], (root) => {
-			geminiSettings(root, ["AGENTS.md"]);
-			assert.deepEqual(scanActiveHygiene(root, NOW, DEFAULTS).leftoverInstructionFiles, ["CLAUDE.md"]);
-		});
-	});
-
-	test("silent about a GEMINI.md that Gemini still reads: its settings name no AGENTS.md, or there are none", () => {
-		// A vault that kept its own older settings: Gemini reads GEMINI.md as its
-		// only context file, so telling the user to delete it would cut Gemini off.
-		withFiles(["AGENTS.md", "GEMINI.md"], (root) => {
-			geminiSettings(root);
-			assert.deepEqual(scanActiveHygiene(root, NOW, DEFAULTS).leftoverInstructionFiles, []);
-		});
-		withFiles(["AGENTS.md", "GEMINI.md"], (root) => {
-			geminiSettings(root, ["GEMINI.md"]);
-			assert.deepEqual(scanActiveHygiene(root, NOW, DEFAULTS).leftoverInstructionFiles, []);
-		});
-		withFiles(["AGENTS.md", "GEMINI.md"], (root) => {
-			assert.deepEqual(scanActiveHygiene(root, NOW, DEFAULTS).leftoverInstructionFiles, []);
-		});
-		// Both named: Gemini loads GEMINI.md as well, so it is not a leftover.
-		withFiles(["AGENTS.md", "GEMINI.md"], (root) => {
-			geminiSettings(root, ["AGENTS.md", "GEMINI.md"]);
-			assert.deepEqual(scanActiveHygiene(root, NOW, DEFAULTS).leftoverInstructionFiles, []);
-		});
-	});
-
-	// As Gemini loads its settings (geminiContextFiles cites the source): comments
-	// are fine and count as whitespace; a BOM or a trailing comma is fatal (#374).
-	const rawSettings = (root: string, text: string): void => {
-		mkdirSync(join(root, ".gemini"), { recursive: true });
-		writeFileSync(join(root, ".gemini/settings.json"), text);
-	};
-	const scanWith = (text: string) => {
-		let report: ReturnType<typeof scanActiveHygiene> | undefined;
-		withFiles(["AGENTS.md", "GEMINI.md"], (root) => {
-			rawSettings(root, text);
-			report = scanActiveHygiene(root, NOW, DEFAULTS);
-		});
-		return report!;
-	};
-
-	test("Gemini settings with comments and CRLF, which Gemini accepts, are still read", () => {
-		const report = scanWith('{\r\n  // where Gemini looks\r\n  "context": { "fileName": ["AGENTS.md"] },\r\n  /* hooks */ "hooks": {}\r\n}\r\n');
-		assert.deepEqual(report.leftoverInstructionFiles, ["GEMINI.md"]);
-		assert.equal(report.geminiSettingsBroken, false);
-	});
-
-	for (const [name, text] of [
-		["a BOM", '﻿{ "context": { "fileName": "AGENTS.md" } }'],
-		["a missing brace", '{ "context": { "fileName": "AGENTS.md" }'],
-		["a trailing comma", '{ "context": { "fileName": "AGENTS.md", }, }'],
-		["a comment inside a token, which is whitespace", '{ "debug": tr/**/ue, "context": { "fileName": "AGENTS.md" } }'],
-		["an unterminated block comment swallowing the closing brace", '{ "context": { "fileName": "AGENTS.md" } /* never closed'],
-		["a JSON value that is not an object", '["AGENTS.md"]'],
-	] as const) {
-		test(`settings Gemini cannot load (${name}) name nothing, and are reported as broken`, () => {
-			const report = scanWith(text);
-			assert.deepEqual(report.leftoverInstructionFiles, [], "GEMINI.md is not retired by a file Gemini never applies");
-			assert.equal(report.geminiSettingsBroken, true);
-		});
-	}
-
-	test("a broken settings file says to fix it and keep GEMINI.md, never to delete GEMINI.md", () => {
-		const text = formatActiveHygiene(scanWith('{ "context": { "fileName": "AGENTS.md", } }')).join("\n");
-		assert.match(text, /\.gemini\/settings\.json doesn't parse — Gemini refuses to start until it does/);
-		assert.match(text, /keep GEMINI\.md/);
-		assert.doesNotMatch(text, /delete it/);
-	});
-
-	test("an unterminated block comment after a complete object still parses", () => {
-		const report = scanWith('{ "context": { "fileName": "AGENTS.md" } } /* never closed');
-		assert.deepEqual(report.leftoverInstructionFiles, ["GEMINI.md"]);
-	});
-
-	test("a commented-out fileName doesn't count, and a // inside a string is no comment", () => {
-		assert.deepEqual(
-			scanWith('{\n  // was: "fileName": "AGENTS.md"\n  /* "context": { "fileName": ["AGENTS.md"] } */\n  "context": { "fileName": "GEMINI.md" }\n}\n').leftoverInstructionFiles,
-			[],
-		);
-		assert.deepEqual(
-			scanWith('{ "$schema": "https://example.com/s.json", "context": { "fileName": "AGENTS.md" } }').leftoverInstructionFiles,
-			["GEMINI.md"],
-		);
-		// An escaped quote doesn't end the string, so the // after it is still inside it.
-		assert.deepEqual(
-			scanWith(String.raw`{ "note": "a 12\" ruler // not a comment", "context": { "fileName": "AGENTS.md" } }`).leftoverInstructionFiles,
-			["GEMINI.md"],
-		);
-	});
-
-	test("only the top-level context counts, and the v1 contextFileName where context.fileName is absent", () => {
-		assert.deepEqual(scanWith('{ "mcpServers": { "x": { "context": { "fileName": "AGENTS.md" } } } }').leftoverInstructionFiles, []);
-		assert.deepEqual(scanWith('{ "contextFileName": "AGENTS.md" }').leftoverInstructionFiles, ["GEMINI.md"]);
-		assert.deepEqual(
-			scanWith('{ "contextFileName": "AGENTS.md", "context": { "fileName": "GEMINI.md" } }').leftoverInstructionFiles,
-			[],
-			"context.fileName wins over the v1 key",
-		);
-	});
-
-	test("no broken flag without AGENTS.md: a vault that hasn't upgraded gets no instruction-file findings", () => {
-		withFiles(["GEMINI.md"], (root) => {
-			rawSettings(root, "{ broken");
-			assert.equal(scanActiveHygiene(root, NOW, DEFAULTS).geminiSettingsBroken, false);
 		});
 	});
 
@@ -851,35 +536,5 @@ describe("leftover CLAUDE.md beside AGENTS.md (#321)", () => {
 		withFiles(["CLAUDE.md"], (root) => {
 			assert.equal(scanActiveHygiene(root, NOW, DEFAULTS).leftoverInstructionFiles.includes("CLAUDE.md"), false);
 		});
-	});
-});
-
-/**
- * stripJsonComments matches strip-json-comments 3.1.1, the version gemini-cli
- * pins, character for character (#380), not only in whether JSON.parse then
- * accepts the result. Expected outputs are 3.1.1's own, as of 2026-10-13.
- */
-describe("stripJsonComments, as strip-json-comments 3.1.1", () => {
-	test("an unterminated string runs to the end: a // after it is string, not comment", () => {
-		assert.equal(stripJsonComments('{ "a": "unterminated // x'), '{ "a": "unterminated // x');
-	});
-
-	test("comments become spaces, line breaks kept, CRLF included", () => {
-		assert.equal(stripJsonComments('{ // c\r\n"a": 1 /* b */ }'), '{     \r\n"a": 1         }');
-		assert.equal(stripJsonComments('{ "a": 1 } /* open'), '{ "a": 1 }        ');
-	});
-
-	test("a quote after an odd run of backslashes doesn't end the string", () => {
-		assert.equal(stripJsonComments(String.raw`{ "a": "12\" // in" }`), String.raw`{ "a": "12\" // in" }`);
-		assert.equal(stripJsonComments(String.raw`{ "a": "x\\" // out` + "\n}"), String.raw`{ "a": "x\\"       ` + "\n}");
-	});
-
-	test("one pass: an unterminated string of escaped quotes stays linear", () => {
-		// The regex form took 61.6 ms at 8,000 and grows with the square, so about
-		// 10 s here; the scan takes a few ms, so the bound holds on a slow runner.
-		const text = '{ "a": "' + '\\"'.repeat(100_000);
-		const start = performance.now();
-		assert.equal(stripJsonComments(text), text);
-		assert.ok(performance.now() - start < 500);
 	});
 });
