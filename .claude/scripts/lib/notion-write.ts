@@ -1,10 +1,14 @@
 /**
- * The form of a Notion write, as a `Bash` hook sees it.
+ * The allow list of Notion commands, as a `Bash` hook sees them.
  *
- * Claude Code reaches Notion through `mcporter`, so a write is a shell command
- * string. A hook can check a write only when it can read the arguments, so one
- * form is the write form: the JSON arguments are in an outbox file, and the
- * command is `mcporter call notion.<tool> --args "$(cat <outbox file>)"`.
+ * Claude Code reaches Notion through `mcporter`, so a Notion call is a shell
+ * command string. No parser can find each write in shell text. So the guard
+ * does not look for a write. It takes each command that names Notion, and it
+ * passes only the two forms below. A hook can read the tool and the arguments
+ * of each form.
+ *
+ * A write: `mcporter call notion.<tool> --args "$(cat <outbox file>)"`
+ * A read:  `mcporter call notion.<read tool> --args '<JSON object>' --output json`
  */
 
 export type ToolClass = "read" | "write";
@@ -90,231 +94,159 @@ export const NOTION_TOOLS = {
 	"notion-get-setup-guide": "read",
 } as const satisfies Record<string, ToolClass>;
 
-/** A tool that the table does not list is a write, so a new tool of the server gets the check. */
-export const isNotionWrite = (tool: string): boolean => !Object.hasOwn(NOTION_TOOLS, tool) || NOTION_TOOLS[tool as keyof typeof NOTION_TOOLS] === "write";
+export type NotionTool = keyof typeof NOTION_TOOLS;
+type ToolOf<Class extends ToolClass> = { [Tool in NotionTool]: (typeof NOTION_TOOLS)[Tool] extends Class ? Tool : never }[NotionTool];
 
 export const OUTBOX_DIR = ".claude/state/outbox";
 
 /** The one command that writes to Notion with the arguments in `outbox`. */
 export const outboxCommand = (tool: string, outbox: string): string => `mcporter call notion.${tool} --args "$(cat ${outbox})"`;
 
-const OUTBOX_COMMAND = /^mcporter +call +notion\.([A-Za-z0-9_-]+) +--args +"\$\(cat +(\.claude\/state\/outbox\/[A-Za-z0-9][A-Za-z0-9._-]*\.json)\)"$/;
+/** A read with inline arguments. `args` is the text of one JSON object with no single quote. */
+export const readCommand = (tool: string, args: string): string => `mcporter call notion.${tool} --args '${args}' --output json`;
+
+const NOTION_TEXT = ["mcporter", "notion."];
+
+/** Quote characters cannot split a name, and the match ignores case, because macOS finds `MCPORTER` too. */
+const bare = (text: string): string => text.replace(/\\\n|['"\\]/g, "").toLowerCase();
+
+/** Whether `command` names Notion anywhere in its text, also in a quoted string or a here-document. */
+export const namesNotion = (command: string, runtimePaths: readonly string[]): boolean => {
+	const text = bare(command);
+	return [...NOTION_TEXT, ...runtimePaths.map(bare)].some((name) => name !== "" && text.includes(name));
+};
+
+const OUTBOX_ARGS = String.raw`"\$\(cat +(\.claude\/state\/outbox\/[A-Za-z0-9][A-Za-z0-9._-]*\.json)\)"`;
+/** A single-quoted string is inert in a shell. The braces keep out `-` (stdin) and `@<file>`. */
+const INLINE_ARGS = String.raw`'(\{[^']*\})'`;
+/**
+ * `--args` is the only source of arguments, because `mcporter` lets a
+ * `tool:<name>` argument or a `--tool` flag replace the tool of the selector.
+ */
+const FORM = new RegExp(String.raw`^mcporter +call +notion\.([A-Za-z0-9_-]+)(?: +--args +(?:${OUTBOX_ARGS}|${INLINE_ARGS}))?( +--output +(?:json|text|markdown|raw))?$`);
 
 export type JsonObject = { readonly [key: string]: unknown };
 
+export type Refusal =
+	| { readonly cause: "form" }
+	| { readonly cause: "unknown-tool"; readonly tool: string }
+	| { readonly cause: "write-form"; readonly tool: ToolOf<"write"> }
+	/** `outbox` is null when the arguments are inline. */
+	| { readonly cause: ArgsProblem; readonly outbox: string | null };
+
+type ArgsProblem = "missing" | "not-json" | "not-object";
+
 export type ParsedCommand =
-	| { readonly kind: "not-notion-write" }
-	| { readonly kind: "outbox-write"; readonly tool: string; readonly outbox: string; readonly args: JsonObject }
-	/** `tool` is null when the command names the `notion` server but its selector does not show the tool. */
-	| { readonly kind: "unparsed-write"; readonly cause: "form"; readonly tool: string | null }
-	| { readonly kind: "unparsed-write"; readonly cause: "missing" | "not-json" | "not-object"; readonly tool: string; readonly outbox: string };
+	| { readonly kind: "other" }
+	| { readonly kind: "read"; readonly tool: ToolOf<"read">; readonly args: JsonObject; readonly outbox: string | null }
+	| { readonly kind: "write"; readonly tool: ToolOf<"write">; readonly args: JsonObject; readonly outbox: string }
+	| ({ readonly kind: "refused" } & Refusal);
 
-/**
- * Classify a `Bash` command. `readOutbox` returns the text of an outbox file,
- * or null when it cannot read the file. The path is the one in the command,
- * relative to the working directory of the shell.
- */
-export function parseCommand(command: string, readOutbox: (outbox: string) => string | null): ParsedCommand {
-	const writes = notionCalls(command).filter((tool) => tool === null || isNotionWrite(tool));
-	if (writes.length === 0) return { kind: "not-notion-write" };
+export type Host = {
+	/** The text of an outbox file, or null when the shell cannot read it. The path is relative to the working directory of the shell. */
+	readonly readOutbox: (outbox: string) => string | null;
+	/** Each folder that holds the `mcporter` runtime on this machine. */
+	readonly runtimePaths: readonly string[];
+};
 
-	const form = OUTBOX_COMMAND.exec(command.trim());
-	const [, tool, outbox] = form ?? [];
-	if (tool === undefined || outbox === undefined) return { kind: "unparsed-write", cause: "form", tool: writes[0] ?? null };
+const isTool = (name: string): name is NotionTool => Object.hasOwn(NOTION_TOOLS, name);
+const isWriteTool = (tool: NotionTool): tool is ToolOf<"write"> => NOTION_TOOLS[tool] === "write";
 
-	const text = readOutbox(outbox);
-	if (text === null) return { kind: "unparsed-write", cause: "missing", tool, outbox };
-	let args: unknown;
+function jsonObject(text: string | null): JsonObject | ArgsProblem {
+	if (text === null) return "missing";
+	let value: unknown;
 	try {
-		args = JSON.parse(text);
+		value = JSON.parse(text);
 	} catch {
-		return { kind: "unparsed-write", cause: "not-json", tool, outbox };
+		return "not-json";
 	}
-	if (args === null || typeof args !== "object" || Array.isArray(args)) return { kind: "unparsed-write", cause: "not-object", tool, outbox };
-	return { kind: "outbox-write", tool, outbox, args: args as JsonObject };
+	return value === null || typeof value !== "object" || Array.isArray(value) ? "not-object" : (value as JsonObject);
+}
+
+/** Classify a `Bash` command. A command that names Notion is a call in one of the two forms, or it is refused. */
+export function parseCommand(command: string, host: Host): ParsedCommand {
+	if (!namesNotion(command, host.runtimePaths)) return { kind: "other" };
+
+	const [, name, outbox = null, inline = "{}", output] = FORM.exec(command.trim()) ?? [];
+	if (name === undefined) return { kind: "refused", cause: "form" };
+	if (!isTool(name)) return { kind: "refused", cause: "unknown-tool", tool: name };
+
+	if (isWriteTool(name)) {
+		if (outbox === null || output !== undefined) return { kind: "refused", cause: "write-form", tool: name };
+		const args = jsonObject(host.readOutbox(outbox));
+		return typeof args === "string" ? { kind: "refused", cause: args, outbox } : { kind: "write", tool: name, args, outbox };
+	}
+	const args = jsonObject(outbox === null ? inline : host.readOutbox(outbox));
+	return typeof args === "string" ? { kind: "refused", cause: args, outbox } : { kind: "read", tool: name, args, outbox };
 }
 
 export type Decision = { readonly kind: "pass" } | { readonly kind: "deny"; readonly reason: string };
 
-const outboxSteps = (tool: string): string =>
+const PLACEHOLDER = `${OUTBOX_DIR}/<name>.json`;
+
+const writeSteps = (tool: string): string =>
 	[
-		`1. Write the JSON arguments to ${OUTBOX_DIR}/<name>.json with the Write tool.`,
-		`2. Run this command from the project root, with no other command, pipe, redirect, or argument:`,
-		`   ${outboxCommand(tool, `${OUTBOX_DIR}/<name>.json`)}`,
+		`1. Write the JSON arguments to ${PLACEHOLDER} with the Write tool.`,
+		"2. Run this command from the project root, with no other command, pipe, redirect, or argument:",
+		`   ${outboxCommand(tool, PLACEHOLDER)}`,
 	].join("\n");
 
-const OUTBOX_PROBLEM = {
-	missing: "The shell cannot read the outbox file from its working directory",
-	"not-json": "The outbox file is not valid JSON",
-	"not-object": "The outbox file must hold one JSON object",
-} as const;
+const READ_STEPS = [
+	`   ${readCommand("<read tool>", "<JSON object>")}`,
+	"   `--args` and `--output` are optional. Put the JSON object in single quotes, and write a single quote in it as \\u0027.",
+	`   A read can also take its arguments from an outbox file: --args "$(cat ${PLACEHOLDER})"`,
+].join("\n");
+
+function refusalReason(refusal: Refusal): string {
+	const source = "outbox" in refusal && refusal.outbox !== null ? `The outbox file ${refusal.outbox}` : "The inline --args value";
+	switch (refusal.cause) {
+		case "form":
+			return [
+				"The command names `mcporter`, its runtime, or `notion.`, and it is not in a form that the hooks can check.",
+				"Use one of the two forms exactly, with no other command, pipe, redirect, variable, or flag.",
+				"A write:",
+				writeSteps("<tool>"),
+				"A read:",
+				READ_STEPS,
+			].join("\n");
+		case "unknown-tool":
+			return `The tool table of the guard does not list ${refusal.tool}. Use a tool of NOTION_TOOLS in .claude/scripts/lib/notion-write.ts.`;
+		case "write-form":
+			return `${refusal.tool} changes Notion, so its arguments must come from an outbox file.\n${writeSteps(refusal.tool)}`;
+		case "missing":
+			return `The shell cannot read the outbox file from its working directory: ${refusal.outbox}.\n${writeSteps("<tool>")}`;
+		case "not-json":
+			return `${source} is not valid JSON.`;
+		case "not-object":
+			return `${source} must hold one JSON object.`;
+	}
+}
 
 /** The guard checks the form only. Content findings are warnings after the write. */
 export function decide(parsed: ParsedCommand): Decision {
 	switch (parsed.kind) {
-		case "not-notion-write":
+		case "other":
+		case "read":
 			return { kind: "pass" };
-		case "unparsed-write": {
-			const problem = parsed.cause === "form" ? "The command is not in the outbox form, so the hooks cannot check the write." : `${OUTBOX_PROBLEM[parsed.cause]}: ${parsed.outbox}.`;
-			return { kind: "deny", reason: `Notion write denied. ${problem}\n${outboxSteps(parsed.tool ?? "<tool>")}` };
-		}
-		case "outbox-write":
+		case "refused":
+			return { kind: "deny", reason: `Notion command denied. ${refusalReason(parsed)}` };
+		case "write":
 			// Without it the reply holds a task and no page ID, so the write hook cannot find the page.
 			if (parsed.tool === "notion-create-pages" && parsed.args["allow_async"] !== false) {
-				return { kind: "deny", reason: `Notion write denied. Set "allow_async": false at the top level of ${parsed.outbox}, then run the same command again.` };
+				return { kind: "deny", reason: `Notion command denied. Set "allow_async": false at the top level of ${parsed.outbox}, then run the same command again.` };
 			}
 			return { kind: "pass" };
 	}
 }
 
-const NO_TOOL_CALL = new Set(["list", "auth", "config", "daemon", "vault", "resource", "inspect-cli", "emit-ts", "generate-cli"]);
-const SHELLS = new Set(["bash", "sh", "zsh", "dash", "ksh"]);
-
-const baseName = (word: string): string => word.slice(word.lastIndexOf("/") + 1);
-const namesNotion = (word: string): boolean => word === "notion" || word === "--server=notion" || /^https?:\/\/[^/]*\bnotion\.(?:com|so)\b/.test(word);
-
-/** The tool of each `mcporter` call in `command` that names the `notion` server. */
-function notionCalls(command: string): (string | null)[] {
-	return simpleCommands(command).flatMap((words) => {
-		const starts = words.flatMap((word, index) => (baseName(word) === "mcporter" ? [index] : []));
-		const direct = starts.flatMap((start, n) => {
-			const segment = words.slice(start + 1, starts[n + 1]);
-			const subcommand = segment.find((word) => !word.startsWith("-"));
-			if (subcommand === undefined || NO_TOOL_CALL.has(subcommand)) return [];
-			const tools = segment.flatMap((word) => /^notion\.([A-Za-z0-9_-]+)/.exec(word)?.[1] ?? []);
-			if (tools.length > 0) return tools;
-			return segment.some(namesNotion) ? [null] : [];
-		});
-		return [...direct, ...shellScripts(words).flatMap(notionCalls)];
-	});
-}
-
-function shellScripts(words: readonly string[]): string[] {
-	const evalAt = words.indexOf("eval");
-	const scripts = evalAt === -1 ? [] : [words.slice(evalAt + 1).join(" ")];
-	const shellAt = words.findIndex((word) => SHELLS.has(baseName(word)));
-	const flagAt = shellAt === -1 ? -1 : words.findIndex((word, index) => index > shellAt && /^-[a-z]*c$/.test(word));
-	const script = flagAt === -1 ? undefined : words[flagAt + 1];
-	return script === undefined ? scripts : [...scripts, script];
-}
-
 /**
- * The simple commands of a shell command line, each as its words after quote
- * removal. A command substitution gives its own commands too. A here-document
- * body is data, not commands. The lexer covers the POSIX forms that decide
- * where a command starts, and it does not expand a variable.
+ * The shell command of a `PreToolUse` payload, or null for a tool other than
+ * `Bash`. It throws for a payload that it cannot read, so the guard denies.
  */
-export function simpleCommands(command: string): string[][] {
-	const out: string[][] = [];
-	const end = command.length;
-	let at = 0;
-
-	const list = (closer: ")" | "`" | null): void => {
-		let words: string[] = [];
-		let word: string | null = null;
-		const hereDocs: { readonly delimiter: string; readonly stripTabs: boolean }[] = [];
-		const add = (text: string): void => {
-			word = (word ?? "") + text;
-		};
-		const endWord = (): void => {
-			if (word !== null) words.push(word);
-			word = null;
-		};
-		const endCommand = (): void => {
-			endWord();
-			if (words.length > 0) out.push(words);
-			words = [];
-		};
-		const substitution = (opener: number, nested: ")" | "`"): void => {
-			at += opener;
-			add("");
-			list(nested);
-		};
-
-		while (at < end) {
-			const char = command[at]!;
-			const next = command[at + 1];
-			if (char === closer) {
-				at += 1;
-				break;
-			}
-			if (char === "\n") {
-				endCommand();
-				at += 1;
-				for (const { delimiter, stripTabs } of hereDocs.splice(0)) {
-					while (at < end) {
-						const lineEnd = command.indexOf("\n", at);
-						const line = command.slice(at, lineEnd === -1 ? end : lineEnd);
-						at = lineEnd === -1 ? end : lineEnd + 1;
-						if ((stripTabs ? line.replace(/^\t+/, "") : line) === delimiter) break;
-					}
-				}
-			} else if (char === " " || char === "\t") {
-				endWord();
-				at += 1;
-			} else if (char === "#" && word === null) {
-				const lineEnd = command.indexOf("\n", at);
-				at = lineEnd === -1 ? end : lineEnd;
-			} else if (char === "\\") {
-				if (next !== "\n") add(next ?? "");
-				at += 2;
-			} else if (char === "'") {
-				const close = command.indexOf("'", at + 1);
-				add(command.slice(at + 1, close === -1 ? end : close));
-				at = close === -1 ? end : close + 1;
-			} else if (char === '"') {
-				at += 1;
-				add("");
-				while (at < end && command[at] !== '"') {
-					const inner = command[at]!;
-					const after = command[at + 1];
-					if (inner === "\\" && after !== undefined && '$`"\\\n'.includes(after)) {
-						if (after !== "\n") add(after);
-						at += 2;
-					} else if (inner === "$" && after === "(") {
-						substitution(2, ")");
-					} else if (inner === "`") {
-						substitution(1, "`");
-					} else {
-						add(inner);
-						at += 1;
-					}
-				}
-				at += 1;
-			} else if (char === "$" && next === "(") {
-				substitution(2, ")");
-			} else if (char === "`") {
-				substitution(1, "`");
-			} else if (command.startsWith("<<<", at)) {
-				endWord();
-				at += 3;
-			} else if (char === "<" && next === "<") {
-				endWord();
-				at += 2;
-				const stripTabs = command[at] === "-";
-				const delimiter = /^[ \t]*([^\s;&|()<>]*)/.exec(command.slice(at + (stripTabs ? 1 : 0)))!;
-				at += (stripTabs ? 1 : 0) + delimiter[0].length;
-				hereDocs.push({ delimiter: delimiter[1]!.replace(/['"\\]/g, ""), stripTabs });
-			} else if ((char === ">" || char === "<") && next === "&") {
-				endWord();
-				at += 2;
-			} else if (char === "&" && next === ">") {
-				endWord();
-				at += 2;
-			} else if (char === ">" || char === "<") {
-				endWord();
-				at += 1;
-			} else if (";&|()".includes(char)) {
-				endCommand();
-				at += 1;
-			} else {
-				add(char);
-				at += 1;
-			}
-		}
-		endCommand();
-	};
-
-	list(null);
-	return out;
+export function bashCommand(payload: unknown): string | null {
+	const { tool_name: tool, tool_input: input } = (payload ?? {}) as { readonly tool_name?: unknown; readonly tool_input?: { readonly command?: unknown } | null };
+	if (typeof tool !== "string") throw new Error("The hook payload names no tool.");
+	if (tool !== "Bash") return null;
+	if (typeof input?.command !== "string") throw new Error("The hook payload of Bash holds no command.");
+	return input.command;
 }
