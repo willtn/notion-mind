@@ -199,13 +199,13 @@ describe("hook config — Claude commands find the vault root from a subfolder (
 	const commands = eachNodeHookCommand(loadConfig(".claude/settings.json"));
 	const scriptOf = (command: string) => /\/\.claude\/scripts\/([a-z-]+\.ts)"$/.exec(command)?.[1] ?? "";
 
-	test("every command walks up with the same text: one rule, five copies that cannot drift", () => {
+	test("every command walks up with the same text: one rule, six copies that cannot drift", () => {
 		// JSON cannot share a snippet, so each command carries the walk-up. Each
 		// copy is also run below, but only this keeps one copy from quietly
 		// losing a branch (the fallback, say) that the run cases happen not to reach.
 		const walkOf = (command: string) => command.slice(0, command.indexOf("/.claude/scripts/"));
 		const walks = new Set(commands.map(({ command }) => walkOf(command)));
-		assert.equal(commands.length, 5);
+		assert.equal(commands.length, 6);
 		assert.equal(walks.size, 1, `the walk-up differs between commands:\n${[...walks].join("\n")}`);
 		assert.match([...walks][0]!, /vault-manifest\.json/);
 	});
@@ -327,4 +327,15 @@ describe("hook config — write validation fires on each agent's own file tools 
 			}
 		});
 	}
+});
+
+describe("hook config — the Notion write guard runs before each Bash call", () => {
+	// Claude Code reaches Notion through `mcporter`, so a Notion write is a Bash
+	// call. A matcher that misses Bash lets each write through with no check.
+	test("Claude Code: a PreToolUse entry with a timeout runs guard-notion-write on Bash", () => {
+		const entries = entriesRunning(".claude/settings.json", "PreToolUse", "guard-notion-write.ts");
+		assert.ok(firesOn(entries, "Bash", regex), "no PreToolUse matcher fires on Bash");
+		const hooks = entries.flatMap((entry) => entry.hooks ?? []) as ReadonlyArray<{ readonly timeout?: number }>;
+		assert.deepEqual(hooks.map((hook) => hook.timeout), [5]);
+	});
 });

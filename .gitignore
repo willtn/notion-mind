@@ -27,6 +27,10 @@ node_modules/
 .claude/scripts/.checklist-state.json
 .claude/scripts/.stop-handoff/
 
+# Local state outside the note store. The outbox holds the JSON arguments of a
+# Notion write until the write hook removes them.
+.claude/state/
+
 # The Notion IDs of the content model, written by notion-setup.ts. The
 # repository is public, so only notion-map.example.json is committed.
 notion-map.json
