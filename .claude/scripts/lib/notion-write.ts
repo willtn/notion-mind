@@ -11,6 +11,8 @@
  * A write: `mcporter call notion.<tool> --args "$(cat <outbox file>)"`
  * A read:  `mcporter call notion.<read tool> --args '<JSON object>' --output json`
  * Also:    `mcporter list notion [--schema] [--output json]` and `mcporter auth notion`
+ * Other:   `mcporter call <server>.<tool> [--args '<JSON object>'] [--output <format>]`, with a server that is not `notion`.
+ *          The JSON is in single quotes, so a shell reads it as text, and it passes whatever words it holds.
  *
  * The match for the word `notion` is a text match. A command that hides the
  * word on purpose (base64, a variable) passes. That is outside the threat
@@ -130,6 +132,16 @@ const OUTBOX_ARGS = String.raw`"\$\(cat +(\.claude\/state\/outbox\/[A-Za-z0-9][A
 /** A single-quoted string is inert in a shell. The braces keep out `-` (stdin) and `@<file>`. */
 const INLINE_ARGS = String.raw`'(\{[^']*\})'`;
 /**
+ * A plain call to another server. The command has `mcporter` as its first word, and nothing follows the
+ * single-quoted JSON but an output format. So the command has no second command, no pipe, no redirect,
+ * and no substitution outside the quotes. The braces keep out `-` (stdin) and `@<file>`.
+ */
+const OTHER_SERVER_FORM = new RegExp(String.raw`^mcporter +call +([A-Za-z0-9_-]+)\.[A-Za-z0-9_.-]+(?: +--args +${INLINE_ARGS})?(?: +--output +(?:json|text|markdown|raw))?$`);
+const isOtherServerCall = (command: string): boolean => {
+	const server = OTHER_SERVER_FORM.exec(command)?.[1];
+	return server !== undefined && server.toLowerCase() !== "notion";
+};
+/**
  * `--args` is the only source of arguments, because `mcporter` lets a
  * `tool:<name>` argument or a `--tool` flag replace the tool of the selector.
  */
@@ -178,7 +190,7 @@ function jsonObject(text: string | null): JsonObject | ArgsProblem {
 
 /** Classify a `Bash` command. A Notion command is in one of the forms of the allow list, or it is refused. */
 export function parseCommand(command: string, host: Host): ParsedCommand {
-	if (!isNotionCommand(command, host.runtimePaths)) return { kind: "other" };
+	if (isOtherServerCall(command.trim()) || !isNotionCommand(command, host.runtimePaths)) return { kind: "other" };
 	if (INSPECT_FORM.test(command.trim())) return { kind: "inspect" };
 
 	const [, name, outbox = null, inline = "{}", output] = FORM.exec(command.trim()) ?? [];
@@ -226,6 +238,7 @@ function refusalReason(refusal: Refusal): string {
 				READ_STEPS,
 				"The tool list, with `--schema` and `--output json` as options, and the sign-in:",
 				...INSPECT_STEPS,
+				"A commit message or a PR body that names Notion and mcporter: write it to a file, then run `git commit -F <file>` or `gh pr create --body-file <file>`.",
 			].join("\n");
 		case "unknown-tool":
 			return `The tool table of the guard does not list ${refusal.tool}. Use a tool of NOTION_TOOLS in .claude/scripts/lib/notion-write.ts.`;
@@ -256,6 +269,20 @@ export function decide(parsed: ParsedCommand): Decision {
 			}
 			return { kind: "pass" };
 	}
+}
+
+/**
+ * The decision when the guard cannot look up the runtime folder of `mcporter`. A machine with no
+ * `mcporter` is not this case. Here the guard cannot tell a command that reaches Notion from one
+ * that does not, so it denies each command that names `mcporter` or Notion, and it passes the rest.
+ */
+export function decideWithoutRuntime(command: string, failure: string): Decision {
+	const text = bare(command);
+	if (!text.includes("mcporter") && !text.includes("notion")) return { kind: "pass" };
+	return {
+		kind: "deny",
+		reason: `The Notion guard failed to look up mcporter, so it denied this command that names mcporter or Notion: ${failure}\nRepair the lookup in .claude/scripts/lib/notion-client.ts, then run the command again.`,
+	};
 }
 
 /**

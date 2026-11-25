@@ -9,7 +9,8 @@
  *
  * Claude Code runs the call when this hook exits with an error. So the body
  * is in one handler that denies on each error, and the modules of this
- * repository load in the handler too.
+ * repository load in the handler too. A failed lookup of `mcporter` denies
+ * each command that names `mcporter` or Notion (decideWithoutRuntime).
  */
 
 import { readFileSync } from "node:fs";
@@ -20,17 +21,18 @@ const deny = (reason: string): void => {
 };
 
 try {
-	const { bashCommand, decide, parseCommand } = await import("./lib/notion-write.ts");
+	const { bashCommand, decide, decideWithoutRuntime, parseCommand } = await import("./lib/notion-write.ts");
 	const { findMcporter, mcporterRuntimePath } = await import("./lib/notion-client.ts");
 
-	const runtimePaths = (): string[] => {
-		// A machine with no `mcporter`, or with one that does not resolve, has no runtime to name.
+	type RuntimeLookup = { readonly paths: string[] } | { readonly failure: string };
+	const lookupRuntime = (): RuntimeLookup => {
 		try {
 			const executable = findMcporter();
+			// A machine with no `mcporter`, or with one that does not resolve, has no runtime to name.
 			const runtime = executable === null ? null : mcporterRuntimePath(executable);
-			return runtime === null ? [] : [dirname(runtime)];
-		} catch {
-			return [];
+			return { paths: runtime === null ? [] : [dirname(runtime)] };
+		} catch (error) {
+			return { failure: error instanceof Error ? error.message : String(error) };
 		}
 	};
 
@@ -48,7 +50,8 @@ try {
 				return null;
 			}
 		};
-		const decision = decide(parseCommand(command, { readOutbox, runtimePaths: runtimePaths() }));
+		const runtime = lookupRuntime();
+		const decision = "failure" in runtime ? decideWithoutRuntime(command, runtime.failure) : decide(parseCommand(command, { readOutbox, runtimePaths: runtime.paths }));
 		if (decision.kind === "deny") deny(decision.reason);
 	}
 } catch (error) {
