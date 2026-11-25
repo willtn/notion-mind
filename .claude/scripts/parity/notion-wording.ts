@@ -5,6 +5,7 @@
  * so the parity run of a hook fails until its wording is here.
  */
 
+import { DATABASES } from "../lib/notion-model.ts";
 import { MARKDOWN_WORDING } from "./markdown-wording.ts";
 import type { TextKind, Wording } from "./wording.ts";
 
@@ -14,6 +15,23 @@ import type { TextKind, Wording } from "./wording.ts";
  * `fae7be4` for each one, so the pattern is the pattern of the Markdown form.
  */
 const SAME_TEXT = [
+	"session title",
+	"size meter",
+	"section date",
+	"section north star",
+	"section brain topics",
+	"section recent changes",
+	"section open tasks",
+	"section active work",
+	"section context pointer",
+	"date line",
+	"north star hidden items",
+	"north star line",
+	"open task",
+	"no open tasks",
+	"no active work",
+	"active note",
+	"context pointer",
 	"claim HY-07",
 	"claim HY-09",
 	"more items",
@@ -32,6 +50,18 @@ const SAME_TEXT = [
 	"hint UP-03",
 ] as const satisfies readonly TextKind[];
 
+const escaped = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * The groups of the listing: each database with each `Type` of the model,
+ * then the database alone, for a row with no `Type`. A listing line is a
+ * title, with its group and " / " before it for a row.
+ */
+const LISTING_GROUPS: readonly string[] = DATABASES.flatMap(({ title, properties }) => {
+	const type = properties["Type"];
+	return [...(type?.type === "select" ? type.options.map((option) => `${title} / ${option}`) : []), title];
+});
+
 export const NOTION_WORDING: Wording = {
 	patterns: {
 		...Object.fromEntries(SAME_TEXT.map((kind) => [kind, MARKDOWN_WORDING.patterns[kind]] as const)),
@@ -45,6 +75,15 @@ export const NOTION_WORDING: Wording = {
 		"item HY-03": /^(?<note>.+) \((?<sizeKb>\d+)KB\)$/,
 		"item HY-04": /^(?<note>.+) \(\d+d, (?<count>\d+) open item\(s\)\)$/,
 		"hygiene header": /^Workspace Hygiene \(drift detected\):$/,
+
+		"section listing": /^### Workspace Listing$/,
+		"section hygiene": /^### Workspace Hygiene \(drift detected\)$/,
+		// Part d.2 gives the titles of the rows that changed, and no commit subject.
+		"no recent changes": /^\(no recent changes\)$/,
+		"recent change": /^.+$/,
+		"open tasks note": /^(?<note>.+)$/,
+		"listing collapsed": /^(?<group>.+) — (?<count>\d+) notes \(listing collapsed — (?<formText>.+) on demand\)$/,
+		"listing note": new RegExp(`^(?:(?:${LISTING_GROUPS.map(escaped).join("|")}) / )?(?<note>.+)$`),
 
 		// Part d.2 gives this line: `- Name — description`, with " (empty)" as a part of the description.
 		"brain topic": /^- (?<note>.+?) — (?<detail>.+)$/,
@@ -64,6 +103,9 @@ export const NOTION_WORDING: Wording = {
 	},
 	names: [
 		["Workspace Hygiene", "{hygiene}"],
+		["Workspace Listing", "{listing}"],
+		["the workspace listing", "{listing}"],
+		["the North Star page", "{North Star}"],
 		["Active rows with no `Project`", "{loose active notes}"],
 		["note(s) past the 25KB organization threshold", "{oversized notes}"],
 		["note(s) with open follow-ups untouched 14+ days", "{old open loops}"],

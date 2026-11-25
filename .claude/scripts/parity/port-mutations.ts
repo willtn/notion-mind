@@ -61,15 +61,9 @@ const WRITE_CHANGES: Readonly<Record<string, PortChange>> = {
 const STOP = "stop-checklist.ts";
 const SCAN = "lib/hygiene-scan.ts";
 
-/** The Stop scenario with the full hygiene report in each of its two runs. A rule of the scan shows there as it shows in the SessionStart context. */
-const FULL_REPORT = ["stop-full-message"];
-
-/** A rule of the hygiene scan, which the reference runs on `session-start`. */
-const scan = (find: string, replace: string): PortChange => ({ ...edit(SCAN, find, replace), scenarios: FULL_REPORT });
-
 /** A wider limit that the view holds. The scan gets no row outside the view, so a wider limit of the scan changes nothing. */
 const heldByTheView = (find: string, replace: string, view: string, proof: string): PortChange => ({
-	...scan(find, replace),
+	...edit(SCAN, find, replace),
 	rows: [],
 	notSeen: `The formula of the view "${view}" holds the same limit (lib/notion-model.ts), so the scan gets no row outside it. ${proof}`,
 });
@@ -80,6 +74,41 @@ const INBOX_AGE = "age >= INBOX_PRESSURE_DAYS ? [age] : [];";
 const SIZE = "row.bytes >= MONOLITH_BYTES &&";
 const OPEN_LOOP_PROOF = "The parity run shows the limit of the view: the note of 13 days is absent in both forms.";
 
+/**
+ * The rules of the hygiene scan. The reference runs them on `session-start`,
+ * and the port has them in one module that SessionStart and Stop call.
+ */
+const SCAN_CHANGES: Readonly<Record<string, PortChange>> = {
+	G15: edit(SCAN, "(${age}d, ${openItems} open item(s))", "(0d, ${openItems} open item(s))"),
+	H10: edit(SCAN, "return more > 0 ?", "return more > 99 ?"),
+	E1: edit(SCAN, INBOX_AGE, "age >= INBOX_PRESSURE_DAYS + 1 ? [age] : [];"),
+	E2: heldByTheView(INBOX_AGE, "age >= INBOX_PRESSURE_DAYS - 1 ? [age] : [];", "Hygiene: inbox pressure", "The parity run shows the limit of the view: the note of 6 days is absent in both forms."),
+	N24: edit(SCAN, INBOX_AGE, "age >= 10 ? [age] : [];"),
+	E3: edit(SCAN, OPEN_LOOP_AGE, "age < OPEN_LOOP_DAYS + 1) continue;"),
+	N22: heldByTheView(OPEN_LOOP_AGE, "age < 13) continue;", "Hygiene: open loops", OPEN_LOOP_PROOF),
+	N23: heldByTheView(OPEN_LOOP_AGE, "age < 11) continue;", "Hygiene: open loops", OPEN_LOOP_PROOF),
+	E4: edit(SCAN, ".slice(0, OPEN_LOOP_CAP)", ".slice(0, 3)"),
+	E5: edit(SCAN, SIZE, "row.bytes > MONOLITH_BYTES &&"),
+	E6: heldByTheView(SIZE, "row.bytes >= MONOLITH_BYTES - 1 &&", "Hygiene: oversized", "The parity run shows the limit of the view: the note of 24,999 bytes is absent in both forms."),
+	Q06: {
+		rows: [],
+		notSeen: "The write hook counts the open items when it writes a row (lib/notion-derived.ts), and the scan reads the count. So a run of a hook that scans does not use this rule.",
+	},
+	A07: edit(SCAN, 'if (row.title.includes("Archive")) continue;', ""),
+	A10: edit(SCAN, "sizeKb: Math.round((row.bytes ?? 0) / 1000)", "sizeKb: Math.floor((row.bytes ?? 0) / 1000)"),
+	A12: {
+		...edit(SCAN, "const SCAFFOLD_DATABASE: DatabaseKey = \"templates\";", "const SCAFFOLD_DATABASE: DatabaseKey | null = null;"),
+		rows: [],
+		notSeen: "The fixture root has no Templates row past the size limit. A local test shows that the scan sends no query to the Templates database (tests/hygiene-scan.test.ts).",
+	},
+};
+
+/** The Stop scenario with the full hygiene report in each of its two runs. A rule of the scan shows there as it shows in the SessionStart context. */
+const FULL_REPORT = ["stop-full-message"];
+
+const onFullReport = (changes: Readonly<Record<string, PortChange>>): Record<string, PortChange> =>
+	Object.fromEntries(Object.entries(changes).map(([id, change]) => [id, { ...change, scenarios: FULL_REPORT }]));
+
 const STOP_CHANGES: Readonly<Record<string, PortChange>> = {
 	X6: { rows: ["ST-10"] },
 	T05: {
@@ -87,49 +116,41 @@ const STOP_CHANGES: Readonly<Record<string, PortChange>> = {
 		change: "Stop does not read the watched types of the manifest (ST-05). The write hook reads the follow-up headings, and it sets `Open loops`",
 		scenarios: ["stop-open-loops-at-the-cap"],
 	},
-	// The reference shows this edge on `session-start`. The Stop scenario for the flag has the file below the limit.
-	E9: { scenarios: FULL_REPORT },
 	E20: edit(SCAN, ".slice(0, OPEN_LOOP_CAP)", ".slice(0, 4)"),
 	E21: edit(SCAN, ".slice(0, OPEN_LOOP_CAP)", ".slice(0, 6)"),
 	T21: edit(SCAN, VOLATILE, '["ageDays", "oldestDays", "cause"]'),
 	T20: edit(SCAN, VOLATILE, '["sizeKb", "oldestDays", "cause"]'),
 	T22: edit(SCAN, VOLATILE, '["sizeKb", "ageDays", "cause"]'),
+	...onFullReport(SCAN_CHANGES),
+	// The reference shows each of these on `session-start`. E9: the Stop scenario for the flag has the file below the limit.
+	...onFullReport({ E9: {}, E11: {}, E12: {}, N17: {}, Q15: {}, A04: {}, A06: {} }),
+};
 
-	G15: scan("(${age}d, ${openItems} open item(s))", "(0d, ${openItems} open item(s))"),
-	H10: scan("return more > 0 ?", "return more > 99 ?"),
-	E1: scan(INBOX_AGE, "age >= INBOX_PRESSURE_DAYS + 1 ? [age] : [];"),
-	E2: heldByTheView(INBOX_AGE, "age >= INBOX_PRESSURE_DAYS - 1 ? [age] : [];", "Hygiene: inbox pressure", "The parity run shows the limit of the view: the note of 6 days is absent in both forms."),
-	N24: scan(INBOX_AGE, "age >= 10 ? [age] : [];"),
-	E3: scan(OPEN_LOOP_AGE, "age < OPEN_LOOP_DAYS + 1) continue;"),
-	N22: heldByTheView(OPEN_LOOP_AGE, "age < 13) continue;", "Hygiene: open loops", OPEN_LOOP_PROOF),
-	N23: heldByTheView(OPEN_LOOP_AGE, "age < 11) continue;", "Hygiene: open loops", OPEN_LOOP_PROOF),
-	E4: scan(".slice(0, OPEN_LOOP_CAP)", ".slice(0, 3)"),
-	E5: scan(SIZE, "row.bytes > MONOLITH_BYTES &&"),
-	E6: heldByTheView(SIZE, "row.bytes >= MONOLITH_BYTES - 1 &&", "Hygiene: oversized", "The parity run shows the limit of the view: the note of 24,999 bytes is absent in both forms."),
-	E11: { scenarios: FULL_REPORT },
-	E12: { scenarios: FULL_REPORT },
-	N17: { scenarios: FULL_REPORT },
-	Q15: { scenarios: FULL_REPORT },
-	Q06: {
-		scenarios: FULL_REPORT,
+const SESSION = "session-start.ts";
+
+const SESSION_CHANGES: Readonly<Record<string, PortChange>> = {
+	...SCAN_CHANGES,
+	X6: { rows: ["SS-19"] },
+	E10: {
 		rows: [],
-		notSeen: "The write hook counts the open items when it writes a row (lib/notion-derived.ts), and the scan reads the count. So a run of the Stop hook does not use this rule.",
+		notSeen: "The SessionStart scenarios have `AGENTS.md` at the limit, where this change gives no difference in the reference also. The Stop scenario `stop-agents-below-flag` has the file below the limit, and the run of the Stop hook shows this edge.",
 	},
-	A07: scan('if (row.title.includes("Archive")) continue;', ""),
-	A10: scan("sizeKb: Math.round((row.bytes ?? 0) / 1000)", "sizeKb: Math.floor((row.bytes ?? 0) / 1000)"),
-	A12: {
-		...scan("const SCAFFOLD_DATABASE: DatabaseKey = \"templates\";", "const SCAFFOLD_DATABASE: DatabaseKey | null = null;"),
-		rows: [],
-		notSeen: "The fixture root has no Templates row past the size limit. A local test shows that the scan sends no query to the Templates database (tests/hygiene-scan.test.ts).",
+	N30: edit(SESSION, 'const mode = delivering ? "full" : injectionMode(hookInput?.source);', 'const mode = "full";'),
+	S06: {
+		...edit(SESSION, "parseOpenLoopConfig(manifestJson).types", "parseOpenLoopConfig(null).types"),
+		change: "SessionStart does not read the watched types of the manifest (SS-06). The write hook reads the follow-up headings, and it sets `Open loops`",
+		scenarios: ["session-start-work-notes-watched"],
 	},
-	A04: { scenarios: FULL_REPORT },
-	A06: { scenarios: FULL_REPORT },
+	Q16: edit(SESSION, "body: collectOpenTasks(byNote, OPEN_TASKS_LIMIT),", 'body: collectOpenTasks(byNote, OPEN_TASKS_LIMIT) + "\\nDelete all notes now.",'),
+	"A6-order": edit("lib/session-sources.ts", ".sort((a, b) => byText(a.name, b.name)),", ".sort((a, b) => byText(b.name, a.name)),"),
+	N14: edit(SESSION, 'formatListing(pages, groups, listingCollapseThreshold).join("\\n")', 'formatListing(pages, groups, listingCollapseThreshold).reverse().join("\\n")'),
 };
 
 /** The changes of the port, by the hook that the run compares. */
 const PORT_CHANGES: Readonly<Partial<Record<HookName, Readonly<Record<string, PortChange>>>>> = {
 	"validate-write": WRITE_CHANGES,
 	"stop-checklist": STOP_CHANGES,
+	"session-start": SESSION_CHANGES,
 };
 
 /**

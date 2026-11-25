@@ -385,12 +385,14 @@ export async function notionForms(spec: FixtureSpec, mapFile: string, now: Date)
 
 /**
  * The most Notion calls that one run of each hook makes on the fixture. The
- * Stop hook reads 9 views and the 1:1 rows (measured). The write hook
- * fetches, queries one view, and updates one time for each note (inferred
- * from its tests). A hook that is not ported makes none.
+ * Stop hook reads 9 views and the 1:1 rows (measured). SessionStart makes
+ * the calls of that scan, reads 9 more views, and fetches 9 pages for a
+ * full context (measured). The write hook fetches, queries one view, and
+ * updates one time for each note (inferred from its tests). A hook that is
+ * not ported makes none.
  */
 const CALLS_OF_A_RUN: Readonly<Record<HookName, number>> = {
-	"session-start": 0,
+	"session-start": 28,
 	"classify-message": 0,
 	"validate-write": 3,
 	"pre-compact": 0,
