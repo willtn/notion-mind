@@ -255,6 +255,6 @@ export function runScenarios(spec: FixtureSpec, workDir: string, form: HookForm)
 		const dir = join(passDir, String(index));
 		const formDir = join(dir, "form");
 		mkdirSync(formDir, { recursive: true });
-		return runScenario(scenario, spec, form(formDir), dir);
+		return runScenario(scenario, spec, form(formDir, scenario), dir);
 	});
 }

@@ -227,5 +227,7 @@ export type HookEnvironment = {
 /**
  * A form of the fixture. It gives each scenario its environment. `dir` is an
  * empty directory that the scenario owns, for the local files of the form.
+ * `scenario` is the scenario that runs next, for a form that must prepare
+ * for its runs.
  */
-export type HookForm = (dir: string) => HookEnvironment;
+export type HookForm = (dir: string, scenario?: Scenario) => HookEnvironment;

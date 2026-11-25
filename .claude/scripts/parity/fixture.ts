@@ -472,15 +472,31 @@ const notes: readonly FixtureNote[] = [
 /** The size from which the hygiene scan flags `AGENTS.md`. The fixture file is exactly at it. */
 const AGENTS_FLAG_BYTES = 23_000;
 
-const WATCHED_FOLDERS = ["work/1-1", "work/meetings", "work/incidents"];
+/**
+ * A place whose notes can hold an open loop: the folder that the hooks at
+ * `fae7be4` read (`open_loop_dirs`), and the `Type` of the Work rows that
+ * hold the same notes (`open_loop_types`). The manifest states both, and
+ * each form reads its own key.
+ */
+type Watched = { readonly folders: readonly string[]; readonly type: string };
 
-const manifest = (openLoopDirs: readonly string[]): RepoFile => ({
+const WATCHED: readonly Watched[] = [
+	{ folders: ["work/1-1"], type: "1:1" },
+	{ folders: ["work/meetings"], type: "Inbox item" },
+	{ folders: ["work/incidents"], type: "Incident" },
+];
+
+/** The active and the archived work notes are the rows of one `Type`. */
+const WATCHED_WORK_NOTES: Watched = { folders: ["work/active", "work/archive"], type: "Work note" };
+
+const manifest = (watched: readonly Watched[]): RepoFile => ({
 	path: "vault-manifest.json",
 	content: `${JSON.stringify(
 		{
 			template: "obsidian-mind",
 			version: "10.0.0",
-			open_loop_dirs: openLoopDirs,
+			open_loop_dirs: watched.flatMap(({ folders }) => folders),
+			open_loop_types: watched.map(({ type }) => type),
 			// "follow ups" is not a default, so a finding under that heading shows that the hook read this file.
 			open_loop_sections: ["action items", "what to watch", "follow ups"],
 			listing_collapse_threshold: 12,
@@ -500,15 +516,16 @@ const manifest = (openLoopDirs: readonly string[]): RepoFile => ({
 });
 
 /**
- * The manifest that also watches the archived work. Two archived notes are
- * old and hold a follow-up line, so 6 notes have open loops, one more than
- * the list keeps. With the manifest of the fixture, 4 notes have open
- * loops, and the list shows the notes at the age limit.
+ * The manifest that also watches the work notes. Two archived notes are
+ * old and hold a follow-up line, and no active note holds one. So 6 notes
+ * have open loops, one more than the list keeps. With the manifest of the
+ * fixture, 4 notes have open loops, and the list shows the notes at the
+ * age limit.
  */
-const MANIFEST_WITH_ARCHIVE_WATCHED = manifest([...WATCHED_FOLDERS, "work/archive"]);
+const MANIFEST_WITH_WORK_NOTES_WATCHED = manifest([...WATCHED, WATCHED_WORK_NOTES]);
 
 const repoFiles: readonly RepoFile[] = [
-	manifest(WATCHED_FOLDERS),
+	manifest(WATCHED),
 	{ path: "AGENTS.md", content: paddedTo(head("AGENTS"), AGENTS_FLAG_BYTES) },
 	{ path: "CLAUDE.md", content: "Read AGENTS.md.\n" },
 	// Past the size limit. The size scan leaves out the folder of the templates.
@@ -575,7 +592,7 @@ const OPEN_LOOPS: readonly (readonly [note: string, openItems: number])[] = [
 ];
 
 /**
- * The open loops when the manifest also watches the archived work: 6 notes
+ * The open loops when the manifest also watches the work notes: 6 notes
  * have open loops, and the list keeps the 5 oldest. The note at the age
  * limit is the one that it does not show.
  */
@@ -1275,7 +1292,7 @@ const scenarios: readonly Scenario[] = [
 	{
 		id: "stop-open-loops-at-the-cap",
 		rows: ["HY-04", "ST-05"],
-		steps: [{ ...payload("stop-checklist", { session_id: "" }), replaceRepoFile: MANIFEST_WITH_ARCHIVE_WATCHED }],
+		steps: [{ ...payload("stop-checklist", { session_id: "" }), replaceRepoFile: MANIFEST_WITH_WORK_NOTES_WATCHED }],
 		expect: [{ row: "ST-11", detail: "system message" }, ...checklist(0), { row: "ST-04" }, ...hygiene(0, OPEN_LOOPS_AT_THE_CAP)],
 	},
 

@@ -2,8 +2,9 @@
  * The mutations of `mutations.ts` for the hooks of the port. A mutation of
  * the reference hooks names text of the hooks at `fae7be4`. The port holds
  * the same rule, sometimes in a different file or in different words, so
- * this table gives the edit of the port for each such mutation. A mutation
- * with no entry here applies to the port with the edits that it has.
+ * this table gives the edit of the port for each such mutation, by hook. A
+ * mutation with no entry here applies to the port with the edits that it
+ * has.
  *
  * The harness compares the reference hooks on the Markdown form with a
  * mutated copy of the port on its own form. The mutation must give the
@@ -20,13 +21,25 @@ type PortChange = {
 	readonly change?: string;
 	/** The rows of the port run, when the reference mutation also names rows of a hook that the run leaves out. */
 	readonly rows?: readonly Finding["row"][];
+	/**
+	 * The scenarios of the port run, when the reference mutation runs only
+	 * on a scenario of a hook that is not ported. Example: a rule of the
+	 * hygiene scan runs on `session-start` at the reference commit, and the
+	 * Stop hook prints the same report.
+	 */
+	readonly scenarios?: readonly string[];
+	/**
+	 * Why a run on the Notion form cannot see the change. The port gives no
+	 * row for it, and the reason names what holds the rule in the port.
+	 */
+	readonly notSeen?: string;
 };
 
 const edit = (file: string, find: string, replace: string): PortChange => ({ edits: [{ file, find, replace }] });
 
 const CHECK = "lib/write-check.ts";
 
-const PORT_CHANGES: Readonly<Record<string, PortChange>> = {
+const WRITE_CHANGES: Readonly<Record<string, PortChange>> = {
 	X6: { rows: ["VW-17"] },
 	X3: edit(CHECK, 'policy_id: "organization-threshold"', 'policy_id: "organization-limit"'),
 	X4: edit(CHECK, 'policy_id: "phantom-edge"', 'policy_id: "phantom-link"'),
@@ -45,22 +58,100 @@ const PORT_CHANGES: Readonly<Record<string, PortChange>> = {
 	F03: edit(CHECK, "date: (property) => `The property \\`${property}\\` is empty`,", 'date: () => "Add a date",'),
 };
 
+const STOP = "stop-checklist.ts";
+const SCAN = "lib/hygiene-scan.ts";
+
+/** The Stop scenario with the full hygiene report in each of its two runs. A rule of the scan shows there as it shows in the SessionStart context. */
+const FULL_REPORT = ["stop-full-message"];
+
+/** A rule of the hygiene scan, which the reference runs on `session-start`. */
+const scan = (find: string, replace: string): PortChange => ({ ...edit(SCAN, find, replace), scenarios: FULL_REPORT });
+
+/** A wider limit that the view holds. The scan gets no row outside the view, so a wider limit of the scan changes nothing. */
+const heldByTheView = (find: string, replace: string, view: string, proof: string): PortChange => ({
+	...scan(find, replace),
+	rows: [],
+	notSeen: `The formula of the view "${view}" holds the same limit (lib/notion-model.ts), so the scan gets no row outside it. ${proof}`,
+});
+
+const VOLATILE = '["sizeKb", "ageDays", "oldestDays", "cause"]';
+const OPEN_LOOP_AGE = "age < OPEN_LOOP_DAYS) continue;";
+const INBOX_AGE = "age >= INBOX_PRESSURE_DAYS ? [age] : [];";
+const SIZE = "row.bytes >= MONOLITH_BYTES &&";
+const OPEN_LOOP_PROOF = "The parity run shows the limit of the view: the note of 13 days is absent in both forms.";
+
+const STOP_CHANGES: Readonly<Record<string, PortChange>> = {
+	X6: { rows: ["ST-10"] },
+	T05: {
+		...edit(STOP, "parseOpenLoopConfig(manifestJson).types", "parseOpenLoopConfig(null).types"),
+		change: "Stop does not read the watched types of the manifest (ST-05). The write hook reads the follow-up headings, and it sets `Open loops`",
+		scenarios: ["stop-open-loops-at-the-cap"],
+	},
+	// The reference shows this edge on `session-start`. The Stop scenario for the flag has the file below the limit.
+	E9: { scenarios: FULL_REPORT },
+	E20: edit(SCAN, ".slice(0, OPEN_LOOP_CAP)", ".slice(0, 4)"),
+	E21: edit(SCAN, ".slice(0, OPEN_LOOP_CAP)", ".slice(0, 6)"),
+	T21: edit(SCAN, VOLATILE, '["ageDays", "oldestDays", "cause"]'),
+	T20: edit(SCAN, VOLATILE, '["sizeKb", "oldestDays", "cause"]'),
+	T22: edit(SCAN, VOLATILE, '["sizeKb", "ageDays", "cause"]'),
+
+	G15: scan("(${age}d, ${openItems} open item(s))", "(0d, ${openItems} open item(s))"),
+	H10: scan("return more > 0 ?", "return more > 99 ?"),
+	E1: scan(INBOX_AGE, "age >= INBOX_PRESSURE_DAYS + 1 ? [age] : [];"),
+	E2: heldByTheView(INBOX_AGE, "age >= INBOX_PRESSURE_DAYS - 1 ? [age] : [];", "Hygiene: inbox pressure", "The parity run shows the limit of the view: the note of 6 days is absent in both forms."),
+	N24: scan(INBOX_AGE, "age >= 10 ? [age] : [];"),
+	E3: scan(OPEN_LOOP_AGE, "age < OPEN_LOOP_DAYS + 1) continue;"),
+	N22: heldByTheView(OPEN_LOOP_AGE, "age < 13) continue;", "Hygiene: open loops", OPEN_LOOP_PROOF),
+	N23: heldByTheView(OPEN_LOOP_AGE, "age < 11) continue;", "Hygiene: open loops", OPEN_LOOP_PROOF),
+	E4: scan(".slice(0, OPEN_LOOP_CAP)", ".slice(0, 3)"),
+	E5: scan(SIZE, "row.bytes > MONOLITH_BYTES &&"),
+	E6: heldByTheView(SIZE, "row.bytes >= MONOLITH_BYTES - 1 &&", "Hygiene: oversized", "The parity run shows the limit of the view: the note of 24,999 bytes is absent in both forms."),
+	E11: { scenarios: FULL_REPORT },
+	E12: { scenarios: FULL_REPORT },
+	N17: { scenarios: FULL_REPORT },
+	Q15: { scenarios: FULL_REPORT },
+	Q06: {
+		scenarios: FULL_REPORT,
+		rows: [],
+		notSeen: "The write hook counts the open items when it writes a row (lib/notion-derived.ts), and the scan reads the count. So a run of the Stop hook does not use this rule.",
+	},
+	A07: scan('if (row.title.includes("Archive")) continue;', ""),
+	A10: scan("sizeKb: Math.round((row.bytes ?? 0) / 1000)", "sizeKb: Math.floor((row.bytes ?? 0) / 1000)"),
+	A12: {
+		...scan("const SCAFFOLD_DATABASE: DatabaseKey = \"templates\";", "const SCAFFOLD_DATABASE: DatabaseKey | null = null;"),
+		rows: [],
+		notSeen: "The fixture root has no Templates row past the size limit. A local test shows that the scan sends no query to the Templates database (tests/hygiene-scan.test.ts).",
+	},
+	A04: { scenarios: FULL_REPORT },
+	A06: { scenarios: FULL_REPORT },
+};
+
+/** The changes of the port, by the hook that the run compares. */
+const PORT_CHANGES: Readonly<Partial<Record<HookName, Readonly<Record<string, PortChange>>>>> = {
+	"validate-write": WRITE_CHANGES,
+	"stop-checklist": STOP_CHANGES,
+};
+
 /**
  * The mutations that change a scenario of `hook`, with the edits of the
  * port. Each one runs only on its scenarios of that hook.
  */
 export function portMutations(hook: HookName, mutations: readonly Mutation[] = MUTATIONS, spec: FixtureSpec = FIXTURE): Mutation[] {
 	const ofHook = new Set(spec.scenarios.filter(({ steps }) => steps.some((step) => step.hook === hook)).map(({ id }) => id));
+	const changes = PORT_CHANGES[hook] ?? {};
 	return mutations
-		.filter(({ scenarios }) => scenarios.some((id) => ofHook.has(id)))
 		.map((mutation): Mutation => {
-			const port = PORT_CHANGES[mutation.id] ?? {};
+			const port = changes[mutation.id] ?? {};
+			const { notSeen: referenceHole, ...rest } = mutation;
+			const notSeen = port.notSeen ?? referenceHole;
 			return {
-				...mutation,
+				...rest,
 				change: port.change ?? mutation.change,
 				edits: port.edits ?? mutation.edits,
-				scenarios: mutation.scenarios.filter((id) => ofHook.has(id)),
+				scenarios: (port.scenarios ?? mutation.scenarios).filter((id) => ofHook.has(id)),
 				rows: port.rows ?? mutation.rows,
+				...(notSeen === undefined ? {} : { notSeen }),
 			};
-		});
+		})
+		.filter(({ scenarios }) => scenarios.length > 0);
 }

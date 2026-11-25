@@ -38,7 +38,7 @@ import {
 	type Pages,
 	type Target,
 } from "./notion-pages.ts";
-import type { FixtureNote, FixtureSpec, HookForm } from "./spec.ts";
+import type { FixtureNote, FixtureSpec, HookForm, HookName } from "./spec.ts";
 
 /** The map file of the fixture root in the repository root, as `notion-setup.ts --map` writes it. */
 export const FIXTURE_MAP_FILE = "notion-map.fixtures.json";
@@ -373,7 +373,56 @@ export async function notionForms(spec: FixtureSpec, mapFile: string, now: Date)
 	} finally {
 		await client.close();
 	}
-	return (scriptsDir) => hookFormOf(spec, { scriptsDir, now, mapFile, map, pages, notionEnv: notionHookEnvironment });
+	const pace = requestPacer();
+	return (scriptsDir) => {
+		const form = hookFormOf(spec, { scriptsDir, now, mapFile, map, pages, notionEnv: notionHookEnvironment });
+		return (dir, scenario) => {
+			if (scenario !== undefined) pace(scenario.steps.reduce((calls, step) => calls + CALLS_OF_A_RUN[step.hook], 0));
+			return form(dir);
+		};
+	};
+}
+
+/**
+ * The most Notion calls that one run of each hook makes on the fixture. The
+ * Stop hook reads 9 views and the 1:1 rows (measured). The write hook
+ * fetches, queries one view, and updates one time for each note (inferred
+ * from its tests). A hook that is not ported makes none.
+ */
+const CALLS_OF_A_RUN: Readonly<Record<HookName, number>> = {
+	"session-start": 0,
+	"classify-message": 0,
+	"validate-write": 3,
+	"pre-compact": 0,
+	"stop-checklist": 10,
+};
+
+const WINDOW_MS = 60_000;
+/** Below the plan limit of 180 calls in 60 s, which all runs of one login share. */
+const CALLS_IN_A_WINDOW = 150;
+/** The writer made at most this number of calls before the first scenario (measured: about 95 for a new `now`). */
+const CALLS_OF_THE_WRITER = 100;
+
+/**
+ * Holds a scenario until its calls fit in the 60 s window. Each hook run is
+ * a new process with its own client, so no client sees the calls of the
+ * runs before it. Without the wait, 19 Stop runs make about 190 calls in
+ * less than a minute, and Notion limits the rate.
+ */
+function requestPacer(): (calls: number) => void {
+	const started: { readonly at: number; readonly calls: number }[] = [{ at: Date.now(), calls: CALLS_OF_THE_WRITER }];
+	return (calls) => {
+		if (calls === 0) return;
+		for (;;) {
+			const now = Date.now();
+			while (started.length > 0 && now - (started[0]?.at ?? 0) >= WINDOW_MS) started.shift();
+			const inWindow = started.reduce((sum, entry) => sum + entry.calls, 0);
+			const oldest = started[0];
+			if (oldest === undefined || inWindow + calls <= CALLS_IN_A_WINDOW) break;
+			Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, oldest.at + WINDOW_MS - now);
+		}
+		started.push({ at: Date.now(), calls });
+	};
 }
 
 /**
