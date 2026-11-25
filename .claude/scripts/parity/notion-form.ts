@@ -24,6 +24,7 @@ import {
 	FIXTURE_DATABASES,
 	hookStampArguments,
 	liveValues,
+	notesInGroup,
 	notionBody,
 	propertyArguments,
 	sameContent,
@@ -36,7 +37,7 @@ import {
 	type Pages,
 	type Target,
 } from "./notion-pages.ts";
-import { NOTE_TYPES, type FixtureNote, type FixtureSpec, type HookForm } from "./spec.ts";
+import type { FixtureNote, FixtureSpec, HookForm } from "./spec.ts";
 
 /** The map file of the fixture root in the repository root, as `notion-setup.ts --map` writes it. */
 export const FIXTURE_MAP_FILE = "notion-map.fixtures.json";
@@ -402,7 +403,7 @@ export async function notionForm(
 			},
 			wording: NOTION_WORDING,
 			noteOf,
-			notesIn: (group) => spec.notes.filter((note) => note.type === group || NOTE_TYPES[note.type].database === group).map((note) => note.title),
+			notesIn: (group) => notesInGroup(spec.notes, group),
 		};
 	};
 }

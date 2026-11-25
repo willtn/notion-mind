@@ -54,12 +54,14 @@ async function main(): Promise<number> {
 		if (flags["verify"] === undefined) return 0;
 
 		let differences = 0;
-		console.log("\n| Database | View | Expected rows | Live rows | Same titles |\n|---|---|---|---|---|");
+		console.log("\n| Database | View | Expected rows | Live rows | Same titles | The hook leaves out by name |\n|---|---|---|---|---|---|");
 		for (const expectation of expectedViewRows(FIXTURE)) {
 			const titles = await liveViewTitles(client, map, expectation.database, expectation.view);
 			const same = titles.join("\n") === expectation.titles.join("\n");
 			if (!same) differences++;
-			console.log(`| ${map.databases[expectation.database].title} | ${expectation.view} | ${expectation.titles.length} | ${titles.length} | ${same ? "yes" : `no: expected [${expectation.titles.join(", ")}], live [${titles.join(", ")}]`} |`);
+			console.log(
+				`| ${map.databases[expectation.database].title} | ${expectation.view} | ${expectation.titles.length} | ${titles.length} | ${same ? "yes" : `no: expected [${expectation.titles.join(", ")}], live [${titles.join(", ")}]`} | ${expectation.hookLeavesOut.join(", ")} |`,
+			);
 		}
 
 		const manifest = FIXTURE.repoFiles.find((file) => file.path === "vault-manifest.json")?.content ?? null;

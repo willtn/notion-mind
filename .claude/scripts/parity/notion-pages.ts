@@ -5,7 +5,7 @@
  */
 
 import { derivedValues } from "../lib/notion-derived.ts";
-import { DATABASES, type DatabaseKey, type DatabaseSpec, type PageKey, type PropertySpec } from "../lib/notion-model.ts";
+import { DATABASES, VERBATIM_PROPERTY, type DatabaseKey, type DatabaseSpec, type PageKey, type PropertySpec } from "../lib/notion-model.ts";
 import { notionId } from "../lib/notion-parse.ts";
 import { renderNote } from "./markdown-form.ts";
 import { changedAt, NOTE_TYPES, PROPERTY_OF_FIELD, type Field, type FixtureNote, type NoteType } from "./spec.ts";
@@ -29,6 +29,7 @@ function databaseSpec(key: DatabaseKey): DatabaseSpec {
 export function targetOf(note: FixtureNote): Target {
 	const title = NOTE_TYPES[note.type].database;
 	if (title === null) {
+		if (note.verbatim) throw new Error(`${note.title} is a verbatim note outside the databases. The mark is the property "${VERBATIM_PROPERTY}", and such a page has no properties.`);
 		const page = SCAFFOLD_PAGES[note.type];
 		return page === undefined ? { kind: "loose" } : { kind: "scaffold", page };
 	}
@@ -43,6 +44,30 @@ export const FIXTURE_DATABASES: readonly DatabaseKey[] = [...new Set(Object.valu
 	if (spec === undefined) throw new Error(`A note type names the database "${title}", which the model does not have.`);
 	return spec.key;
 });
+
+/** The listing group of the Work notes that are not active. The vault kept them in `work/archive/`, and the listing shows them as one line. */
+export const ARCHIVED_WORK_GROUP = "Work / Archived";
+
+const isArchivedWork = (note: FixtureNote): boolean => note.type === "Work note" && note.fields.status !== "active";
+
+/**
+ * The titles of the fixture notes of a listing group (SS-16). A group has
+ * one of three names.
+ *
+ * - A database and a `Type`, for example "Knowledge / Reference". An
+ *   archived Work note is in `ARCHIVED_WORK_GROUP` and not in the group of
+ *   its `Type`, so each row is in exactly one group of this form.
+ * - A `Type` alone: each note of that type.
+ * - A database alone: each note of that database.
+ */
+export function notesInGroup(notes: readonly FixtureNote[], group: string): string[] {
+	const inGroup = (note: FixtureNote): boolean => {
+		const database = NOTE_TYPES[note.type].database;
+		if (note.type === group || database === group) return true;
+		return database !== null && group === (isArchivedWork(note) ? ARCHIVED_WORK_GROUP : `${database} / ${note.type}`);
+	};
+	return notes.filter(inGroup).map((note) => note.title);
+}
 
 /** A fixture note that exists in Notion. */
 export interface PageRef {
@@ -71,7 +96,7 @@ const LINK_RELATIONS = ["Person", "Related"] as const;
 /** The properties of a database that the fixture sets. A property that a note does not set is empty. */
 export function managedProperties(database: DatabaseKey): string[] {
 	const properties = databaseSpec(database).properties;
-	return [...new Set([TYPE, ...Object.values(PROPERTY_OF_FIELD), ...LINK_RELATIONS, ...DERIVED])].filter((name) => name in properties);
+	return [...new Set([TYPE, ...Object.values(PROPERTY_OF_FIELD), VERBATIM_PROPERTY, ...LINK_RELATIONS, ...DERIVED])].filter((name) => name in properties);
 }
 
 const WIKILINK = /\[\[([^\]|#]+)(?:[|#][^\]]*)?\]\]/g;
@@ -110,6 +135,7 @@ export function desiredValues(note: FixtureNote, database: DatabaseKey, context:
 		else throw new Error(`${note.title}: the field "${field}" is a list, and the property "${name}" holds one value.`);
 	}
 	if (TYPE in properties) values[TYPE] = note.type;
+	if (note.verbatim) values[VERBATIM_PROPERTY] = true;
 
 	const linked = linkedTitles(note.body)
 		.filter((title) => title !== note.title)
@@ -307,25 +333,44 @@ function canonicalLine(line: string): string {
 	return text.replace(/\\([!-/:-@[-`{-~])/g, "$1");
 }
 
+const FENCE = /^(\s*)(`{3,})(.*)$/;
+/** The name that Notion returns for a language of a code block, where it differs from the name of the write (measured). */
+const FETCHED_LANGUAGE: Readonly<Record<string, string>> = { text: "txt" };
+
 /**
  * Content in one form for a comparison of what a write sends with what a
  * fetch returns. Notion returns a hard wrap as `<br />`, a mention with the
- * title of its page, strike-through as a tag, and a backslash before a
- * bracket. It also moves blank lines. The form covers the constructs of the
- * fixture set. A new construct that it does not cover shows as an update on
- * each run.
+ * title of its page, strike-through as a tag, a backslash before a bracket,
+ * and its own name for the language of a code block. It also moves blank
+ * lines. A line inside a code block stays as it is. The form covers the
+ * constructs of the fixture set. A new construct that it does not cover
+ * shows as an update on each run.
  */
 export function canonicalContent(content: string): string {
 	const out: string[] = [];
 	let proseAbove = false;
+	let openFence: string | null = null;
 	for (const raw of content.replace(/\r\n/g, "\n").split("\n")) {
 		const line = raw.trimEnd();
+		const fence = FENCE.exec(line);
+		if (openFence !== null) {
+			out.push(line);
+			if (fence !== null && (fence[2] ?? "").length >= openFence.length && fence[3] === "") openFence = null;
+			continue;
+		}
+		if (fence !== null) {
+			const language = fence[3] ?? "";
+			openFence = fence[2] ?? "";
+			out.push(`${fence[1]}${openFence}${FETCHED_LANGUAGE[language] ?? language}`);
+			proseAbove = false;
+			continue;
+		}
 		const prose = line !== "" && !BLOCK_LINE.test(line);
-		if (prose && proseAbove) out[out.length - 1] += `<br />${line}`;
-		else if (line !== "") out.push(line);
+		if (prose && proseAbove) out[out.length - 1] += `<br />${canonicalLine(line)}`;
+		else if (line !== "") out.push(canonicalLine(line));
 		proseAbove = prose;
 	}
-	return out.map(canonicalLine).join("\n");
+	return out.join("\n");
 }
 
 export const sameContent = (a: string, b: string): boolean => canonicalContent(a) === canonicalContent(b);

@@ -14,17 +14,19 @@ import { mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSyn
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseOpenLoopConfig } from "../lib/active-hygiene.ts";
-import { DATABASES } from "../lib/notion-model.ts";
+import { DATABASES, VERBATIM_PROPERTY } from "../lib/notion-model.ts";
 import { FIXTURE } from "../parity/fixture.ts";
 import { renderNote } from "../parity/markdown-form.ts";
 import { notionHookEnvironment } from "../parity/notion-env.ts";
 import {
+	ARCHIVED_WORK_GROUP,
 	canonicalContent,
 	changedValues,
 	composeContent,
 	desiredValues,
 	liveValues,
 	managedProperties,
+	notesInGroup,
 	notionBody,
 	propertyArguments,
 	sameContent,
@@ -36,7 +38,7 @@ import {
 	type PageRef,
 } from "../parity/notion-pages.ts";
 import { expectedViewRows } from "../parity/notion-verify.ts";
-import { changedAt, NOTE_TYPES, type FixtureNote, type NoteType } from "../parity/spec.ts";
+import { changedAt, NOTE_TYPES, type FixtureNote, type FixtureSpec, type NoteType } from "../parity/spec.ts";
 import { note, SPEC } from "./_notion-spec.ts";
 
 const idOf = (index: number): string => `00000000-0000-0000-0000-${String(index).padStart(12, "0")}`;
@@ -86,6 +88,10 @@ describe("targetOf", () => {
 		assert.deepEqual(targetOf(note("Runbook Archive")), { kind: "row", database: "knowledge" });
 	});
 
+	test("a verbatim note outside the databases stops the run, because its page has no property for the mark", () => {
+		assert.throws(() => targetOf({ ...note("Loose Draft"), verbatim: true }), /verbatim note outside the databases/);
+	});
+
 	test("North Star and Home are pages of the setup, and a note with no properties is a plain page", () => {
 		assert.deepEqual(targetOf(note("North Star")), { kind: "scaffold", page: "north_star" });
 		assert.deepEqual(targetOf(note("Home")), { kind: "scaffold", page: "home" });
@@ -107,6 +113,7 @@ describe("desiredValues", () => {
 			Ticket: "OPS-41",
 			Severity: "high",
 			Role: "incident-lead",
+			Verbatim: false,
 			Related: null,
 			Changed: "2026-02-07T10:00",
 			Bytes: outageBytes,
@@ -156,7 +163,61 @@ describe("desiredValues", () => {
 	});
 
 	test("userValues leaves out each derived property", () => {
-		assert.deepEqual(Object.keys(userValues(valuesOf("Gotchas"))).sort(), ["Date", "Description", "Tags", "Type"]);
+		assert.deepEqual(Object.keys(userValues(valuesOf("Gotchas"))).sort(), ["Date", "Description", "Tags", "Type", "Verbatim"]);
+	});
+
+	test("a verbatim note has the Verbatim box set, in each database, and a write sends it as a property of a person", () => {
+		for (const title of ["Outage RCA", "Ada Park", "Runbook"]) {
+			const target = targetOf(note(title));
+			if (target.kind !== "row") assert.fail(`${title} is not a row`);
+			assert.equal(valuesOf(title)[VERBATIM_PROPERTY], false, title);
+			const values = desiredValues({ ...note(title), verbatim: true }, target.database, context);
+			assert.equal(values[VERBATIM_PROPERTY], true, title);
+			assert.equal(propertyArguments(userValues(values), target.database)[VERBATIM_PROPERTY], "__YES__", title);
+		}
+	});
+
+	test("the other keys of a note are in no property, and they count in Bytes as they do in the file", () => {
+		const plain = note("Export Pipeline");
+		const withKey: FixtureNote = { ...plain, otherKeys: { update: "2026-01-05" } };
+		const { Bytes: bytes, ...rest } = desiredValues(withKey, "work", context);
+		const { Bytes: plainBytes, ...plainRest } = valuesOf("Export Pipeline");
+		assert.deepEqual(rest, plainRest);
+		assert.equal(bytes, (plainBytes as number) + Buffer.byteLength("update: 2026-01-05\n"));
+	});
+});
+
+describe("notesInGroup", () => {
+	const archived: FixtureNote = { ...note("Export Pipeline"), title: "Old Export", fields: { ...note("Export Pipeline").fields, status: "completed" } };
+	const notes = [...SPEC.notes, archived];
+
+	test("the archived Work notes are one group, and the group of their Type does not hold them", () => {
+		assert.deepEqual(notesInGroup(notes, ARCHIVED_WORK_GROUP), ["Old Export"]);
+		assert.deepEqual(notesInGroup(notes, "Work / Work note"), ["Export Pipeline", "Pricing Rollout"]);
+		assert.deepEqual(notesInGroup(notes, "Knowledge / Reference"), ["Runbook", "Ticket Links"]);
+	});
+
+	test("an incident with no status is not an archived Work note", () => {
+		assert.deepEqual(notesInGroup(notes, "Work / Incident"), ["Outage", "Outage RCA"]);
+	});
+
+	test("a Type alone and a database alone hold each note of that name", () => {
+		assert.deepEqual(notesInGroup(notes, "Work note"), ["Export Pipeline", "Pricing Rollout", "Old Export"]);
+		assert.deepEqual(notesInGroup(notes, "People"), ["Ada Park"]);
+	});
+
+	test("each row is in exactly one group of a database and a Type, and a page outside the databases is in none", () => {
+		const groups = ["Work / Work note", "Work / Incident", "Work / 1:1", "Work / Inbox item", "Work / Thinking", ARCHIVED_WORK_GROUP, "People / Person", "Knowledge / Brain topic", "Knowledge / Reference", "Knowledge / Archive note"];
+		const grouped = groups.flatMap((group) => notesInGroup(FIXTURE.notes, group));
+		const rows = FIXTURE.notes.filter((n) => NOTE_TYPES[n.type].database !== null).map((n) => n.title);
+		assert.deepEqual([...grouped].sort(), [...rows].sort());
+	});
+
+	test("the parity fixture set has the groups that the wording test of the harness names", () => {
+		assert.deepEqual(notesInGroup(FIXTURE.notes, ARCHIVED_WORK_GROUP), FIXTURE.notes.filter((n) => n.type === "Work note" && n.fields.status !== "active").map((n) => n.title));
+		assert.equal(notesInGroup(FIXTURE.notes, ARCHIVED_WORK_GROUP).length, 4);
+		assert.equal(notesInGroup(FIXTURE.notes, "Knowledge / Reference").length, 13);
+		assert.deepEqual(notesInGroup(FIXTURE.notes, "No such group"), []);
 	});
 });
 
@@ -316,6 +377,11 @@ describe("canonicalContent", () => {
 			"- [x] Share the agenda",
 			"- A plain item",
 			"",
+			"```text",
+			"gateway: refused",
+			"retries: 3",
+			"```",
+			"",
 		].join("\n");
 		const fetched = [
 			"# Wrapped Prose",
@@ -331,8 +397,22 @@ describe("canonicalContent", () => {
 			"- [x] Share the agenda",
 			"",
 			"- A plain item",
+			"",
+			"```txt",
+			"gateway: refused",
+			"retries: 3",
+			"```",
 		].join("\n");
 		assert.ok(sameContent(sent, fetched));
+	});
+
+	test("a line of a code block stays as it is: no wrap mark, no changed tag, and a blank line counts", () => {
+		const block = "```text\nfirst <b>line</b>\nsecond line\n```\n";
+		assert.equal(canonicalContent(block), "```txt\nfirst <b>line</b>\nsecond line\n```");
+		assert.equal(sameContent(block, block.replace("second", "third")), false);
+		assert.equal(sameContent(block, block.replace("\nsecond", "\n\nsecond")), false);
+		assert.equal(sameContent(block, block.replace("```text", "```yaml")), false);
+		assert.equal(canonicalContent("```\ncode\n```\nA line\nand its wrap.\n"), "```\ncode\n```\nA line<br />and its wrap.");
 	});
 
 	test("a changed word, a closed task, a removed line, and a mention of a different page are differences", () => {
@@ -357,7 +437,7 @@ describe("canonicalContent", () => {
 		const fixturePages = pagesOf(FIXTURE.notes);
 		for (const n of FIXTURE.notes) {
 			const sent = composeContent(notionBody(n, fixturePages), "");
-			const fetched = sent.replace(/<mention url="([^"]+)"\/>/g, '<mention url="$1">Title</mention>').replace(/\[\[/g, "\\[\\[").replace(/\]\]/g, "\\]\\]");
+			const fetched = sent.replace(/<mention url="([^"]+)"\/>/g, '<mention url="$1">Title</mention>').replace(/\[\[/g, "\\[\\[").replace(/\]\]/g, "\\]\\]").replace(/^```text$/gm, "```txt");
 			assert.ok(sameContent(sent, fetched), n.title);
 		}
 	});
@@ -375,6 +455,16 @@ describe("expectedViewRows", () => {
 		assert.deepEqual(rows("Hygiene: oversized", "knowledge"), ["Runbook"]);
 		assert.deepEqual(rows("Hygiene: oversized"), []);
 		assert.deepEqual(rows("Brain index", "knowledge"), ["Gotchas", "Patterns"]);
+	});
+
+	test("a note that the original hook skips by its name is a row of the view, and the expectation names it for the hook", () => {
+		const named: FixtureSpec = { ...SPEC, notes: [...SPEC.notes, { ...note("Outage"), title: "Outage Log Archive" }, { ...note("Patterns"), title: "Memories" }] };
+		const of = (view: string, database: string) => expectedViewRows(named).find((expectation) => expectation.view === view && expectation.database === database) ?? assert.fail(`no view ${view}`);
+		assert.deepEqual(of("Hygiene: open loops", "work").titles, ["Ada Park 2026-02-07", "Outage", "Outage Log Archive"]);
+		assert.deepEqual(of("Hygiene: open loops", "work").hookLeavesOut, ["Outage Log Archive"]);
+		assert.deepEqual(of("Brain index", "knowledge").titles, ["Gotchas", "Memories", "Patterns"]);
+		assert.deepEqual(of("Brain index", "knowledge").hookLeavesOut, ["Memories"]);
+		assert.deepEqual(expectedViewRows(SPEC).flatMap((expectation) => expectation.hookLeavesOut), []);
 	});
 
 	test("each expected view is a view of the model", () => {

@@ -26,6 +26,12 @@ export interface ViewExpectation {
 	readonly view: string;
 	/** The titles of the fixture notes that the view must return, in sorted order. */
 	readonly titles: readonly string[];
+	/**
+	 * The titles of `titles` that the original hook skips by the name of
+	 * the note. No view filter of part (d) holds a name, so the view returns
+	 * these rows and the ported hook must leave them out.
+	 */
+	readonly hookLeavesOut: readonly string[];
 }
 
 /** The rows that each view of a hook must return for the fixture set, by the conditions of part (d). */
@@ -39,23 +45,27 @@ export function expectedViewRows(spec: FixtureSpec): ViewExpectation[] {
 	};
 	const titles = (test: (note: FixtureNote) => boolean): string[] => spec.notes.filter(test).map((note) => note.title).sort();
 	const looseActive = (note: FixtureNote): boolean => folder(note) === "work/active";
+	const hasOpenLoops = (note: FixtureNote): boolean =>
+		loops.dirs.includes(folder(note)) && note.changedDaysAgo >= OPEN_LOOP_DAYS && countOpenLoops(renderNote(note), loops.sectionRe) > 0;
+	const view = (database: DatabaseKey, name: string, test: (note: FixtureNote) => boolean, skippedByName: (note: FixtureNote) => boolean = () => false): ViewExpectation => ({
+		database,
+		view: name,
+		titles: titles(test),
+		hookLeavesOut: titles((note) => test(note) && skippedByName(note)),
+	});
 
 	return [
-		...FIXTURE_DATABASES.map((database): ViewExpectation => ({
-			database,
-			view: "Hygiene: oversized",
-			titles: titles((note) => inDatabase(note, database) && Buffer.byteLength(renderNote(note)) >= MONOLITH_BYTES && !isMonolithExempt(`${note.title}.md`)),
-		})),
-		{
-			database: "work",
-			view: "Hygiene: open loops",
-			titles: titles((note) => loops.dirs.includes(folder(note)) && note.changedDaysAgo >= OPEN_LOOP_DAYS && countOpenLoops(renderNote(note), loops.sectionRe) > 0),
-		},
-		{ database: "work", view: "Hygiene: inbox pressure", titles: titles((note) => folder(note) === "work/meetings" && note.changedDaysAgo >= INBOX_PRESSURE_DAYS) },
-		{ database: "work", view: "Hygiene: loose active", titles: titles(looseActive) },
-		{ database: "work", view: "Open tasks", titles: titles((note) => looseActive(note) && /^\s*- \[ \]/m.test(note.body)) },
-		{ database: "knowledge", view: "Brain index", titles: titles((note) => note.type === "Brain topic") },
-		...FIXTURE_DATABASES.map((database): ViewExpectation => ({ database, view: "Hygiene: edited outside hooks", titles: [] })),
+		...FIXTURE_DATABASES.map((database) =>
+			view(database, "Hygiene: oversized", (note) => inDatabase(note, database) && Buffer.byteLength(renderNote(note)) >= MONOLITH_BYTES && !isMonolithExempt(`${note.title}.md`)),
+		),
+		// `findOpenLoops` of the original skips a note with "Archive" in its name.
+		view("work", "Hygiene: open loops", hasOpenLoops, (note) => note.title.includes("Archive")),
+		view("work", "Hygiene: inbox pressure", (note) => folder(note) === "work/meetings" && note.changedDaysAgo >= INBOX_PRESSURE_DAYS),
+		view("work", "Hygiene: loose active", looseActive),
+		view("work", "Open tasks", (note) => looseActive(note) && /^\s*- \[ \]/m.test(note.body)),
+		// `formatBrainIndex` of the original leaves out the note "Memories".
+		view("knowledge", "Brain index", (note) => note.type === "Brain topic", (note) => note.title === "Memories"),
+		...FIXTURE_DATABASES.map((database) => view(database, "Hygiene: edited outside hooks", () => false)),
 	];
 }
 

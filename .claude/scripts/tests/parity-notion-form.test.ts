@@ -10,11 +10,11 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { NotionError, type NotionClient, type NotionReply } from "../lib/notion-client.ts";
 import type { NotionMap } from "../lib/notion-map.ts";
-import { DATABASES, type DatabaseKey } from "../lib/notion-model.ts";
+import { DATABASES, VERBATIM_PROPERTY, type DatabaseKey } from "../lib/notion-model.ts";
 import { appendFileSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { FIXTURE_ROOT_TITLE, ledgerHooks, ledgerHooksOf, writeFixture, type WriteResult } from "../parity/notion-form.ts";
+import { createArguments, FIXTURE_ROOT_TITLE, ledgerHooks, ledgerHooksOf, writeFixture, type WriteResult } from "../parity/notion-form.ts";
 import type { FixtureSpec } from "../parity/spec.ts";
 import { SPEC } from "./_notion-spec.ts";
 
@@ -187,6 +187,30 @@ describe("writeFixture", () => {
 		assert.deepEqual(counts(second), { created: 0, updated: 0, unchanged: ALL });
 		assert.equal(second.optionsAdded, 0);
 		assert.equal(writes(notion.calls.slice(before)), 0);
+	});
+
+	test("a verbatim note has the Verbatim box set, a second run makes no write, and the box goes away with the mark", async () => {
+		const notion = fakeNotion();
+		const verbatim = withNote("Outage RCA", (n) => ({ ...n, verbatim: true }));
+		await writeFixture(notion.client, verbatim, notion.map, { now });
+		assert.equal(notion.pageOf("Outage RCA").properties[VERBATIM_PROPERTY], "__YES__");
+		assert.equal(notion.pageOf("Outage").properties[VERBATIM_PROPERTY], undefined, "a box that is not set needs no write");
+		const before = notion.calls.length;
+		assert.deepEqual(counts(await writeFixture(notion.client, verbatim, notion.map, { now })), { created: 0, updated: 0, unchanged: ALL });
+		assert.equal(writes(notion.calls.slice(before)), 0);
+		assert.deepEqual(counts(await writeFixture(notion.client, SPEC, notion.map, { now })), { created: 0, updated: 1, unchanged: ALL - 1 });
+		assert.equal(notion.pageOf("Outage RCA").properties[VERBATIM_PROPERTY], "__NO__");
+	});
+
+	test("the write call of a verbatim note sends the Verbatim box with the properties of a person, and no derived property", async () => {
+		const notion = fakeNotion();
+		const { pages } = await writeFixture(notion.client, SPEC, notion.map, { now });
+		const context = { now, openLoopSections: /^$/, pages };
+		const sent = (note: FixtureSpec["notes"][number]) => (createArguments([note], notion.map, context)["pages"] as { properties: Record<string, unknown> }[])[0]?.properties ?? {};
+		const plain = SPEC.notes.find((n) => n.title === "Outage RCA") ?? assert.fail("no note");
+		assert.equal(sent({ ...plain, verbatim: true })[VERBATIM_PROPERTY], "__YES__");
+		assert.equal(sent(plain)[VERBATIM_PROPERTY], "__NO__");
+		assert.equal(sent(plain)["Bytes"], undefined);
 	});
 
 	test("the synced block of North Star holds the focus of the fixture, Home shows it, and Home keeps its linked view", async () => {

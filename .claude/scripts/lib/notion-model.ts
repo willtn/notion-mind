@@ -132,6 +132,14 @@ const KNOWLEDGE_TYPES = ["Brain topic", "Reference", "Domain note", "Event-log s
 const STATUSES = ["active", "completed", "archived", "proposed", "accepted", "deprecated", "draft", "inbox"] as const;
 const TAGS = ["work-note", "decision", "incident", "perf", "review", "thinking", "north-star", "competency", "person", "team", "brain", "org", "index", "moc"] as const;
 
+/**
+ * The checkbox that replaces the `verbatim: true` key of the vault. A row
+ * with the box set is a raw capture that keeps its line breaks, so the
+ * hard-wrap check leaves it out. A page outside the databases has no
+ * properties, so it cannot have the mark.
+ */
+export const VERBATIM_PROPERTY = "Verbatim";
+
 /** The properties of every database: the global note fields, then the fields that the hygiene views read. */
 const COMMON_PROPERTIES: Readonly<Record<string, PropertySpec>> = {
 	Date: { type: "date" },
@@ -142,6 +150,7 @@ const COMMON_PROPERTIES: Readonly<Record<string, PropertySpec>> = {
 	Changed: { type: "date" },
 	Bytes: { type: "number" },
 	"Hook stamp": { type: "date" },
+	[VERBATIM_PROPERTY]: { type: "checkbox" },
 	Stale: { type: "formula", expression: atLeastDaysOld(14) },
 	Oversized: { type: "formula", expression: yesNo('prop("Bytes") >= 25000 and not contains(prop("Name"), "Archive")') },
 	// Notion keeps a date and time to the minute (measured). So a stamp can read up to

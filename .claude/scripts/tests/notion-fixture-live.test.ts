@@ -16,8 +16,10 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseOpenLoopConfig } from "../lib/active-hygiene.ts";
 import { createNotionClient } from "../lib/notion-client.ts";
 import { NOTION_MAP_ENV, NOTION_MAP_FILE, readNotionMap } from "../lib/notion-map.ts";
+import { VERBATIM_PROPERTY } from "../lib/notion-model.ts";
 import { FIXTURE } from "../parity/fixture.ts";
 import { FIXTURE_MAP_FILE, ledgerHooksOf, notionForm, writeFixture } from "../parity/notion-form.ts";
+import { ARCHIVED_WORK_GROUP } from "../parity/notion-pages.ts";
 import { checkNote, expectedViewRows, liveViewTitles } from "../parity/notion-verify.ts";
 import { NOTION_WORDING } from "../parity/notion-wording.ts";
 import { minimalHookEnvironment } from "../parity/runner.ts";
@@ -120,6 +122,12 @@ describe("the Notion form of the fixture set, live", () => {
 			assert.equal(environment.noteOf("No Such Note"), null);
 			assert.equal(environment.wording, NOTION_WORDING);
 			assert.deepEqual(environment.notesIn("Work note"), FIXTURE.notes.filter((candidate) => candidate.type === "Work note").map((candidate) => candidate.title));
+			assert.deepEqual([...environment.notesIn(ARCHIVED_WORK_GROUP)].sort(), ["Legacy Importer", "Old Pricing Plan", "Search Migration", "Undated Plan"]);
+
+			const raw = FIXTURE.notes.find((candidate) => candidate.verbatim) ?? assert.fail("the fixture has no verbatim note");
+			const rawCommand = String((environment.writePayload([raw])["tool_input"] as { command: string }).command);
+			const rawArgs = JSON.parse(readFileSync(join(environment.projectDir, rawCommand.match(/\$\(cat ([^)]+)\)/)?.[1] ?? ""), "utf-8")) as { pages: { properties: Record<string, unknown> }[] };
+			assert.equal(rawArgs.pages[0]?.properties[VERBATIM_PROPERTY], "__YES__", "the write of a verbatim note sends the mark");
 
 			const two = FIXTURE.notes.filter((candidate) => candidate.type === "Work note").slice(0, 2);
 			const twoCommand = String((environment.writePayload(two)["tool_input"] as { command: string }).command);
