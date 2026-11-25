@@ -28,6 +28,7 @@ import {
 	NORTH_STAR_POINTER,
 	type BudgetSection,
 } from "../lib/session-start.ts";
+import { SCAFFOLD_SOURCES } from "../lib/notion-model.ts";
 import { fakeUrl, readableWorkspace } from "./_fake-notion.ts";
 import { hookContext, runScript as spawnHook, rmTemp } from "./_helpers.ts";
 
@@ -229,7 +230,7 @@ describe("northStarLadder", () => {
 	});
 
 	test("the shipped template yields no headlines (its bullets are empty), so the ladder skips those levels", () => {
-		const l = northStarLadder(readFileSync(join(VAULT, "brain", "North Star.md"), "utf-8"));
+		const l = northStarLadder(readFileSync(join(VAULT, SCAFFOLD_SOURCES.north_star), "utf-8"));
 		assert.deepEqual(l.headlines, []);
 		assert.ok(!l.full.includes("Shifts Log"));
 	});

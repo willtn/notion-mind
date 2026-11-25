@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { countSection, formatResult } from "../lib/charcount.ts";
+import { SCAFFOLD_SOURCES } from "../lib/notion-model.ts";
 
 const SCRIPTS = join(dirname(fileURLToPath(import.meta.url)), "..");
 const VAULT = join(SCRIPTS, "..", "..");
@@ -151,7 +152,7 @@ describe("countSection — ## sections and heading names", () => {
 	});
 
 	test("every section heading in the shipped review template is found", () => {
-		const tpl = readFileSync(join(VAULT, "templates", "Review Template.md"), "utf-8");
+		const tpl = readFileSync(join(VAULT, SCAFFOLD_SOURCES.template_review), "utf-8");
 		for (const s of ["Summary", "Impact", "Competencies", "Principles", "Growth Plan"]) {
 			assert.notEqual(countSection(tpl, { section: s }), null, s);
 		}
