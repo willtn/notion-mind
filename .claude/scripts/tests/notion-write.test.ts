@@ -5,7 +5,7 @@
 
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { NOTION_TOOLS, OUTBOX_DIR, bashCommand, decide, isNotionCommand, outboxCommand, parseCommand, readCommand } from "../lib/notion-write.ts";
+import { NOTION_TOOLS, OUTBOX_DIR, bashCommand, decide, decideWithoutRuntime, isNotionCommand, outboxCommand, parseCommand, readCommand } from "../lib/notion-write.ts";
 import type { Host } from "../lib/notion-write.ts";
 import { VERIFIER_CASES } from "./notion-guard-cases.ts";
 import { CAPTURED_POST_TOOL_USE, CAPTURED_PRE_TOOL_USE } from "./notion-write-payloads.ts";
@@ -300,7 +300,6 @@ describe("the text that makes a Notion command", () => {
 		["notion as the word of a list", "mcporter list notion --http-url https://example.com"],
 		["notion in a URL", "mcporter call https://mcp.notion.com/mcp.notion-create-pages"],
 		["notion in a package name", `mcporter call --stdio "npx -y @notionhq/notion-mcp-server" --tool x`],
-		["notion in the tool name", "mcporter call other.notion-like-tool"],
 		["quotes inside both words", `mcpor''ter call noti""on notion-create-pages`],
 		["a backslash inside mcporter", "mcpor\\ter call notion.x"],
 		["a line continuation inside mcporter", "mcpor\\\nter call notion.x"],
@@ -365,6 +364,81 @@ describe("the text that makes a Notion command", () => {
 	test("a command that names Notion in an argument of another server is a Notion command", () => {
 		assert.equal(refusal(`mcporter call slack.x --args "$(echo notion)"`), "form");
 	});
+});
+
+describe("a plain call to another server", () => {
+	const PLAIN: ReadonlyArray<readonly [string, string]> = [
+		["no arguments", "mcporter call jira.search_issues"],
+		["JSON arguments", `mcporter call slack.post_message --args '{}'`],
+		["the word notion in the JSON", `mcporter call slack.search_slack_messages --args '{"query":"notion"}'`],
+		["the word Notion and mcporter in the JSON", `mcporter call ticktick.search_task --args '{"query":"Notion mcporter"}'`],
+		["a pipe, a substitution, and a semicolon inside the quotes", `mcporter call slack.search --args '{"query":"notion | $(x) \`y\`; > z"}'`],
+		["an output format", `mcporter call jira.search --args '{"jql":"notion"}' --output json`],
+		["a newline inside the quotes", `mcporter call slack.search --args '{"query":\n"notion"}'`],
+		["notion in the tool name of another server", "mcporter call other.notion-like-tool"],
+		["a server name with a dash and a tool name with a dot", "mcporter call my-server.some.tool"],
+		["a server that only holds the letters of notion", "mcporter call notions.get --args '{}'"],
+		["space around the command", `  mcporter call slack.x --args '{"query":"notion"}'  `],
+	];
+	for (const [label, command] of PLAIN) {
+		test(`${label} passes, with the runtime folder on the machine`, () => {
+			assert.deepEqual(parseCommand(command, hostOf({}, [RUNTIME])), { kind: "other" }, command);
+			assert.deepEqual(decide(parseCommand(command, hostOf({}, [RUNTIME]))), { kind: "pass" });
+		});
+	}
+
+	const NOT_PLAIN: ReadonlyArray<readonly [string, string]> = [
+		["a substitution as the arguments", `mcporter call slack.x --args "$(echo notion)"`],
+		["a second call after a semicolon", `mcporter call slack.x --args '{}' ; mcporter call notion.notion-create-pages --args '{}'`],
+		["a pipe to a shell, with the word notion in the JSON", `mcporter call slack.x --args '{"a":"notion"}' | sh`],
+		["the Notion server in upper case", `mcporter call NOTION.notion-create-pages --args '{}'`],
+		["the Notion server in title case", `mcporter call Notion.notion-get-self`],
+		["a redirect", `mcporter call slack.x --args '{"q":"notion"}' > out.json`],
+		["a background call", `mcporter call slack.x --args '{"q":"notion"}' &`],
+		["a command before the call", `cd /tmp && mcporter call slack.x --args '{"q":"notion"}'`],
+		["an environment prefix", `FOO=1 mcporter call slack.x --args '{"q":"notion"}'`],
+		["a path to mcporter", `./node_modules/.bin/mcporter call slack.x --args '{"q":"notion"}'`],
+		["a substitution after the quotes", `mcporter call slack.x --args '{"q":"notion"}'$(id)`],
+		["arguments in double quotes", `mcporter call slack.x --args "{\"q\":\"notion\"}"`],
+		["a flag that sets the tool", `mcporter call slack.x --tool notion-create-pages --args '{}'`],
+		["key:value arguments that name Notion", "mcporter call slack.x query:notion"],
+		["a second line", `mcporter call slack.x --args '{"q":"notion"}'\nrm -rf x`],
+		["the runtime folder with the JSON in quotes", `node ${RUNTIME}/dist/index.js '{"q":"notion"}'`],
+	];
+	for (const [label, command] of NOT_PLAIN) {
+		test(`${label} is a Notion command with the round 2 rules`, () => {
+			assert.equal(parseCommand(command, hostOf({}, [RUNTIME])).kind, "refused", command);
+			assert.equal(decide(parseCommand(command, hostOf({}, [RUNTIME]))).kind, "deny", command);
+		});
+	}
+
+	test("the denial of a command with no allowed form names the workaround for a commit message and a PR body", () => {
+		const reason = denial(`git commit -m "mcporter call notion.notion-create-pages"`);
+		assert.ok(reason.includes("`git commit -F <file>`") && reason.includes("`gh pr create --body-file <file>`"), reason);
+	});
+});
+
+describe("the guard cannot look up mcporter", () => {
+	const FAILURE = "the lookup threw";
+	const DENIED: ReadonlyArray<string> = [
+		"mcporter call notion.notion-update-page --args '{}'",
+		"mcporter call slack.search --args '{\"query\":\"notion\"}'",
+		"echo NOTION",
+		"rg MCPORTER .claude",
+		"mcpor''ter list slack",
+		"git log --grep=\"mcporter Notion\"",
+		outboxCommand("notion-create-pages", OUTBOX),
+	];
+	for (const command of DENIED) {
+		test(`${JSON.stringify(command)} is denied with the guard error`, () => {
+			const decision = decideWithoutRuntime(command, FAILURE);
+			assert.equal(decision.kind, "deny");
+			assert.ok(decision.kind === "deny" && decision.reason.includes(FAILURE) && decision.reason.includes("failed to look up mcporter"), command);
+		});
+	}
+	for (const command of ["ls", "npm test", "", "git status", "cat .claude/scripts/lib/hook-io.ts"]) {
+		test(`${JSON.stringify(command)} passes`, () => assert.deepEqual(decideWithoutRuntime(command, FAILURE), { kind: "pass" }));
+	}
 });
 
 describe("the tool list and the sign-in of the Notion server", () => {

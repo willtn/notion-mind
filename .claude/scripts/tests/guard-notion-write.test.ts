@@ -115,8 +115,32 @@ describe("guard-notion-write, a command that names mcporter and not Notion", () 
 	];
 	for (const [label, command] of OTHER_SERVER) test(`${label} passes`, () => assertSilent(bash(command)));
 
-	test("a call to another server with an argument that names Notion is denied", () => {
-		assert.match(denialOf(bash(`mcporter call slack.x --args "$(echo notion)"`)), /^Notion command denied\./);
+	const PLAIN_WITH_NOTION: ReadonlyArray<readonly [string, string]> = [
+		["a Slack search for the word notion", `mcporter call slack.search_slack_messages --args '{"query":"notion"}'`],
+		["a TickTick search for the word notion", `mcporter call ticktick.search_task --args '{"query":"notion"}'`],
+		["a Jira search with an output format", `mcporter call jira.search --args '{"jql":"text ~ \\"Notion\\""}' --output json`],
+		["JSON that holds a pipe and a substitution inside the quotes", `mcporter call slack.search --args '{"query":"notion | $(x) \`y\`; z"}'`],
+	];
+	test("a pipe after a call that names no Notion passes, as in round 2", () => assertSilent(bash(`mcporter call slack.x --args '{"a":1}' | sh`)));
+
+	for (const [label, command] of PLAIN_WITH_NOTION) test(`${label} passes`, () => assertSilent(bash(command)));
+
+	const STILL_DENIED: ReadonlyArray<readonly [string, string]> = [
+		["an argument that is a substitution", `mcporter call slack.x --args "$(echo notion)"`],
+		["a second Notion call after a semicolon", `mcporter call slack.x --args '{}' ; mcporter call notion.notion-create-pages --args '{}'`],
+		["a pipe to a shell, with the word notion in the JSON", `mcporter call slack.x --args '{"a":"notion"}' | sh`],
+		["a Notion server in upper case", `mcporter call NOTION.notion-create-pages --args '{}'`],
+		["a redirect after the JSON", `mcporter call slack.x --args '{"q":"notion"}' > out.json`],
+		["a command before the call", `cd /tmp && mcporter call slack.x --args '{"q":"notion"}'`],
+		["a JSON string that closes its quote early", `mcporter call slack.x --args '{"q":"notion"}'$(id)`],
+	];
+	for (const [label, command] of STILL_DENIED) {
+		test(`${label} is denied`, () => assert.match(denialOf(bash(command)), /^Notion command denied\./));
+	}
+
+	test("the denial names the workaround for a commit message and a PR body", () => {
+		const reason = denialOf(bash(`git commit -m "mcporter call notion.notion-create-pages"`));
+		assert.ok(reason.includes("git commit -F <file>") && reason.includes("gh pr create --body-file <file>"), reason);
 	});
 });
 
@@ -146,6 +170,60 @@ describe("guard-notion-write, the runtime folder of mcporter", () => {
 	});
 
 	test("the same command passes on a machine with no mcporter on PATH", () => assertSilent(bash(command), { PATH: elsewhere }));
+});
+
+describe("guard-notion-write, a failed lookup of mcporter", () => {
+	const LIB = resolve(dirname(SCRIPT), "lib");
+	const STUBS: ReadonlyArray<readonly [string, string, string]> = [
+		["findMcporter throws", `export const findMcporter = () => { throw new Error("injected-findMcporter"); };\nexport const mcporterRuntimePath = () => null;\n`, "injected-findMcporter"],
+		["mcporterRuntimePath throws", `export const findMcporter = () => "/stub/mcporter";\nexport const mcporterRuntimePath = () => { throw new Error("injected-mcporterRuntimePath"); };\n`, "injected-mcporterRuntimePath"],
+		["no mcporter is found", `export const findMcporter = () => null;\nexport const mcporterRuntimePath = () => null;\n`, ""],
+	];
+
+	/** A copy of the guard whose notion-client module is the stub. */
+	const stubbedGuard = (name: string, stub: string): string => {
+		const dir = join(project, `stub-${name.replaceAll(/\W/g, "-")}`);
+		mkdirSync(join(dir, "lib"), { recursive: true });
+		writeFileSync(join(dir, "package.json"), '{"type":"module"}');
+		copyFileSync(SCRIPT, join(dir, "guard-notion-write.ts"));
+		copyFileSync(join(LIB, "notion-write.ts"), join(dir, "lib", "notion-write.ts"));
+		writeFileSync(join(dir, "lib", "notion-client.ts"), stub);
+		return join(dir, "guard-notion-write.ts");
+	};
+	const silentWith = (script: string, command: string): void => {
+		const run = runScript(script, bash(command));
+		assert.deepEqual({ code: run.code, stdout: run.stdout, stderr: run.stderr }, { code: 0, stdout: "", stderr: "" }, command);
+	};
+
+	for (const [label, stub, message] of STUBS.filter(([, , message]) => message !== "")) {
+		describe(label, () => {
+			const NAMES: ReadonlyArray<string> = [
+				`mcporter call notion.notion-update-page --args '{}'`,
+				"echo notion",
+				"git log --grep=NOTION",
+				"rg mcporter .claude/scripts",
+				outboxCommand("notion-create-pages", `${OUTBOX_DIR}/note.json`),
+				`mcporter call slack.search --args '{"query":"notion"}'`,
+			];
+			for (const command of NAMES) {
+				test(`${command.split("\n")[0]} is denied with the guard error`, () => {
+					const reason = denialOf(bash(command), stubbedGuard(label, stub));
+					assert.match(reason, /^The Notion guard failed to look up mcporter, so it denied this command that names mcporter or Notion: /);
+					assert.ok(reason.includes(message), reason);
+				});
+			}
+			for (const command of ["ls", "npm test", "git log -5"]) test(`${command} passes`, () => silentWith(stubbedGuard(label, stub), command));
+		});
+	}
+
+	test("a machine with no mcporter is not an error, so a command that names Notion and mcporter follows the form rules", () => {
+		const [, stub] = STUBS[2] as readonly [string, string, string];
+		const script = stubbedGuard("none", stub);
+		silentWith(script, "mcporter call slack.x --args '{}'");
+		silentWith(script, "rg mcporter");
+		silentWith(script, outboxCommand("notion-create-pages", `${OUTBOX_DIR}/note.json`));
+		assert.match(denialOf(bash(`mcporter call notion.notion-update-page --args '{}'`), script), /^Notion command denied\./);
+	});
 });
 
 describe("guard-notion-write, an error denies", () => {
