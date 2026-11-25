@@ -360,15 +360,24 @@ const write = (note: string): Step => ({ hook: "validate-write", input: { kind: 
 
 const BILLING_CLUSTER = "billing: Billing Export Pipeline, Billing Retry Design";
 
-const hygieneClaims = (step: number): ExpectedFinding[] => [
-	{ row: "HY-07", step, detail: "CLAUDE.md" },
-	{ row: "HY-09", step, sizeKb: 24 },
-	{ row: "HY-01", step, detail: "claim", count: 1 },
-	{ row: "HY-02", step, detail: "claim" },
-	{ row: "HY-03", step, detail: "claim", count: 1 },
-	{ row: "HY-04", step, detail: "claim", count: 5 },
-	{ row: "HY-05", step, detail: "claim", count: 4 },
+const WRITE_CONTEXT = "additional context, event PostToolUse";
+const PROMPT_CONTEXT = "additional context, event UserPromptSubmit";
+
+/** The places that state the hygiene claims: the report lines, the one-line summary, and the report data. */
+type ClaimPlace = "claim" | "summary claim" | "data claim";
+
+const hygieneClaims = (step: number, place: ClaimPlace = "claim"): ExpectedFinding[] => [
+	{ row: "HY-07", step, detail: `${place} CLAUDE.md` },
+	{ row: "HY-09", step, detail: place, sizeKb: 24 },
+	{ row: "HY-01", step, detail: place, count: 1 },
+	{ row: "HY-02", step, detail: place },
+	{ row: "HY-03", step, detail: place, count: 1 },
+	{ row: "HY-04", step, detail: place, count: 5 },
+	{ row: "HY-05", step, detail: place, count: 4 },
 ];
+
+/** The hygiene findings after `CLAUDE.md` goes away: each finding but the one of that file. */
+const withoutClaudeFile = (findings: readonly ExpectedFinding[]): ExpectedFinding[] => findings.filter(({ row }) => row !== "HY-07");
 
 /** Six notes have open items, and the report keeps the five oldest. */
 const hygiene = (step: number): ExpectedFinding[] => [
@@ -384,6 +393,24 @@ const hygiene = (step: number): ExpectedFinding[] => [
 ];
 
 const checklist = (step: number): ExpectedFinding => ({ row: "ST-03", step, count: 5 });
+
+/** The one-line summary of a Stop report. `trailer` is the row of the line that says where the full report goes. */
+const summary = (step: number, trailer: "ST-09" | "ST-10"): ExpectedFinding[] => [
+	{ row: "ST-03", step, detail: "summary", count: 5 },
+	...hygieneClaims(step, "summary claim"),
+	{ row: trailer, step, detail: "trailer" },
+];
+
+/** The report of the `om_mod: "report"` run. `key` is the step that gave the same report key first. */
+const reportData = (step: number, key: number): ExpectedFinding[] => [
+	{ row: "ST-08", step, detail: "report data" },
+	{ row: "ST-06", step, detail: `key first given at step ${key}` },
+	...hygieneClaims(step, "data claim"),
+	{ row: "ST-08", step, detail: "preface" },
+	checklist(step),
+	{ row: "ST-04", step },
+	...hygiene(step),
+];
 
 const HYGIENE_ROWS = ["HY-01", "HY-02", "HY-03", "HY-04", "HY-05", "HY-07", "HY-09"] as const;
 
@@ -439,7 +466,9 @@ const scenarios: readonly Scenario[] = [
 		rows: ["SS-10", "SS-11", "SS-12", "SS-13", "SS-14", "SS-15", "SS-16", "SS-17", "SS-19", ...HYGIENE_ROWS],
 		steps: [payload("session-start", { source: "startup" })],
 		expect: [
-			{ row: "SS-19", detail: "additional context" },
+			{ row: "SS-19", detail: "additional context, event SessionStart" },
+			{ row: "SS-19", detail: "session title" },
+			{ row: "SS-19", detail: "size meter" },
 			{ row: "SS-10", detail: "date line" },
 			{ row: "SS-11", detail: "## Current Focus" },
 			{ row: "SS-11", detail: "completed items hidden", count: 1 },
@@ -476,8 +505,9 @@ const scenarios: readonly Scenario[] = [
 		rows: ["VW-03"],
 		steps: [{ hook: "validate-write", input: { kind: "memory-write", file: "lesson.md" } }],
 		expect: [
-			{ row: "VW-17", detail: "additional context" },
+			{ row: "VW-17", detail: WRITE_CONTEXT },
 			{ row: "VW-03", detail: "lesson.md" },
+			{ row: "VW-03", detail: "policy memory-location, misplaced-memory, warn, with a target, at ~/.claude/projects/parity/memory/lesson.md" },
 		],
 	},
 	{
@@ -485,7 +515,7 @@ const scenarios: readonly Scenario[] = [
 		rows: ["VW-07"],
 		steps: [write("Loose Draft")],
 		expect: [
-			{ row: "VW-17", detail: "additional context" },
+			{ row: "VW-17", detail: WRITE_CONTEXT },
 			{ row: "VW-07", note: "Loose Draft" },
 		],
 	},
@@ -494,9 +524,9 @@ const scenarios: readonly Scenario[] = [
 		rows: ["VW-08"],
 		steps: [write("Missing Fields")],
 		expect: [
-			{ row: "VW-17", detail: "additional context" },
-			{ row: "VW-08", note: "Missing Fields", detail: "description" },
-			{ row: "VW-08", note: "Missing Fields", detail: "tags" },
+			{ row: "VW-17", detail: WRITE_CONTEXT },
+			{ row: "VW-08", note: "Missing Fields", detail: "Description" },
+			{ row: "VW-08", note: "Missing Fields", detail: "Tags" },
 		],
 	},
 	{
@@ -504,8 +534,8 @@ const scenarios: readonly Scenario[] = [
 		rows: ["VW-09"],
 		steps: [write("Ben Ortiz")],
 		expect: [
-			{ row: "VW-17", detail: "additional context" },
-			{ row: "VW-09", note: "Ben Ortiz", detail: "title" },
+			{ row: "VW-17", detail: WRITE_CONTEXT },
+			{ row: "VW-09", note: "Ben Ortiz", detail: "Role" },
 		],
 	},
 	{
@@ -519,7 +549,7 @@ const scenarios: readonly Scenario[] = [
 		rows: ["VW-10"],
 		steps: [write("No Links")],
 		expect: [
-			{ row: "VW-17", detail: "additional context" },
+			{ row: "VW-17", detail: WRITE_CONTEXT },
 			{ row: "VW-10", note: "No Links" },
 		],
 	},
@@ -528,7 +558,7 @@ const scenarios: readonly Scenario[] = [
 		rows: ["VW-11"],
 		steps: [write("Wrapped Prose")],
 		expect: [
-			{ row: "VW-17", detail: "additional context" },
+			{ row: "VW-17", detail: WRITE_CONTEXT },
 			{ row: "VW-11", note: "Wrapped Prose", count: 2 },
 		],
 	},
@@ -537,8 +567,9 @@ const scenarios: readonly Scenario[] = [
 		rows: ["VW-12"],
 		steps: [write("Ticket Links")],
 		expect: [
-			{ row: "VW-17", detail: "additional context" },
+			{ row: "VW-17", detail: WRITE_CONTEXT },
 			{ row: "VW-12", note: "Ticket Links", count: 2 },
+			{ row: "VW-12", note: "Ticket Links", detail: "policy phantom-edge, ticket-id-wikilink, warn" },
 		],
 	},
 	{
@@ -546,8 +577,9 @@ const scenarios: readonly Scenario[] = [
 		rows: ["VW-14"],
 		steps: [write("Runbook")],
 		expect: [
-			{ row: "VW-17", detail: "additional context" },
+			{ row: "VW-17", detail: WRITE_CONTEXT },
 			{ row: "VW-14", note: "Runbook", sizeKb: 26 },
+			{ row: "VW-14", note: "Runbook", detail: "policy organization-threshold, oversized-note, flag" },
 		],
 	},
 	{
@@ -567,8 +599,9 @@ const scenarios: readonly Scenario[] = [
 		rows: ["VW-15"],
 		steps: [write("Billing Retry Design")],
 		expect: [
-			{ row: "VW-17", detail: "additional context" },
-			{ row: "VW-15", note: "Billing Retry Design", detail: BILLING_CLUSTER, count: 1 },
+			{ row: "VW-17", detail: WRITE_CONTEXT },
+			{ row: "VW-15", detail: BILLING_CLUSTER, count: 1 },
+			{ row: "VW-15", note: "Billing Retry Design", detail: "policy topic-cluster, ungrouped-cluster, flag, with a target" },
 		],
 	},
 
@@ -586,7 +619,7 @@ const scenarios: readonly Scenario[] = [
 		],
 		expect: (["UP-03", "UP-05", "UP-06", "UP-07", "UP-08", "UP-09", "UP-10"] as const).flatMap(
 			(row, step): ExpectedFinding[] => [
-				{ row: "UP-14", step, detail: "additional context" },
+				{ row: "UP-14", step, detail: PROMPT_CONTEXT },
 				{ row: "UP-12", step, count: 1 },
 				{ row, step },
 			],
@@ -597,7 +630,7 @@ const scenarios: readonly Scenario[] = [
 		rows: ["UP-03", "UP-04"],
 		steps: [prompt("We decided to drop the cache, so the old choice is superseded.")],
 		expect: [
-			{ row: "UP-14", detail: "additional context" },
+			{ row: "UP-14", detail: PROMPT_CONTEXT },
 			{ row: "UP-12", count: 2 },
 			{ row: "UP-03" },
 			{ row: "UP-04" },
@@ -608,11 +641,13 @@ const scenarios: readonly Scenario[] = [
 		rows: ["UP-11"],
 		steps: [prompt("We decided to keep the nightly export."), prompt("We decided to keep the weekly export.")],
 		expect: [
-			{ row: "UP-14", step: 0, detail: "additional context" },
+			{ row: "UP-14", step: 0, detail: PROMPT_CONTEXT },
 			{ row: "UP-12", step: 0, count: 1 },
 			{ row: "UP-03", step: 0 },
 			{ row: "UP-14", step: 1, detail: "silent" },
 		],
+		// The dedupe prints no line. Its result is the silence of the second prompt.
+		provenBy: { "UP-11": { row: "UP-14", step: 1, detail: "silent" } },
 	},
 	{
 		id: "prompt-hint-without-session",
@@ -622,7 +657,7 @@ const scenarios: readonly Scenario[] = [
 			prompt("We decided to keep the weekly export.", { session_id: "" }),
 		],
 		expect: [0, 1].flatMap((step): ExpectedFinding[] => [
-			{ row: "UP-14", step, detail: "additional context" },
+			{ row: "UP-14", step, detail: PROMPT_CONTEXT },
 			{ row: "UP-12", step, count: 1 },
 			{ row: "UP-03", step },
 		]),
@@ -652,13 +687,16 @@ const scenarios: readonly Scenario[] = [
 		steps: [payload("stop-checklist"), prompt("What is the time in Lisbon?")],
 		expect: [
 			{ row: "ST-09", step: 0, detail: "system message" },
-			...hygieneClaims(0),
-			{ row: "UP-14", step: 1, detail: "additional context" },
+			...summary(0, "ST-09"),
+			{ row: "UP-14", step: 1, detail: PROMPT_CONTEXT },
 			{ row: "UP-02", step: 1 },
+			{ row: "ST-09", step: 1, detail: "preface" },
 			checklist(1),
 			{ row: "ST-04", step: 1 },
 			...hygiene(1),
 		],
+		// The manifest read prints no line. "Follow Ups" is a heading that only the manifest of the fixture names.
+		provenBy: { "ST-05": { row: "HY-04", step: 1, note: "Planning Export", count: 1 } },
 	},
 	{
 		id: "stop-twice",
@@ -666,8 +704,24 @@ const scenarios: readonly Scenario[] = [
 		steps: [payload("stop-checklist"), payload("stop-checklist")],
 		expect: [
 			{ row: "ST-09", step: 0, detail: "system message" },
-			...hygieneClaims(0),
+			...summary(0, "ST-09"),
 			{ row: "ST-07", step: 1, detail: "empty envelope" },
+		],
+	},
+	{
+		id: "stop-after-report-change",
+		rows: ["ST-06", "ST-07", "ST-09"],
+		steps: [
+			payload("stop-checklist"),
+			{ ...payload("stop-checklist"), removeRepoFile: "CLAUDE.md" },
+			payload("stop-checklist"),
+		],
+		expect: [
+			{ row: "ST-09", step: 0, detail: "system message" },
+			...summary(0, "ST-09"),
+			{ row: "ST-09", step: 1, detail: "system message" },
+			...withoutClaudeFile(summary(1, "ST-09")),
+			{ row: "ST-07", step: 2, detail: "empty envelope" },
 		],
 	},
 	{
@@ -686,13 +740,17 @@ const scenarios: readonly Scenario[] = [
 		id: "stop-report-data",
 		rows: ["ST-03", "ST-04", "ST-06", "ST-08", ...HYGIENE_ROWS],
 		steps: [payload("stop-checklist", { om_mod: "report" })],
-		expect: [
-			{ row: "ST-08", detail: "report data" },
-			{ row: "ST-06", detail: "key" },
-			checklist(0),
-			{ row: "ST-04" },
-			...hygiene(0),
+		expect: reportData(0, 0),
+	},
+	{
+		id: "stop-report-data-after-change",
+		rows: ["ST-06", "ST-08"],
+		steps: [
+			payload("stop-checklist", { om_mod: "report" }),
+			payload("stop-checklist", { om_mod: "report" }),
+			{ ...payload("stop-checklist", { om_mod: "report" }), removeRepoFile: "CLAUDE.md" },
 		],
+		expect: [...reportData(0, 0), ...reportData(1, 0), ...withoutClaudeFile(reportData(2, 2))],
 	},
 	{
 		id: "stop-handoff-blocked",
@@ -700,7 +758,9 @@ const scenarios: readonly Scenario[] = [
 		steps: [payload("stop-checklist")],
 		blockHandoff: true,
 		expect: [
-			{ row: "ST-10", detail: "system message and feedback" },
+			{ row: "ST-10", detail: "system message and feedback, event Stop" },
+			{ row: "ST-10", detail: "preface" },
+			...summary(0, "ST-10"),
 			checklist(0),
 			{ row: "ST-04" },
 			...hygiene(0),

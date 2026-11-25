@@ -92,7 +92,7 @@ describe("the parity harness on the original hooks", { skip }, () => {
 		const { differences } = comparePasses(original, changed, FIXTURE);
 		assert.deepEqual(
 			differences.map(({ row, scenario, kind, original: finding }) => ({ row, scenario, kind, note: finding?.note, detail: finding?.detail })),
-			[{ row: "VW-08", scenario: "write-missing-global-fields", kind: "only in the original", note: "Missing Fields", detail: "tags" }],
+			[{ row: "VW-08", scenario: "write-missing-global-fields", kind: "only in the original", note: "Missing Fields", detail: "Tags" }],
 		);
 	});
 
@@ -135,7 +135,7 @@ describe("the minimal hook environment", { skip: process.platform === "win32" },
 		const dir = mkdtempSync(join(tmpdir(), "om-parity-env-"));
 		try {
 			const env = inPollutedProcess(() => minimalHookEnvironment(dir));
-			assert.deepEqual(Object.keys(env).sort(), ["HOME", "PATH", "USERPROFILE", "XDG_CACHE_HOME"]);
+			assert.deepEqual(Object.keys(env).sort(), ["HOME", "PATH", "USERPROFILE"]);
 		} finally {
 			rmSync(dir, { recursive: true, force: true });
 		}

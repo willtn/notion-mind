@@ -5,6 +5,7 @@
 
 import { mkdirSync, utimesSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
+import { MARKDOWN_WORDING } from "./markdown-wording.ts";
 import { changedAt, type Field, type FixtureNote, type FixtureSpec, type HookForm, type NoteType } from "./spec.ts";
 
 const ARCHIVE_YEAR = "2025";
@@ -83,6 +84,7 @@ export function markdownForm(spec: FixtureSpec, options: { readonly scriptsDir: 
 					tool_response: { filePath, success: true },
 				};
 			},
+			wording: MARKDOWN_WORDING,
 			noteOf: (reference) => titleOfReference.get(reference.replace(/^\.\//, "")) ?? null,
 			notesIn: (folder) => [...paths].filter(([, path]) => path.startsWith(`${folder}/`)).map(([title]) => title),
 		};

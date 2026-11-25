@@ -5,6 +5,7 @@
  */
 
 import type { RowId } from "./rows.ts";
+import type { Wording } from "./wording.ts";
 
 /** The Notion database of each note type. `null` is a page outside the databases. */
 export const NOTE_TYPES = {
@@ -94,7 +95,12 @@ export type StepInput =
 	/** Bytes that go to stdin as they are. */
 	| { readonly kind: "raw"; readonly stdin: string };
 
-export type Step = { readonly hook: HookName; readonly input: StepInput };
+export type Step = {
+	readonly hook: HookName;
+	readonly input: StepInput;
+	/** A repository file that goes away before the run. Both forms keep these files in the project directory. */
+	readonly removeRepoFile?: string;
+};
 
 /**
  * One finding of one hook run, in a form that does not depend on the wording
@@ -127,6 +133,11 @@ export type Scenario = {
 	readonly steps: readonly Step[];
 	/** The findings that the conditions of part (d) give for this fixture. */
 	readonly expect: readonly ExpectedFinding[];
+	/**
+	 * For a row that prints nothing of its own: the expected finding of a
+	 * different row that exists only because of that row.
+	 */
+	readonly provenBy?: Readonly<Partial<Record<RowId, ExpectedFinding>>>;
 	/** Makes the Stop hand-over file impossible to write (ST-10). */
 	readonly blockHandoff?: true;
 	/** The number of old transcript copies that exist before the first step (PC-04). */
@@ -146,7 +157,7 @@ export type FixtureSpec = {
 export type HookEnvironment = {
 	/** The directory that holds the five hook entry scripts. */
 	readonly scriptsDir: string;
-	/** The project directory of the hook process. */
+	/** The project directory of the hook process. It holds each repository file of the spec. */
 	readonly projectDir: string;
 	/** Environment variables that only this form needs. */
 	readonly env: Readonly<Record<string, string>>;
@@ -155,6 +166,12 @@ export type HookEnvironment = {
 	/** The PostToolUse payload fields for a write of `note`. */
 	readonly writePayload: (note: FixtureNote) => Readonly<Record<string, unknown>>;
 	/**
+	 * The wording of the hook output in this form. The harness reads the
+	 * output only through these patterns, so each form names its own objects
+	 * and gives the same findings.
+	 */
+	readonly wording: Wording;
+	/**
 	 * The fixture note that a reference in hook output names. A reference is
 	 * a path or a file name in the Markdown form and a title in the Notion
 	 * form. `null` means that the reference names no fixture note.
@@ -162,7 +179,8 @@ export type HookEnvironment = {
 	readonly noteOf: (reference: string) => string | null;
 	/**
 	 * The fixture notes of a group that the listing shows as one line. A
-	 * group is a folder in the Markdown form.
+	 * group is a folder in the Markdown form, and a database with a `Type`
+	 * in the Notion form.
 	 */
 	readonly notesIn: (group: string) => readonly string[];
 };

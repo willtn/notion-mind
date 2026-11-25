@@ -1,16 +1,19 @@
 /**
  * Turns the captured output of a scenario into findings. A finding keeps
- * the row, the note, and the count. It does not keep the wording, because
- * the Notion form changes the wording to name Notion objects.
+ * the row, the note, the detail, and the count. It does not keep the
+ * wording: the patterns come from `HookEnvironment.wording`, and no pattern
+ * is in this file.
  *
- * Output that no recognizer knows becomes an `UNMAPPED` finding, so new text
- * in one form shows as a difference and does not go away.
+ * Each line and each field of the output gives a finding. Output that no
+ * pattern knows becomes an `UNMAPPED` finding, so new text in one form shows
+ * as a difference and does not go away.
  */
 
 import { createHash } from "node:crypto";
 import type { RowId } from "./rows.ts";
 import { TRANSCRIPT, type ScenarioRun, type StepRun } from "./runner.ts";
-import type { Finding, FixtureSpec, HookEnvironment, Step } from "./spec.ts";
+import { PROPERTY_OF_FIELD, type Finding, type FixtureSpec, type HookEnvironment, type HookName, type Step } from "./spec.ts";
+import { capturesOf, findingOf, itemPlaceOf, kindsIn, type Capture, type Place, type TextKind } from "./wording.ts";
 
 type Found = Omit<Finding, "step">;
 
@@ -26,210 +29,200 @@ const filled = (lines: readonly string[]): string[] => lines.filter((line) => li
 
 const unmapped = (text: string): Found => found("UNMAPPED", { detail: text.trim().slice(0, 120) });
 
-type Context = { readonly environment: HookEnvironment; readonly spec: FixtureSpec };
+const isString = (value: unknown): value is string => typeof value === "string";
+
+type Context = {
+	readonly environment: HookEnvironment;
+	readonly spec: FixtureSpec;
+	/** The home directory of the hook processes. A path below it is equal in both forms. */
+	readonly home: string;
+};
 
 const noteOf = (context: Context, reference: string): string =>
 	context.environment.noteOf(reference) ?? `not a fixture note: ${reference}`;
 
-type Recognizer = readonly [pattern: RegExp, finding: (match: RegExpExecArray, context: Context) => Found];
+type Match = { readonly kind: TextKind; readonly groups: Readonly<Record<string, string | undefined>> };
 
-function recognize(recognizers: readonly Recognizer[], text: string, context: Context): Found | null {
-	for (const [pattern, finding] of recognizers) {
-		const match = pattern.exec(text);
-		if (match) return finding(match, context);
+function matchOf(context: Context, kinds: readonly TextKind[], text: string): Match | null {
+	for (const kind of kinds) {
+		const match = context.environment.wording[kind]?.exec(text);
+		if (match) return { kind, groups: match.groups ?? {} };
 	}
 	return null;
 }
 
-const CLAIMS: readonly Recognizer[] = [
-	[/^(\S+) present beside AGENTS\.md/, (m) => found("HY-07", { detail: m[1]! })],
-	[/^AGENTS\.md is (\d+)KB/, (m) => found("HY-09", { sizeKb: Number(m[1]) })],
-	[/^(\d+) note\(s\) marked done but still in active\//, (m) => found("HY-01", { detail: "claim", count: Number(m[1]) })],
-	[/^Loose active\/ notes that look like one topic/, () => found("HY-02", { detail: "claim" })],
-	[/^(\d+) note\(s\) past the 25KB organization threshold/, (m) => found("HY-03", { detail: "claim", count: Number(m[1]) })],
-	[/^(\d+) note\(s\) with open follow-ups untouched 14\+ days/, (m) => found("HY-04", { detail: "claim", count: Number(m[1]) })],
-	[/^(\d+) raw export\(s\) sitting in work\/meetings\/ for 7\+ days/, (m) => found("HY-05", { detail: "claim", count: Number(m[1]) })],
-];
+function captured(match: Match, capture: Capture): string {
+	const value = match.groups[capture];
+	if (value === undefined) throw new Error(`the pattern of "${match.kind}" has no group "${capture}"`);
+	return value;
+}
 
-const cluster = (context: Context, token: string, names: string): string =>
-	`${token}: ${names
-		.split(", ")
+const captureOf = (match: Match, capture: Capture): string | undefined =>
+	capturesOf(match.kind).includes(capture) ? captured(match, capture) : undefined;
+
+const itemsOf = (list: string): string[] =>
+	filled(list.includes("\n") ? list.split("\n") : list.split(" · ")).map((item) => item.replace(/^\s*- /, ""));
+
+const propertyOf = (field: string): string => (PROPERTY_OF_FIELD as Readonly<Record<string, string | undefined>>)[field] ?? field;
+
+/** The findings that matched text gives by itself. `label` goes in front of the detail. */
+function findingsFrom(match: Match, context: Context, label?: string): Found[] {
+	const { row, detail } = findingOf(match.kind);
+	if (row === undefined) return [];
+	const notes = captureOf(match, "notes")
+		?.split(", ")
 		.map((name) => noteOf(context, name))
-		.sort()
-		.join(", ")}`;
+		.sort();
+	const token = captureOf(match, "token");
+	const field = captureOf(match, "field");
+	const details = [
+		label,
+		detail,
+		token === undefined ? undefined : `${token}:`,
+		notes?.join(", "),
+		field === undefined ? undefined : propertyOf(field),
+		captureOf(match, "detail"),
+	].filter(isString);
+	const count = captureOf(match, "count");
+	const items = captureOf(match, "items");
+	const sizeKb = captureOf(match, "sizeKb");
+	const fields = {
+		detail: details.length === 0 ? null : details.join(" "),
+		count: count !== undefined ? Number(count) : items !== undefined ? itemsOf(items).length : (notes?.length ?? null),
+		...(sizeKb === undefined ? {} : { sizeKb: Number(sizeKb) }),
+	};
+	const group = captureOf(match, "group");
+	if (group === undefined) {
+		const note = captureOf(match, "note");
+		return [found(row, { ...fields, note: note === undefined ? null : noteOf(context, note) })];
+	}
+	const members = context.environment.notesIn(group);
+	return [
+		...members.map((note) => found(row, { note, detail: fields.detail })),
+		...(members.length === fields.count ? [] : [found(row, { detail: `${fields.detail} count`, count: fields.count })]),
+	];
+}
 
-const HYGIENE_ITEMS: Partial<Record<RowId, Recognizer>> = {
-	"HY-01": [/^(.+)$/, (m, context) => found("HY-01", { note: noteOf(context, m[1]!) })],
-	"HY-02": [
-		/^"([^"]+)": (.+)$/,
-		(m, context) => found("HY-02", { detail: cluster(context, m[1]!, m[2]!), count: m[2]!.split(", ").length }),
-	],
-	"HY-03": [/^(.+) \((\d+)KB\)$/, (m, context) => found("HY-03", { note: noteOf(context, m[1]!), sizeKb: Number(m[2]) })],
-	"HY-04": [
-		/^(.+) \(\d+d, (\d+) open item\(s\)\)$/,
-		(m, context) => found("HY-04", { note: noteOf(context, m[1]!), count: Number(m[2]) }),
-	],
+const recognize = (context: Context, place: Place, text: string, label?: string): Found[] => {
+	const match = matchOf(context, kindsIn(place), text);
+	return match === null ? [unmapped(text)] : findingsFrom(match, context, label);
 };
 
+/** The findings of each item of a matched list. A note that the list names is the note of each item. */
+function itemFindings(match: Match, context: Context, label?: string): Found[] {
+	const place = itemPlaceOf(match.kind);
+	if (place === undefined) return [];
+	const reference = captureOf(match, "note");
+	const note = reference === undefined ? null : noteOf(context, reference);
+	return itemsOf(captured(match, "items"))
+		.flatMap((item) => recognize(context, place, item, label))
+		.map((finding) => (note === null ? finding : { ...finding, note }));
+}
+
+const withItems = (match: Match, context: Context, label?: string): Found[] => [
+	...findingsFrom(match, context),
+	...itemFindings(match, context, label),
+];
+
+/** The shortest run of paragraphs at the start of `text` that is a known block of `place`. */
+function leadingBlock(context: Context, place: Place, text: string): { readonly match: Match; readonly rest: string } | null {
+	const paragraphs = text.split("\n\n");
+	for (let end = 1; end <= paragraphs.length; end++) {
+		const match = matchOf(context, kindsIn(place), paragraphs.slice(0, end).join("\n\n"));
+		if (match) return { match, rest: paragraphs.slice(end).join("\n\n") };
+	}
+	return null;
+}
+
+/** The hygiene report: a claim line, then the entries of that claim. */
 function hygieneLines(lines: readonly string[], context: Context): Found[] {
 	const out: Found[] = [];
-	let row: Found["row"] = "UNMAPPED";
-	for (const line of lines) {
-		if (line.trim() === "") continue;
+	let row: RowId | null = null;
+	for (const line of filled(lines)) {
 		if (line.startsWith("⚠️")) {
-			const claim = recognize(CLAIMS, line.replace(/^⚠️\s+/, ""), context) ?? unmapped(line);
-			row = claim.row;
-			out.push(claim);
+			const claim = matchOf(context, kindsIn("claim"), line.replace(/^⚠️\s+/, ""));
+			row = claim === null ? null : (findingOf(claim.kind).row ?? null);
+			out.push(...(claim === null ? [unmapped(line)] : findingsFrom(claim, context, "claim")));
 			continue;
 		}
-		const entry = /^ {3}- (.+)$/.exec(line)?.[1];
-		const more = entry === undefined ? null : /^… and (\d+) more$/.exec(entry);
-		const item = row === "UNMAPPED" ? undefined : HYGIENE_ITEMS[row];
-		if (more) out.push(found(row, { detail: "more", count: Number(more[1]) }));
-		else out.push((entry !== undefined && item ? recognize([item], entry, context) : null) ?? unmapped(line));
+		const entry = /^\s+- (.+)$/.exec(line)?.[1];
+		const ofClaim = kindsIn("item").filter((kind) => [undefined, row].includes(findingOf(kind).row));
+		const item = entry === undefined || row === null ? null : matchOf(context, ofClaim, entry);
+		if (item === null || row === null) out.push(unmapped(line));
+		else if (findingOf(item.kind).row === undefined) out.push(found(row, { detail: "more", count: Number(captured(item, "count")) }));
+		else out.push(...findingsFrom(item, context));
 	}
 	return out;
 }
-
-const CHECKLIST_HEADER = "Wrap-up checklist:";
-const HYGIENE_HEADER = "Vault Hygiene (drift detected):";
-const STOP_REPORT_HEADER = "Stop hook report";
-const SUMMARY_CLAIMS = "Hygiene: ";
 
 /** The one-line summary of a Stop report: the checklist, the claims, and where the full report goes. */
 const stopSummary = (message: string, context: Context): Found[] =>
-	message.split("\n").flatMap((line): Found[] => {
-		if (line.startsWith(SUMMARY_CLAIMS)) {
-			return line
-				.slice(SUMMARY_CLAIMS.length)
-				.split(" · ")
-				.map((claim) => recognize(CLAIMS, claim, context) ?? unmapped(claim));
-		}
-		return line.startsWith(`${CHECKLIST_HEADER} `) || line.startsWith("The full report ") ? [] : [unmapped(line)];
+	message.split("\n").flatMap((line) => {
+		const match = matchOf(context, kindsIn("summary"), line);
+		return match === null ? [unmapped(line)] : withItems(match, context, "summary claim");
 	});
 
-/** The full Stop report: an optional preface, the checklist, then the hygiene lines when drift exists. */
-function stopReport(text: string, context: Context): Found[] {
+/**
+ * The full Stop report: a preface, the checklist, then the hygiene lines
+ * when drift exists. `null` means that the text holds no checklist.
+ */
+function stopReport(text: string, context: Context): Found[] | null {
 	const lines = text.split("\n");
-	const start = lines.indexOf(CHECKLIST_HEADER);
-	if (start === -1) return [unmapped(text)];
-	const hygieneStart = lines.indexOf(HYGIENE_HEADER, start);
+	const is = (kind: TextKind) => (line: string): boolean => matchOf(context, [kind], line) !== null;
+	const start = lines.findIndex(is("checklist header"));
+	if (start === -1) return null;
+	const hygieneStart = lines.findIndex((line, index) => index > start && is("hygiene header")(line));
 	const checklist = filled(lines.slice(start + 1, hygieneStart === -1 ? lines.length : hygieneStart));
 	const items = checklist.filter((line) => line.startsWith("- "));
 	return [
-		...filled(lines.slice(0, start))
-			.filter((line) => !line.startsWith(STOP_REPORT_HEADER))
-			.map(unmapped),
+		...filled(lines.slice(0, start)).flatMap((line) => recognize(context, "preface", line)),
 		found("ST-03", { count: items.length }),
 		...checklist.filter((line) => !line.startsWith("- ")).map(unmapped),
-		...(hygieneStart === -1 ? [] : [found("ST-04"), ...hygieneLines(lines.slice(hygieneStart + 1), context)]),
+		...(hygieneStart === -1
+			? []
+			: [...recognize(context, "report", lines[hygieneStart]!), ...hygieneLines(lines.slice(hygieneStart + 1), context)]),
 	];
 }
 
-const WARNINGS: readonly Recognizer[] = [
-	[/^Missing YAML frontmatter$/, () => found("VW-07")],
-	[/^Missing `(date|description|tags)` in frontmatter/, (m) => found("VW-08", { detail: m[1]! })],
-	[/^Missing `([^`]+)` in frontmatter \(required by/, (m) => found("VW-09", { detail: m[1]! })],
-	[/^No \[\[wikilinks\]\] found/, () => found("VW-10")],
-	[/^(\d+) hard-wrapped paragraph line\(s\)/, (m) => found("VW-11", { count: Number(m[1]) })],
-	[/^(\d+) ticket-ID wikilink\(s\)/, (m) => found("VW-12", { count: Number(m[1]) })],
-];
-
-type Policy = { readonly policy_id?: unknown; readonly path?: unknown };
-
-const policyNote = (policies: readonly Policy[], id: string, context: Context): string | null => {
-	const path = policies.find((policy) => policy.policy_id === id)?.path;
-	return typeof path === "string" ? noteOf(context, path) : null;
-};
-
-/** The one block that holds empty lines. It ends at its last sentence. */
-const MEMORY_BLOCK = /⚠️ {2}Memory location violation: `([^`]+)`[\s\S]*?brain note\(s\)\./g;
-
-const WRITE_BLOCKS: readonly (readonly [RegExp, (m: RegExpExecArray, block: string, policies: readonly Policy[], context: Context) => Found[]])[] = [
-	[
-		/^Vault hygiene warnings for `([^`]+)`:\n((?: {2}- .+\n)+)Fix these before moving on\.$/,
-		(m, _block, _policies, context) =>
-			filled(m[2]!.split("\n")).map((line) => {
-				const warning = line.slice(4);
-				return { ...(recognize(WARNINGS, warning, context) ?? unmapped(warning)), note: noteOf(context, m[1]!) };
-			}),
-	],
-	[/^📐 `([^`]+)` is now (\d+)KB .+$/, (m, _block, _policies, context) => [found("VW-14", { note: noteOf(context, m[1]!), sizeKb: Number(m[2]) })]],
-	[
-		/^🗂️ {2}This note joins (\d+) loose sibling\(s\) in active\/ sharing "([^"]+)": (.+)\.\nConvention: .+\nToken overlap .+$/,
-		(m, _block, policies, context) => [
-			found("VW-15", {
-				note: policyNote(policies, "topic-cluster", context),
-				detail: cluster(context, m[2]!, m[3]!),
-				count: Number(m[1]),
-			}),
-		],
-	],
-];
-
-function writeFindings(text: string, policies: readonly Policy[], context: Context): Found[] {
-	const memory = [...text.matchAll(MEMORY_BLOCK)].map((m) => found("VW-03", { detail: m[1]! }));
-	const blocks = text.replace(MEMORY_BLOCK, "").split("\n\n");
-	return [
-		...memory,
-		...blocks.filter((block) => block.trim() !== "").flatMap((block) => {
-			for (const [pattern, findings] of WRITE_BLOCKS) {
-				const match = pattern.exec(block);
-				if (match) return findings(match, block, policies, context);
-			}
-			return [unmapped(block)];
-		}),
-	];
+function writeFindings(text: string, context: Context): Found[] {
+	const out: Found[] = [];
+	for (let rest = text; rest !== ""; ) {
+		const block = leadingBlock(context, "write", rest);
+		if (block !== null) {
+			out.push(...withItems(block.match, context));
+			rest = block.rest;
+			continue;
+		}
+		const [first = "", ...more] = rest.split("\n\n");
+		if (first.trim() !== "") out.push(unmapped(first));
+		rest = more.join("\n\n");
+	}
+	return out;
 }
-
-const HINTS: readonly Recognizer[] = [
-	[/^DECISION detected/, () => found("UP-03")],
-	[/decision REVERSAL/, () => found("UP-04")],
-	[/^INCIDENT detected/, () => found("UP-05")],
-	[/^1:1 CONTENT detected/, () => found("UP-06")],
-	[/^WIN detected/, () => found("UP-07")],
-	[/^ARCHITECTURE discussion/, () => found("UP-08")],
-	[/^PERSON CONTEXT detected/, () => found("UP-09")],
-	[/^PROJECT UPDATE detected/, () => found("UP-10")],
-];
-
-const HINTS_BLOCK = /^Content classification hints .+\n((?:- .+\n)+)\nRemember: .+(?:\n\n|$)/;
 
 /** The hints block first, then the Stop report of the turn before when one waits. */
 function promptFindings(text: string, context: Context): Found[] {
-	const hintsBlock = HINTS_BLOCK.exec(text);
-	const hints = hintsBlock === null ? [] : filled(hintsBlock[1]!.split("\n")).map((line) => line.slice(2));
-	const rest = hintsBlock === null ? text : text.slice(hintsBlock[0].length);
+	const hints = leadingBlock(context, "prompt", text);
+	const rest = hints === null ? text : hints.rest;
+	const report = rest === "" ? [] : stopReport(rest, context);
 	return [
-		...(hintsBlock === null ? [] : [found("UP-12", { count: hints.length })]),
-		...hints.map((hint) => recognize(HINTS, hint, context) ?? unmapped(hint)),
-		...(rest === "" ? [] : rest.startsWith(STOP_REPORT_HEADER) ? [found("UP-02"), ...stopReport(rest, context)] : [unmapped(rest)]),
+		...(hints === null ? [] : withItems(hints.match, context)),
+		...(report === null ? [unmapped(rest)] : report.length === 0 ? [] : [found("UP-02"), ...report]),
 	];
-}
-
-type Section = { readonly header: string; readonly lines: readonly string[] };
-
-const SESSION_TITLE = "## Session Context";
-/** The size meter with no note. A meter that reports a cut or a collapsed section has more text. */
-const PLAIN_METER = /^_context injected: [\d.]+kB \/ [\d.]+kB budget_$/;
-
-/** The sections of the context. The first one has no header and holds the text before the first section. */
-function sections(context: string): Section[] {
-	const out: { header: string; lines: string[] }[] = [{ header: "", lines: [] }];
-	for (const line of context.split("\n")) {
-		if (line.startsWith("### ")) out.push({ header: line.slice(4), lines: [] });
-		else if (line !== SESSION_TITLE && !PLAIN_METER.test(line)) out.at(-1)!.lines.push(line);
-	}
-	return out;
 }
 
 function openTasks(lines: readonly string[], context: Context): Found[] {
 	const out: Found[] = [];
 	let note: string | null = null;
 	for (const line of filled(lines)) {
-		const task = /^\s*- \[ \] (.+)$/.exec(line)?.[1];
-		if (task !== undefined) out.push(found("SS-14", { note, detail: task }));
-		else if (line !== "(no open tasks)") note = noteOf(context, line);
+		const match = matchOf(context, kindsIn("open tasks"), line);
+		if (match === null) {
+			out.push(unmapped(line));
+			continue;
+		}
+		const header = findingOf(match.kind).row === undefined ? captureOf(match, "note") : undefined;
+		if (header !== undefined) note = noteOf(context, header);
+		out.push(...findingsFrom(match, context).map((finding) => ({ ...finding, note })));
 	}
 	return out;
 }
@@ -237,91 +230,126 @@ function openTasks(lines: readonly string[], context: Context): Found[] {
 function listing(lines: readonly string[], context: Context): Found[] {
 	const repoFiles = new Set(context.spec.repoFiles.map((file) => file.path));
 	return filled(lines).flatMap((line): Found[] => {
-		const collapsed = /^\.\/(.+)\/ — (\d+) notes \(listing collapsed/.exec(line);
-		if (collapsed) {
-			const notes = context.environment.notesIn(collapsed[1]!);
-			const each = notes.map((note) => found("SS-16", { note, detail: "collapsed" }));
-			return notes.length === Number(collapsed[2])
-				? each
-				: [...each, found("SS-16", { detail: `collapsed count of ${collapsed[1]}`, count: Number(collapsed[2]) })];
-		}
-		const path = line.replace(/^\.\//, "");
+		const match = matchOf(context, kindsIn("listing"), line);
+		if (match === null) return [unmapped(line)];
 		// A file of the repository is not a note, and only the Markdown form lists it.
-		if (repoFiles.has(path)) return [];
-		return [found("SS-16", { note: noteOf(context, path), detail: "listed" })];
+		if (repoFiles.has(match.groups["note"] ?? "")) return [];
+		return findingsFrom(match, context);
 	});
 }
 
-const SESSION_SECTIONS: Readonly<Record<string, (lines: readonly string[], context: Context) => Found[]>> = {
-	Date: (lines) => {
-		const line = filled(lines).join("\n");
-		return [found("SS-10", { detail: /^\d{4}-\d{2}-\d{2} \(\w+\)$/.test(line) ? "date line" : line })];
-	},
-	"North Star (current goals)": (lines) =>
-		filled(lines).map((line) => {
-			const hidden = /^_\((\d+) completed items? hidden/.exec(line);
-			return hidden
-				? found("SS-11", { detail: "completed items hidden", count: Number(hidden[1]) })
-				: found("SS-11", { detail: line });
-		}),
-	"Brain Topics (read on demand)": (lines, context) =>
-		filled(lines).map((line) => {
-			const entry = /^- \[\[([^\]]+)\]\] — (.+)$/.exec(line);
-			return entry ? found("SS-12", { note: noteOf(context, entry[1]!), detail: entry[2]! }) : unmapped(line);
-		}),
-	"Recent Changes (last 48h)": (lines) => {
-		const entries = filled(lines);
-		return [
-			entries.join("\n") === "(no git history)"
-				? found("SS-13", { detail: "no history" })
-				: found("SS-13", { detail: "entries", count: entries.length }),
-		];
-	},
-	"Open Tasks": openTasks,
-	"Active Work": (lines, context) =>
-		filled(lines)
-			.filter((line) => line !== "(none)")
-			.map((line) => found("SS-15", { note: noteOf(context, line) })),
-	"Vault File Listing": listing,
-	"Vault Hygiene (drift detected)": (lines, context) => [found("SS-17"), ...hygieneLines(lines, context)],
-	"": (lines) => filled(lines).map(unmapped),
+const eachLine =
+	(place: Place) =>
+	(lines: readonly string[], context: Context): Found[] =>
+		filled(lines).flatMap((line) => recognize(context, place, line));
+
+type SectionKind = Extract<TextKind, `section ${string}`>;
+
+const SECTION_LINES: Readonly<Record<SectionKind, (lines: readonly string[], context: Context) => Found[]>> = {
+	"section date": eachLine("date"),
+	"section north star": eachLine("north star"),
+	"section brain topics": eachLine("brain topics"),
+	"section recent changes": eachLine("recent changes"),
+	"section open tasks": openTasks,
+	"section active work": eachLine("active work"),
+	"section listing": listing,
+	"section hygiene": hygieneLines,
 };
 
-const sessionFindings = (text: string, context: Context): Found[] =>
-	sections(text).flatMap(({ header, lines }) => SESSION_SECTIONS[header]?.(lines, context) ?? [unmapped(`### ${header}`)]);
+/** The sections of the SessionStart context. A `### ` line starts a section. */
+function sessionFindings(text: string, context: Context): Found[] {
+	const out: Found[] = [];
+	let header: string | null = null;
+	let lines: string[] = [];
+	const close = (): void => {
+		const section = header === null ? null : matchOf(context, kindsIn("section"), header);
+		if (section === null) out.push(...filled(header === null ? lines : [header, ...lines]).map(unmapped));
+		else out.push(...findingsFrom(section, context), ...SECTION_LINES[section.kind as SectionKind](lines, context));
+		lines = [];
+	};
+	for (const line of text.split("\n")) {
+		const whole = matchOf(context, kindsIn("session"), line);
+		if (whole !== null) out.push(...findingsFrom(whole, context));
+		else if (line.startsWith("### ")) {
+			close();
+			header = line;
+		} else lines.push(line);
+	}
+	close();
+	return out;
+}
 
-type Output =
-	| { readonly shape: "silent" }
-	| { readonly shape: "unparsed output" }
-	| { readonly shape: "empty envelope" }
-	| { readonly shape: "additional context"; readonly context: string; readonly policies: readonly Policy[] }
-	| { readonly shape: "system message"; readonly message: string }
-	| { readonly shape: "system message and feedback"; readonly message: string; readonly context: string }
-	| { readonly shape: "report data"; readonly key: unknown; readonly claims: unknown; readonly text: string };
+/** The fields of the hook output that this repository uses. Each other field is in `unknown`. */
+type Envelope = {
+	readonly eventName: string | null;
+	readonly context: string | null;
+	readonly policies: readonly unknown[];
+	readonly message: string | null;
+	readonly report: { readonly key: string | null; readonly claims: readonly unknown[]; readonly text: string | null } | null;
+	readonly unknown: readonly string[];
+};
+
+type Output = "silent" | "unparsed output" | Envelope;
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+	value !== null && typeof value === "object" && !Array.isArray(value);
+
+const isList = (value: unknown): value is unknown[] => Array.isArray(value);
 
 function outputOf(stdout: string): Output {
-	if (stdout === "") return { shape: "silent" };
-	let parsed: Record<string, unknown>;
+	if (stdout === "") return "silent";
+	let parsed: unknown;
 	try {
-		parsed = JSON.parse(stdout) as Record<string, unknown>;
+		parsed = JSON.parse(stdout);
 	} catch {
-		return { shape: "unparsed output" };
+		return "unparsed output";
 	}
-	if (parsed === null || typeof parsed !== "object") return { shape: "unparsed output" };
-	const specific = parsed["hookSpecificOutput"] as Record<string, unknown> | undefined;
-	const context = specific?.["additionalContext"];
-	const message = parsed["systemMessage"];
-	const report = parsed["report"] as Record<string, unknown> | undefined;
-	if (report !== undefined && typeof report["agentText"] === "string") {
-		return { shape: "report data", key: report["key"], claims: report["claims"], text: report["agentText"] };
-	}
-	if (typeof message === "string" && typeof context === "string") return { shape: "system message and feedback", message, context };
-	if (typeof message === "string") return { shape: "system message", message };
-	if (typeof context === "string") {
-		const policies = specific?.["policyResults"];
-		return { shape: "additional context", context, policies: Array.isArray(policies) ? (policies as Policy[]) : [] };
-	}
-	return Object.keys(parsed).length === 0 ? { shape: "empty envelope" } : { shape: "unparsed output" };
+	if (!isRecord(parsed)) return "unparsed output";
+
+	const unknown: string[] = [];
+	/** A reader of the known fields of `record`. A field that it never reads, or that has the wrong type, goes to `unknown`. */
+	const fieldsOf = <K extends string>(record: Record<string, unknown> | null, path: string, known: readonly K[]) => {
+		unknown.push(
+			...Object.keys(record ?? {})
+				.filter((key) => !(known as readonly string[]).includes(key))
+				.map((key) => path + key),
+		);
+		return <T>(key: K, is: (value: unknown) => value is T): T | null => {
+			const value = record?.[key];
+			if (value === undefined || is(value)) return value ?? null;
+			unknown.push(path + key);
+			return null;
+		};
+	};
+
+	const top = fieldsOf(parsed, "", ["hookSpecificOutput", "systemMessage", "report"]);
+	const specificRecord = top("hookSpecificOutput", isRecord);
+	const reportRecord = top("report", isRecord);
+	const specific = fieldsOf(specificRecord, "hookSpecificOutput.", ["hookEventName", "additionalContext", "policyResults"]);
+	const report = fieldsOf(reportRecord, "report.", ["key", "claims", "agentText"]);
+	return {
+		eventName: specific("hookEventName", isString),
+		context: specific("additionalContext", isString),
+		policies: specific("policyResults", isList) ?? [],
+		message: top("systemMessage", isString),
+		report:
+			reportRecord === null
+				? null
+				: { key: report("key", isString), claims: report("claims", isList) ?? [], text: report("agentText", isString) },
+		unknown,
+	};
+}
+
+/** The channels that the output uses, and the event that it names. */
+function channelOf(output: Output): string {
+	if (isString(output)) return output;
+	const channels = [
+		output.report === null ? null : "report data",
+		output.message === null ? null : "system message",
+		output.context === null ? null : output.message === null ? "additional context" : "feedback",
+	].filter(isString);
+	const label = channels.length === 0 ? "empty envelope" : channels.join(" and ");
+	return output.eventName === null ? label : `${label}, event ${output.eventName}`;
 }
 
 function channelRow(step: Step, output: Output): RowId {
@@ -330,9 +358,10 @@ function channelRow(step: Step, output: Output): RowId {
 	if (step.hook === "pre-compact") return "PC-01";
 	if (step.hook === "classify-message") return step.input.kind === "raw" ? "UP-01" : "UP-14";
 	const fields = step.input.kind === "payload" ? step.input.fields : {};
-	if (output.shape === "report data") return "ST-08";
-	if (output.shape === "system message and feedback") return "ST-10";
-	if (output.shape === "system message") {
+	const envelope = isString(output) ? null : output;
+	if (envelope !== null && envelope.report !== null) return "ST-08";
+	if (envelope !== null && envelope.message !== null) {
+		if (envelope.context !== null) return "ST-10";
 		const stopOfSession = (fields["hook_event_name"] ?? "Stop") === "Stop" && fields["session_id"] !== "";
 		return stopOfSession ? "ST-09" : "ST-11";
 	}
@@ -341,32 +370,62 @@ function channelRow(step: Step, output: Output): RowId {
 	return "ST-07";
 }
 
-function contentFindings(step: Step, output: Output, context: Context): Found[] {
-	switch (output.shape) {
-		case "silent":
-		case "empty envelope":
-		case "unparsed output":
-			return [];
-		case "additional context":
-			if (step.hook === "session-start") return sessionFindings(output.context, context);
-			if (step.hook === "validate-write") return writeFindings(output.context, output.policies, context);
-			return promptFindings(output.context, context);
-		case "system message":
-			return output.message.split("\n")[0] === CHECKLIST_HEADER
-				? stopReport(output.message, context)
-				: stopSummary(output.message, context);
-		case "system message and feedback":
-			// The summary repeats the claims of the report, so only its unknown text counts.
-			return [
-				...stopSummary(output.message, context).filter((finding) => finding.row === "UNMAPPED"),
-				...stopReport(output.context, context),
-			];
-		case "report data":
-			return [
-				found("ST-06", { detail: typeof output.key === "string" && /^[0-9a-f]{16}$/.test(output.key) ? "key" : "no key" }),
-				...stopReport(output.text, context),
-			];
-	}
+/** The row of each policy. A policy ID is an identifier and not wording, so both forms use the same IDs. */
+const POLICY_ROW: Readonly<Record<string, RowId | undefined>> = {
+	"memory-location": "VW-03",
+	"phantom-edge": "VW-12",
+	"organization-threshold": "VW-14",
+	"topic-cluster": "VW-15",
+};
+
+/** One policy result: its ID, its class, its action, and its note. The text of a target names a folder, so only its presence counts. */
+function policyFinding(policy: unknown, context: Context): Found {
+	if (!isRecord(policy)) return unmapped(`policy ${JSON.stringify(policy)}`);
+	const { policy_id: id, path, classification, action, suggested_target: target, ...others } = policy;
+	const note = isString(path) ? context.environment.noteOf(path) : null;
+	const place = isString(path) && context.home !== "" && path.startsWith(context.home) ? `~${path.slice(context.home.length)}` : path;
+	const detail = [
+		`policy ${String(id)}`,
+		String(classification),
+		String(action),
+		...(target === undefined ? [] : ["with a target"]),
+		...Object.keys(others)
+			.sort()
+			.map((key) => `with ${key}`),
+		...(note === null ? [`at ${String(place).replaceAll("\\", "/")}`] : []),
+	].join(", ");
+	return found((isString(id) ? POLICY_ROW[id] : undefined) ?? "UNMAPPED", { note, detail });
+}
+
+const CONTEXT_FINDINGS: Readonly<Record<HookName, (text: string, context: Context) => Found[]>> = {
+	"session-start": sessionFindings,
+	"validate-write": writeFindings,
+	"classify-message": promptFindings,
+	"stop-checklist": (text, context) => stopReport(text, context) ?? [unmapped(text)],
+	"pre-compact": (text) => [unmapped(text)],
+};
+
+const REPORT_KEY = /^[0-9a-f]{16}$/;
+
+function contentFindings(step: Step, output: Envelope, firstStepOf: (key: string) => number, context: Context): Found[] {
+	const { report, message } = output;
+	return [
+		...output.unknown.map((field) => unmapped(`output field ${field}`)),
+		...(report === null
+			? []
+			: [
+					found("ST-06", {
+						detail: report.key !== null && REPORT_KEY.test(report.key) ? `key first given at step ${firstStepOf(report.key)}` : "no key",
+					}),
+					...report.claims.flatMap((claim) =>
+						isString(claim) ? recognize(context, "claim", claim, "data claim") : [unmapped(`claim ${JSON.stringify(claim)}`)],
+					),
+					...(report.text === null ? [] : (stopReport(report.text, context) ?? [unmapped(report.text)])),
+				]),
+		...(message === null ? [] : (stopReport(message, context) ?? stopSummary(message, context))),
+		...(output.context === null ? [] : CONTEXT_FINDINGS[step.hook](output.context, context)),
+		...output.policies.map((policy) => policyFinding(policy, context)),
+	];
 }
 
 const TRANSCRIPT_SHA256 = createHash("sha256").update(TRANSCRIPT).digest("hex");
@@ -385,14 +444,22 @@ function sessionLogFindings(run: StepRun): Found[] {
 }
 
 export function findingsOf(scenarioRun: ScenarioRun, spec: FixtureSpec): Finding[] {
-	const context: Context = { environment: scenarioRun.environment, spec };
+	const context: Context = { environment: scenarioRun.environment, spec, home: scenarioRun.home };
+	const stepOfKey = new Map<string, number>();
 	return scenarioRun.runs.flatMap((run, step) => {
 		const stepInput = scenarioRun.scenario.steps[step]!;
 		const output = outputOf(run.stdout);
+		const row = channelRow(stepInput, output);
 		const exit = run.exitCode === 0 ? "" : ` (exit ${run.exitCode})`;
+		const stderr = run.stderr.trim();
+		const firstStepOf = (key: string): number => {
+			if (!stepOfKey.has(key)) stepOfKey.set(key, step);
+			return stepOfKey.get(key)!;
+		};
 		const all = [
-			found(channelRow(stepInput, output), { detail: output.shape + exit }),
-			...contentFindings(stepInput, output, context),
+			found(row, { detail: channelOf(output) + exit }),
+			...(stderr === "" ? [] : [found(row, { detail: `stderr: ${stderr.slice(0, 120)}` })]),
+			...(isString(output) ? [] : contentFindings(stepInput, output, firstStepOf, context)),
 			...(stepInput.hook === "pre-compact" ? sessionLogFindings(run) : []),
 		];
 		return all.map((finding): Finding => ({ ...finding, step }));

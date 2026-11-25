@@ -31,6 +31,8 @@ export type StepRun = {
 export type ScenarioRun = {
 	readonly scenario: Scenario;
 	readonly environment: HookEnvironment;
+	/** The home directory of each hook process of the scenario. */
+	readonly home: string;
 	readonly runs: readonly StepRun[];
 };
 
@@ -101,7 +103,6 @@ export function minimalHookEnvironment(dir: string): Record<string, string> {
 	const env: Record<string, string> = {
 		HOME: home,
 		USERPROFILE: home,
-		XDG_CACHE_HOME: join(home, ".cache"),
 	};
 	if (process.platform === "win32") {
 		env["PATH"] = process.env["PATH"] ?? "";
@@ -191,7 +192,14 @@ export function runScenario(scenario: Scenario, spec: FixtureSpec, environment: 
 		return JSON.stringify({ ...base, ...environment.writePayload(note) });
 	};
 
+	const repoFiles = new Set(spec.repoFiles.map((file) => file.path));
 	const runs = scenario.steps.map((step): StepRun => {
+		if (step.removeRepoFile !== undefined) {
+			if (!repoFiles.has(step.removeRepoFile)) {
+				throw new Error(`scenario ${scenario.id} removes an unknown repository file: ${step.removeRepoFile}`);
+			}
+			rmSync(join(environment.projectDir, step.removeRepoFile));
+		}
 		const started = performance.now();
 		const run = spawnSync(
 			process.execPath,
@@ -210,7 +218,7 @@ export function runScenario(scenario: Scenario, spec: FixtureSpec, environment: 
 			sessionLogs: sessionLogs(environment.sessionLogDir),
 		};
 	});
-	return { scenario, environment, runs };
+	return { scenario, environment, home, runs };
 }
 
 /** Run every scenario of `spec` in `form`. `workDir` gets one directory for each scenario. */

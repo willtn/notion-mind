@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { FIXTURE } from "../parity/fixture.ts";
 import { markdownForm, markdownPath, renderNote } from "../parity/markdown-form.ts";
 import { ROWS, type RowId } from "../parity/rows.ts";
-import type { FixtureNote } from "../parity/spec.ts";
+import type { ExpectedFinding, FixtureNote } from "../parity/spec.ts";
 
 const note = (title: string): FixtureNote => {
 	const found = FIXTURE.notes.find((candidate) => candidate.title === title);
@@ -37,6 +37,26 @@ describe("fixture spec", () => {
 	test("each row of the parity table has a scenario", () => {
 		const exercised = new Set<RowId>(FIXTURE.scenarios.flatMap((scenario) => scenario.rows));
 		assert.deepEqual((Object.keys(ROWS) as RowId[]).filter((row) => !exercised.has(row)), []);
+	});
+
+	test("each row that part (d) compares has an expected finding in a scenario that names the row", () => {
+		const whole = (finding: ExpectedFinding): string => JSON.stringify({ step: 0, note: null, detail: null, count: null, ...finding });
+		const proven = (row: RowId): boolean =>
+			FIXTURE.scenarios.some((scenario) => {
+				if (!scenario.rows.includes(row)) return false;
+				const standIn = scenario.provenBy?.[row];
+				return scenario.expect.some((finding) => finding.row === row || (standIn !== undefined && whole(finding) === whole(standIn)));
+			});
+		const compared = (Object.keys(ROWS) as RowId[]).filter((row) => ROWS[row].rule !== "not-applicable");
+		assert.deepEqual(compared.filter((row) => !proven(row)), []);
+	});
+
+	test("each repository file that a step removes is a file of the spec", () => {
+		const files = new Set(FIXTURE.repoFiles.map((file) => file.path));
+		const unknown = FIXTURE.scenarios.flatMap((scenario) =>
+			scenario.steps.flatMap((step) => (step.removeRepoFile !== undefined && !files.has(step.removeRepoFile) ? [step.removeRepoFile] : [])),
+		);
+		assert.deepEqual(unknown, []);
 	});
 
 	test("each written note is a fixture note", () => {
