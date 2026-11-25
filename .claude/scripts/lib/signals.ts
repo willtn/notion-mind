@@ -35,10 +35,10 @@ export const SIGNALS: readonly Signal[] = [
 	{
 		name: "DECISION",
 		message:
-			"DECISION detected — consider creating a Decision Record in work/active/ and logging in work/Index.md Decisions Log",
+			"DECISION detected — consider creating a Decision Record in the Work database and logging in the Decisions view of Key Decisions",
 		subHint: {
 			message:
-				"Looks like a decision REVERSAL — update the ORIGINAL Decision Record (status: superseded, link the new one) instead of only adding a second record; run `/om-correct \"<the corrected fact>\"` to sweep every note restating the old decision.",
+				"Looks like a decision REVERSAL — update the ORIGINAL Decision Record (`Status` superseded, link the new one) instead of only adding a second record; run `/om-correct \"<the corrected fact>\"` to sweep every note restating the old decision.",
 			patterns: [
 				"reversed",
 				"superseded",
@@ -76,7 +76,7 @@ export const SIGNALS: readonly Signal[] = [
 	{
 		name: "INCIDENT",
 		message:
-			"INCIDENT detected — consider using /om-incident-capture or creating an incident note in work/incidents/",
+			"INCIDENT detected — consider using /om-incident-capture or creating an incident note in the Work database with `Type` Incident",
 		patterns: [
 			// English
 			"incident",
@@ -105,7 +105,7 @@ export const SIGNALS: readonly Signal[] = [
 	{
 		name: "1:1 CONTENT",
 		message:
-			"1:1 CONTENT detected — consider creating a 1-on-1 note in work/1-1/ and updating the person note in org/people/",
+			"1:1 CONTENT detected — consider creating a 1-on-1 note in the Work database with `Type` 1:1 and updating the person note in the People database",
 		patterns: [
 			// English
 			"1:1",
@@ -127,7 +127,7 @@ export const SIGNALS: readonly Signal[] = [
 	{
 		name: "WIN",
 		message:
-			"WIN detected — consider adding to perf/Brag Doc.md with a link to the evidence note",
+			"WIN detected — consider adding to the Brag quarter row of Perf docs with a link to the evidence note",
 		patterns: [
 			// Delivery — English (shared with PROJECT UPDATE)
 			"shipped",
@@ -202,7 +202,7 @@ export const SIGNALS: readonly Signal[] = [
 	{
 		name: "PERSON CONTEXT",
 		message:
-			"PERSON CONTEXT detected — consider updating the relevant person note in org/people/ and linking from the conversation note",
+			"PERSON CONTEXT detected — consider updating the relevant person note in the People database and linking from the conversation note",
 		patterns: [
 			// English
 			"told me",
@@ -233,7 +233,7 @@ export const SIGNALS: readonly Signal[] = [
 	{
 		name: "PROJECT UPDATE",
 		message:
-			"PROJECT UPDATE detected — consider updating the active work note in work/active/ and checking if wins should go to brag doc",
+			"PROJECT UPDATE detected — consider updating the active work note in the Work database and checking if wins should go to the Brag quarter row of Perf docs",
 		patterns: [
 			// English
 			"project update",

@@ -107,6 +107,15 @@ const names: readonly ObjectName[] = [
 	["Index.md, Memories.md, People & Context, Brag Doc", "{indexes}"],
 	["brain/North Star.md", "{North Star}"],
 	["brain/", "{brain topics}"],
+	["work/active/", "{active work}"],
+	["work/Index.md Decisions Log", "{decisions log}"],
+	["status: superseded", "{superseded mark}"],
+	["work/incidents/", "{incident notes}"],
+	["work/1-1/", "{1:1 notes}"],
+	["org/people/", "{people notes}"],
+	["perf/Brag Doc.md", "{brag doc}"],
+	["brag doc", "{brag doc}"],
+	["[[wikilinks]]", "{links}"],
 ];
 
 export const MARKDOWN_WORDING = { patterns, names };

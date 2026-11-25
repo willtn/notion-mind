@@ -38,13 +38,14 @@ describe("pre-compact hook run with a Claude PreCompact payload", () => {
 		transcript_path: transcript,
 	});
 
-	test("copies the transcript into thinking/session-logs and exits 0", () => {
+	test("copies the transcript into .claude/state/session-logs, outside the note store, and exits 0", () => {
 		withVault((vault, transcript) => {
 			const r = runScript(PRE_COMPACT, payload(transcript), { CLAUDE_PROJECT_DIR: vault });
 			assert.equal(r.code, 0);
-			const logs = join(vault, "thinking", "session-logs");
+			const logs = join(vault, ".claude", "state", "session-logs");
 			const files = existsSync(logs) ? readdirSync(logs) : [];
 			assert.equal(files.length, 1, "one backup lands");
+			assert.equal(existsSync(join(vault, "thinking")), false, "no backup lands in the old folder");
 			assert.match(files[0]!, /^session_auto_\d{8}_\d{6}\.jsonl$/);
 			assert.equal(readFileSync(join(logs, files[0]!), "utf8"), '{"role":"user"}\n', "the backup holds the transcript");
 		});
@@ -53,7 +54,7 @@ describe("pre-compact hook run with a Claude PreCompact payload", () => {
 	test("a backup that throws still exits 0", () => {
 		withVault((vault, transcript) => {
 			// A file where the backup folder goes, so its mkdir throws.
-			writeFileSync(join(vault, "thinking"), "");
+			writeFileSync(join(vault, ".claude"), "");
 			const r = runScript(PRE_COMPACT, payload(transcript), { CLAUDE_PROJECT_DIR: vault });
 			assert.equal(r.code, 0);
 		});
@@ -63,7 +64,7 @@ describe("pre-compact hook run with a Claude PreCompact payload", () => {
 		withVault((vault, transcript) => {
 			const r = runScript(PRE_COMPACT, payload(join(transcript, "gone")), { CLAUDE_PROJECT_DIR: vault });
 			assert.equal(r.code, 0);
-			const logs = join(vault, "thinking", "session-logs");
+			const logs = join(vault, ".claude", "state", "session-logs");
 			assert.equal(existsSync(logs) ? readdirSync(logs).length : 0, 0);
 		});
 	});
