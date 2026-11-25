@@ -11,9 +11,10 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { digestLine, readerMapBody, readNotionMap, writeNotionMap } from "../lib/notion-map.ts";
+import type { NotionClient, NotionReply } from "../lib/notion-client.ts";
 import { DATABASES, PAGES, PROBE_PREFIX, TEMPLATES, type DatabaseKey, type DatabaseSpec } from "../lib/notion-model.ts";
-import type { LiveDatabase, LiveProperty } from "../lib/notion-parse.ts";
-import { missingProperties, probeFailures, probeProperties, propertyStatements, rollupStatements } from "../notion-setup.ts";
+import type { LiveChild, LiveDatabase, LivePage, LiveProperty, LiveView } from "../lib/notion-parse.ts";
+import { createRecorder, ensureLinkedViews, missingProperties, probeFailures, probeProperties, propertyStatements, recordBlock, rollupStatements, runSetup, type CreatedKind, type Recorder } from "../notion-setup.ts";
 import { rmTemp } from "./_helpers.ts";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
@@ -144,5 +145,117 @@ describe("the map file", () => {
 		assert.throws(() => readNotionMap(join(dir, "absent.json")), /Run notion-setup\.ts to write it/);
 		writeFileSync(join(dir, "old.json"), '{"version":0}');
 		assert.throws(() => readNotionMap(join(dir, "old.json")), /does not have the shape of version 1/);
+	});
+});
+
+const uuid = (n: number): string => `00000000-0000-4000-8000-${n.toString(16).padStart(12, "0")}`;
+const hex = (n: number): string => uuid(n).replace(/-/g, "");
+
+describe("the ledger of implicit objects", () => {
+	let dir = "";
+	afterEach(() => rmTemp(dir));
+
+	/** A Notion that makes a root page and databases, each with the default view that only a fetch shows, then stops at the first schema change. */
+	function databaseOnlyNotion(): NotionClient {
+		let next = 100;
+		const databases = new Map<string, { title: string; view: string; dataSource: string }>();
+		const json = (value: unknown): NotionReply => ({ text: JSON.stringify(value), json: value });
+		const databaseText = (id: string, title: string, dataSource: string, views: string): string =>
+			`<database url="https://app.notion.com/p/${id.replace(/-/g, "")}" inline="false">\nThe title of this Database is: ${title}\n<data-sources>\n<data-source url="collection://${dataSource}">\n<data-source-state>\n{"schema":{"Name":{"name":"Name","type":"title"}}}\n</data-source-state>\n</data-source>\n</data-sources>\n${views}</database>`;
+		return {
+			async call(tool, args = {}) {
+				if (tool === "notion-get-self") return json({ workspace: { id: "workspace-1" } });
+				if (tool === "notion-list-private-pages") return json({ results: [] });
+				if (tool === "notion-create-pages") return json({ pages: [{ id: uuid(1), url: `https://app.notion.com/p/${hex(1)}`, properties: { title: "root" } }] });
+				if (tool === "notion-create-database") {
+					const id = uuid(next++);
+					const entry = { title: String(args["title"]), view: uuid(next++), dataSource: uuid(next++) };
+					databases.set(id, entry);
+					return json({ result: databaseText(id, entry.title, entry.dataSource, "") });
+				}
+				if (tool === "notion-update-data-source") throw new Error("stop after the databases");
+				assert.equal(tool, "notion-fetch");
+				const id = String(args["id"]);
+				const entry = databases.get(id);
+				if (entry === undefined) return json({ title: "root", text: `<page url="https://app.notion.com/p/${hex(1)}">\n<content>\n</content>\n</page>` });
+				const view = `<views>\n<view url="view://${entry.view}">\n{"name":"Default view","type":"table"}\n</view>\n</views>\n`;
+				return json({ text: databaseText(id, entry.title, entry.dataSource, view) });
+			},
+			async close() {},
+		};
+	}
+
+	test("a new database logs its default view after the database, with the ID of the view", async () => {
+		dir = mkdtempSync(join(tmpdir(), "notion-ledger-"));
+		const ledgerPath = join(dir, "created.jsonl");
+		const log: string[] = [];
+		await assert.rejects(
+			runSetup(databaseOnlyNotion(), { rootTitle: "root", mapPath: join(dir, "map.json"), ledgerPath, ledgerTag: ["pr", "t"], readSource: () => "Text.\n", log: (line) => log.push(line) }),
+			/stop after the databases/,
+		);
+		const lines = readFileSync(ledgerPath, "utf8").trim().split("\n").map((line) => JSON.parse(line) as { id: string; kind: string; title: string; pr: string });
+		assert.deepEqual(lines.slice(0, 3).map((l) => [l.kind, l.title]), [["page", "root"], ["database", DATABASES[0]?.title], ["view", `${DATABASES[0]?.title}: Default view (default view)`]]);
+		assert.deepEqual(lines.filter((l) => l.kind === "view").map((l) => l.title), DATABASES.map((d) => `${d.title}: Default view (default view)`));
+		assert.deepEqual(lines.filter((l) => l.kind === "view").map((l) => l.id), lines.filter((l) => l.kind === "database").map((l) => lines.find((v) => v.kind === "view" && v.title.startsWith(`${l.title}:`))?.id));
+		assert.ok(lines.every((l) => l.pr === "t"));
+		assert.equal(lines.filter((l) => l.kind === "view").every((l) => /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-8[0-9a-f]{3}-[0-9a-f]{12}$/.test(l.id)), true);
+		assert.equal(log.filter((line) => line.startsWith("created view:")).length, DATABASES.length);
+	});
+
+
+	test("a ledger line holds the kind, the extra fields, and the tag, and a reference block has a null ID with its parent and original", () => {
+		dir = mkdtempSync(join(tmpdir(), "notion-ledger-"));
+		const ledgerPath = join(dir, "created.jsonl");
+		const created = { page: 0, database: 0, property: 0, option: 0, view: 0, row: 0, block: 0, probe_row: 0 } satisfies Record<CreatedKind, number>;
+		const record = createRecorder({ ledgerPath, ledgerTag: ["pr", "t"], log: () => {} }, created);
+		recordBlock(record, { id: uuid(5), title: "synced block: Focus", parentId: uuid(1) });
+		recordBlock(record, { id: undefined, title: "synced block reference: Focus", parentId: uuid(2), syncedFrom: uuid(5) });
+		const lines = readFileSync(ledgerPath, "utf8").trim().split("\n").map((line) => JSON.parse(line) as Record<string, unknown>);
+		assert.deepEqual(lines.map(({ at: _, ...rest }) => rest), [
+			{ id: uuid(5), kind: "block", title: "synced block: Focus", parent_id: uuid(1), pr: "t" },
+			{ id: null, kind: "block", title: "synced block reference: Focus", parent_id: uuid(2), synced_from: uuid(5), pr: "t" },
+		]);
+		assert.equal(created.block, 2);
+	});
+
+	const home = PAGES.find((p) => p.linkedViews.length >= 2) ?? assert.fail("a page with two linked views");
+	const page = (children: readonly LiveChild[]): LivePage => ({ id: uuid(1), url: "", title: home.title, inTrash: false, content: "", children });
+	const block = (n: number): LiveChild => ({ kind: "linked_view", id: uuid(n), url: "", title: "", dataSource: undefined });
+	const saved = (n: number): LiveView => ({ url: `view://${uuid(n)}`, name: "v", type: "table", filters: [], sorts: [], groupBy: undefined });
+	const recorder = (): { record: Recorder; lines: unknown[][] } => {
+		const lines: unknown[][] = [];
+		return { record: (...args) => lines.push(args), lines };
+	};
+
+	test("a new linked view logs the linked database block that appears on the page, not the view", async () => {
+		const shown: LiveChild[] = [block(50)];
+		const { record, lines } = recorder();
+		let made = 0;
+		const views = await ensureLinkedViews(
+			{
+				fetchPage: async () => page(shown),
+				fetchDatabase: async () => ({ ...liveModel().work, views: [] }),
+				ensureView: async () => {
+					shown.push(block(60 + made));
+					return { saved: saved(70 + made++), created: true };
+				},
+				record,
+			},
+			page(shown.slice()),
+			home.linkedViews.slice(0, 2),
+		);
+		assert.deepEqual(lines, [
+			["block", uuid(60), `the page "${home.title}": linked database block of ${home.linkedViews[0]?.name}`, { parent_id: uuid(1) }],
+			["block", uuid(61), `the page "${home.title}": linked database block of ${home.linkedViews[1]?.name}`, { parent_id: uuid(1) }],
+		]);
+		assert.deepEqual(Object.values(views), [`view://${uuid(70)}`, `view://${uuid(71)}`]);
+	});
+
+	test("a linked view that exists already logs nothing, and a new view without a new block stops the setup", async () => {
+		const { record, lines } = recorder();
+		const deps = (created: boolean) => ({ fetchPage: async () => page([block(50)]), fetchDatabase: async () => ({ ...liveModel().work, views: [] }), ensureView: async () => ({ saved: saved(70), created }), record });
+		await ensureLinkedViews(deps(false), page([block(50)]), home.linkedViews.slice(0, 1));
+		assert.deepEqual(lines, []);
+		await assert.rejects(ensureLinkedViews(deps(true), page([block(50)]), home.linkedViews.slice(0, 1)), /made 0 new linked database blocks/);
 	});
 });

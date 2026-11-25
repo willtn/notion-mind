@@ -69,12 +69,25 @@ export function referenceInsert(content: string, heading: string, url: string): 
 	throw new Error(`The page has a "${headingLine(heading)}" section that does not show the original synced block. Remove that section, then run the setup again.`);
 }
 
+/**
+ * A block that the step made. Notion shows the ID of an original block in its
+ * URL, and shows no ID for a reference block, so `id` is `undefined` for a
+ * reference. `parentId` is the page that holds the block, and `syncedFrom` is
+ * the original block that a reference shows.
+ */
+export interface CreatedBlock {
+	readonly id: string | undefined;
+	readonly title: string;
+	readonly parentId: string;
+	readonly syncedFrom?: string;
+}
+
 /** Make the original block, then the reference. Calls `onCreated` for each block that it makes. */
 export async function ensureSyncedSection(
 	client: NotionClient,
 	sync: SyncedSection,
 	pages: { readonly original: string; readonly copy: string },
-	onCreated: (id: string, title: string) => void,
+	onCreated: (block: CreatedBlock) => void,
 ): Promise<void> {
 	const fetchContent = async (id: string): Promise<string> => parsePage(await client.call("notion-fetch", { id })).content;
 	const originalContent = await fetchContent(pages.original);
@@ -85,11 +98,11 @@ export async function ensureSyncedSection(
 		await client.call("notion-update-page", { page_id: pages.original, command: "update_content", content_updates: [wrap] });
 		url = syncedBlockUrl(await fetchContent(pages.original), sync.section);
 		if (url === undefined) throw new Error(`Notion did not keep the synced block of "${sync.section}".`);
-		onCreated(notionId(url.split("#")[1] ?? ""), `synced block: ${sync.section}`);
+		onCreated({ id: notionId(url.split("#")[1] ?? ""), title: `synced block: ${sync.section}`, parentId: pages.original });
 	}
 	const insert = referenceInsert(await fetchContent(pages.copy), sync.section, url);
 	if (insert === undefined) return;
 	await client.call("notion-update-page", { page_id: pages.copy, command: "insert_content", content: insert, position: { type: "start" } });
 	if (referenceInsert(await fetchContent(pages.copy), sync.section, url) !== undefined) throw new Error(`Notion did not keep the synced block reference of "${sync.section}".`);
-	onCreated(notionId(pages.copy), `synced block reference: ${sync.section}`);
+	onCreated({ id: undefined, title: `synced block reference: ${sync.section}`, parentId: pages.copy, syncedFrom: notionId(url.split("#")[1] ?? "") });
 }

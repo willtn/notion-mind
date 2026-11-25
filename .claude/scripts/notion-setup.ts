@@ -61,13 +61,14 @@ import {
 	parseRows,
 	parseViews,
 	parseWorkspaceId,
+	type LiveChild,
 	type LiveDatabase,
 	type LivePage,
 	type LiveProperty,
 	type LiveView,
 	type PageRef,
 } from "./lib/notion-parse.ts";
-import { ensureSyncedSection } from "./lib/notion-synced.ts";
+import { ensureSyncedSection, type CreatedBlock } from "./lib/notion-synced.ts";
 
 export interface SetupOptions {
 	readonly rootTitle: string;
@@ -184,16 +185,54 @@ export function probeFailures(view: ViewSpec, returned: ReadonlySet<string>): st
 
 const hookStamp = (now: Date): Record<string, string | number> => ({ "date:Hook stamp:start": now.toISOString(), "date:Hook stamp:is_datetime": 1 });
 
-export async function runSetup(client: NotionClient, options: SetupOptions): Promise<SetupResult> {
-	const created: Record<CreatedKind, number> = { page: 0, database: 0, property: 0, option: 0, view: 0, row: 0, block: 0, probe_row: 0 };
-	const sleep = options.sleep ?? ((ms: number) => new Promise<void>((done) => setTimeout(done, ms)));
-	const record = (kind: CreatedKind, id: string, title: string): void => {
+export type Recorder = (kind: CreatedKind, id: string | null, title: string, extra?: Readonly<Record<string, string>>) => void;
+
+export interface LinkedViewDeps {
+	readonly fetchPage: (id: string) => Promise<LivePage>;
+	readonly fetchDatabase: (id: string) => Promise<LiveDatabase>;
+	readonly ensureView: (view: LinkedViewSpec, existing: readonly LiveView[]) => Promise<{ saved: LiveView; created: boolean }>;
+	readonly record: Recorder;
+}
+
+/** Make each linked view of a page that is missing, and log the linked database block that Notion adds with each new view. */
+export async function ensureLinkedViews(deps: LinkedViewDeps, page: LivePage, specs: readonly LinkedViewSpec[]): Promise<Record<string, string>> {
+	const linkedIds = (children: readonly LiveChild[]): string[] => children.filter((child) => child.kind === "linked_view").map((child) => child.id);
+	const existing = (await Promise.all(linkedIds(page.children).map((id) => deps.fetchDatabase(id)))).flatMap((block) => block.views);
+	const known = new Set(linkedIds(page.children));
+	const views: Record<string, string> = {};
+	for (const view of specs) {
+		const result = await deps.ensureView(view, existing);
+		views[view.name] = result.saved.url;
+		if (!result.created) continue;
+		// The reply of a new linked view names no block, so the page shows which block is new.
+		const fresh = linkedIds((await deps.fetchPage(page.id)).children).filter((id) => !known.has(id));
+		const block = fresh.length === 1 ? fresh[0] : undefined;
+		if (block === undefined) return fail(`Notion made ${fresh.length} new linked database blocks on the page "${page.title}" for the view "${view.name}", and the setup expects 1.`);
+		known.add(block);
+		deps.record("block", block, `the page "${page.title}": linked database block of ${view.name}`, { parent_id: page.id });
+	}
+	return views;
+}
+
+/** Counts each object that the run makes and, with a ledger path, appends one JSON line for it. */
+export function createRecorder(options: Pick<SetupOptions, "ledgerPath" | "ledgerTag" | "log">, created: Record<CreatedKind, number>): Recorder {
+	return (kind, id, title, extra = {}) => {
 		created[kind]++;
 		options.log(`created ${kind}: ${title}`);
 		if (options.ledgerPath === undefined) return;
 		const tag = options.ledgerTag === undefined ? {} : { [options.ledgerTag[0]]: options.ledgerTag[1] };
-		appendFileSync(options.ledgerPath, `${JSON.stringify({ id, kind, title, ...tag, at: new Date().toISOString() })}\n`);
+		appendFileSync(options.ledgerPath, `${JSON.stringify({ id, kind, title, ...extra, ...tag, at: new Date().toISOString() })}\n`);
 	};
+}
+
+/** A reference block has no ID, so its line names the page that holds it and the original that it shows. */
+export const recordBlock = (record: Recorder, block: CreatedBlock): void =>
+	record("block", block.id ?? null, block.title, { parent_id: block.parentId, ...(block.syncedFrom === undefined ? {} : { synced_from: block.syncedFrom }) });
+
+export async function runSetup(client: NotionClient, options: SetupOptions): Promise<SetupResult> {
+	const created: Record<CreatedKind, number> = { page: 0, database: 0, property: 0, option: 0, view: 0, row: 0, block: 0, probe_row: 0 };
+	const sleep = options.sleep ?? ((ms: number) => new Promise<void>((done) => setTimeout(done, ms)));
+	const record = createRecorder(options, created);
 
 	const workspaceId = parseWorkspaceId(await client.call("notion-get-self"));
 	const earlier = existsSync(options.mapPath) ? readNotionMap(options.mapPath) : undefined;
@@ -241,7 +280,10 @@ export async function runSetup(client: NotionClient, options: SetupOptions): Pro
 		const reply = await client.call("notion-create-database", { parent: { page_id: rootId }, title: spec.title, description, schema: 'CREATE TABLE ("Name" TITLE)' });
 		const database = parseDatabase(reply);
 		record("database", database.id, spec.title);
-		return database;
+		// The reply of a new database lists no view, but Notion adds a default view that only a fetch shows.
+		const fetched = await fetchDatabase(database.id);
+		for (const view of fetched.views) record("view", notionId(view.url), `${spec.title}: ${view.name} (default view)`);
+		return fetched;
 	};
 	const live = {} as Record<DatabaseKey, LiveDatabase>;
 	for (const spec of DATABASES) live[spec.key] = await ensureDatabase(spec);
@@ -279,12 +321,12 @@ export async function runSetup(client: NotionClient, options: SetupOptions): Pro
 		if (dropped.length > 0) fail(`The view "${saved.name}" of ${where} does not hold these directives: ${dropped.join("; ")}.`);
 	};
 	/** Find the view by name, or make it. A new view on a formula keeps the unverified name until its test rows pass. */
-	const ensureView = async (view: ViewSpec, existing: readonly LiveView[], target: Record<string, string>, dataSource: string, where: string): Promise<{ saved: LiveView; pending: boolean }> => {
+	const ensureView = async (view: ViewSpec, existing: readonly LiveView[], target: Record<string, string>, dataSource: string, where: string): Promise<{ saved: LiveView; pending: boolean; created: boolean }> => {
 		const pendingName = `${view.name}${UNVERIFIED_SUFFIX}`;
 		const found = existing.find((v) => v.name === view.name) ?? existing.find((v) => v.name === pendingName);
 		if (found !== undefined) {
 			checkSaved(view, found, where);
-			return { saved: found, pending: found.name === pendingName };
+			return { saved: found, pending: found.name === pendingName, created: false };
 		}
 		const pending = view.probe !== undefined;
 		const name = pending ? pendingName : view.name;
@@ -292,7 +334,7 @@ export async function runSetup(client: NotionClient, options: SetupOptions): Pro
 		const saved = parseViews(reply)[0] ?? fail(`notion-create-view returned no view for "${name}".`);
 		record("view", notionId(saved.url), `${where}: ${name}`);
 		checkSaved(view, saved, where);
-		return { saved, pending };
+		return { saved, pending, created: true };
 	};
 
 	const queryNames = async (viewUrl: string): Promise<Map<string, string>> => {
@@ -367,16 +409,17 @@ export async function runSetup(client: NotionClient, options: SetupOptions): Pro
 	};
 
 	const pages = {} as Record<PageKey | "reader_map", MapPage>;
-	const linkedViews = async (page: LivePage, specs: readonly LinkedViewSpec[]): Promise<Record<string, string>> => {
-		const blocks = await Promise.all(page.children.filter((child) => child.kind === "linked_view").map((child) => fetchDatabase(child.id)));
-		const existing = blocks.flatMap((block) => block.views);
-		const views: Record<string, string> = {};
-		for (const view of specs) {
-			const result = await ensureView(view, existing, { parent_page_id: page.id }, databases[view.database].data_source, `the page "${page.title}"`);
-			views[view.name] = result.saved.url;
-		}
-		return views;
-	};
+	const linkedViews = (page: LivePage, specs: readonly LinkedViewSpec[]): Promise<Record<string, string>> =>
+		ensureLinkedViews(
+			{
+				fetchPage,
+				fetchDatabase,
+				ensureView: (view, existing) => ensureView(view, existing, { parent_page_id: page.id }, databases[view.database].data_source, `the page "${page.title}"`),
+				record,
+			},
+			page,
+			specs,
+		);
 	const quickLinks = (spec: PageSpec): string => {
 		if (spec.links === undefined) return "";
 		const targets = spec.links.map((key) => (key in databases ? databases[key as DatabaseKey] : pages[key as PageKey]) ?? fail(`The page "${spec.title}" links to "${key}", which is not made yet.`));
@@ -401,7 +444,7 @@ export async function runSetup(client: NotionClient, options: SetupOptions): Pro
 	};
 	for (const spec of PAGES) pages[spec.key] = await ensurePage(spec);
 	for (const sync of SYNCED_SECTIONS) {
-		await ensureSyncedSection(client, sync, { original: pages[sync.original].id, copy: pages[sync.copy].id }, (id, title) => record("block", id, title));
+		await ensureSyncedSection(client, sync, { original: pages[sync.original].id, copy: pages[sync.copy].id }, (block) => recordBlock(record, block));
 	}
 
 	const templates: Record<string, NotionRef> = {};
