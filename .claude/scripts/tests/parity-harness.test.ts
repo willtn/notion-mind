@@ -8,13 +8,20 @@
 import { test, describe, before } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
-import { basename, dirname } from "node:path";
+import { existsSync, mkdtempSync, readdirSync, rmSync, statSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, dirname, join } from "node:path";
 import { comparePasses } from "../parity/compare.ts";
 import { passOf, type Pass } from "../parity/findings.ts";
 import { FIXTURE } from "../parity/fixture.ts";
 import { markdownForm } from "../parity/markdown-form.ts";
-import { REFERENCE_COMMIT, referenceCommitExists, runScenarios, withReferenceWorktree } from "../parity/runner.ts";
+import {
+	minimalHookEnvironment,
+	REFERENCE_COMMIT,
+	referenceCommitExists,
+	runScenarios,
+	withReferenceWorktree,
+} from "../parity/runner.ts";
 import type { Finding, FixtureSpec } from "../parity/spec.ts";
 
 const git = (cwd: string, args: readonly string[]): string =>
@@ -38,6 +45,7 @@ describe("the parity harness on the original hooks", { skip }, () => {
 	let changed: Pass;
 	let workDir: string;
 	let writesInReference: string;
+	let writeTrace: string;
 
 	before(() => {
 		const now = new Date();
@@ -48,6 +56,16 @@ describe("the parity harness on the original hooks", { skip }, () => {
 			original = pass(FIXTURE);
 			secondRun = pass(FIXTURE);
 			changed = pass(withTags);
+			const traced = markdownForm(FIXTURE, { scriptsDir: dirs.scriptsDir, now });
+			const [write] = runScenarios(
+				{ ...FIXTURE, scenarios: FIXTURE.scenarios.filter(({ id }) => id === "write-clean") },
+				dirs.workDir,
+				(dir) => {
+					const environment = traced(dir);
+					return { ...environment, env: { ...environment.env, HOOK_DEBUG: "1" } };
+				},
+			);
+			writeTrace = write!.runs.map(({ stderr }) => stderr).join("\n");
 			writesInReference = git(dirname(dirs.scriptsDir), ["status", "--porcelain", "--ignored"]);
 		});
 	});
@@ -78,6 +96,11 @@ describe("the parity harness on the original hooks", { skip }, () => {
 		);
 	});
 
+	test("a write hook run asks for a search index refresh and starts no worker", () => {
+		assert.match(writeTrace, /validate-write: refresh requested/);
+		assert.match(writeTrace, /validate-write: \S+ not resolvable; skipping/);
+		assert.doesNotMatch(writeTrace, /no worker spawned/);
+	});
 	test("no hook run writes into the directory of the reference hooks", () => {
 		assert.equal(writesInReference, "");
 	});
@@ -85,5 +108,50 @@ describe("the parity harness on the original hooks", { skip }, () => {
 	test("the harness leaves no worktree and no temporary directory", () => {
 		assert.equal(existsSync(workDir), false);
 		assert.equal(git(import.meta.dirname, ["worktree", "list", "--porcelain"]).includes(basename(workDir)), false);
+	});
+});
+
+describe("the minimal hook environment", { skip: process.platform === "win32" }, () => {
+	const polluted = {
+		npm_config_prefix: "/not/a/real/prefix",
+		NPM_CONFIG_USERCONFIG: "/not/a/real/npmrc",
+		PREFIX: "/not/a/real/prefix",
+		DESTDIR: "/not/a/real/destdir",
+		GITHUB_TOKEN: "not-a-token",
+	};
+
+	const inPollutedProcess = <T>(use: () => T): T => {
+		const saved = { ...process.env };
+		Object.assign(process.env, polluted);
+		try {
+			return use();
+		} finally {
+			for (const name of Object.keys(polluted)) delete process.env[name];
+			Object.assign(process.env, saved);
+		}
+	};
+
+	test("a hook sees no variable of the process that runs the harness", () => {
+		const dir = mkdtempSync(join(tmpdir(), "om-parity-env-"));
+		try {
+			const env = inPollutedProcess(() => minimalHookEnvironment(dir));
+			assert.deepEqual(Object.keys(env).sort(), ["HOME", "PATH", "USERPROFILE", "XDG_CACHE_HOME"]);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	test("the command path holds links to node and git only, and the home folder is empty", () => {
+		const dir = mkdtempSync(join(tmpdir(), "om-parity-env-"));
+		try {
+			const env = minimalHookEnvironment(dir);
+			const commands = readdirSync(env["PATH"]!).sort();
+			assert.ok(commands.includes("node"));
+			assert.ok(commands.every((name) => name === "node" || name === "git"));
+			assert.equal(statSync(join(env["PATH"]!, "node")).isFile(), true);
+			assert.deepEqual(readdirSync(env["HOME"]!), []);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
 	});
 });

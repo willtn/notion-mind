@@ -73,8 +73,7 @@ export function markdownForm(spec: FixtureSpec, options: { readonly scriptsDir: 
 		return {
 			scriptsDir,
 			projectDir: dir,
-			// The hooks at `fae7be4` start a detached search-index worker without this switch.
-			env: { VAULT_QMD_REFRESH: "off" },
+			env: {},
 			sessionLogDir: join(dir, "thinking", "session-logs"),
 			writePayload: (note) => {
 				const filePath = join(dir, paths.get(note.title)!);

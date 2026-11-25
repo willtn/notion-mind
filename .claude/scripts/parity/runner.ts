@@ -7,7 +7,7 @@
 
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
+import { accessSync, constants, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -67,20 +67,58 @@ export function withReferenceWorktree<T>(use: (dirs: { readonly scriptsDir: stri
 	}
 }
 
+const WINDOWS_VARIABLES = ["SystemRoot", "PATHEXT", "ComSpec", "TEMP", "TMP"] as const;
+
+function executableOnPath(name: string): string | null {
+	for (const folder of (process.env["PATH"] ?? "").split(delimiter)) {
+		if (folder === "") continue;
+		const candidate = join(folder, name);
+		try {
+			accessSync(candidate, constants.X_OK);
+			return candidate;
+		} catch {
+			continue;
+		}
+	}
+	return null;
+}
+
 /**
- * The directory that a hook process searches for commands. It holds `node`
- * and the system directories only, so a tool on the machine of one
- * developer (a search index, a global package) cannot change a hook output.
+ * The environment of every hook process, in both forms. Nothing comes from
+ * the environment of the harness, so a tool or a setting on the machine of
+ * one developer cannot change a hook output:
+ *
+ * - `PATH` is a folder in `dir` with links to this `node` and to `git` only.
+ * - `HOME` is an empty folder in `dir`, so no user file of npm is read.
+ * - No npm variable is set.
+ *
+ * A form adds only what its own store needs, through `HookEnvironment.env`.
+ * On Windows the links need a privilege, so `PATH` stays as the harness has it.
  */
-function commandPath(dir: string): string {
-	if (process.platform === "win32") return process.env["PATH"] ?? "";
+export function minimalHookEnvironment(dir: string): Record<string, string> {
+	const home = join(dir, "home");
+	mkdirSync(home, { recursive: true });
+	const env: Record<string, string> = {
+		HOME: home,
+		USERPROFILE: home,
+		XDG_CACHE_HOME: join(home, ".cache"),
+	};
+	if (process.platform === "win32") {
+		env["PATH"] = process.env["PATH"] ?? "";
+		for (const name of WINDOWS_VARIABLES) {
+			const value = process.env[name];
+			if (value !== undefined) env[name] = value;
+		}
+		return env;
+	}
 	const bin = join(dir, "bin");
 	mkdirSync(bin, { recursive: true });
 	symlinkSync(process.execPath, join(bin, "node"));
-	return [bin, "/usr/bin", "/bin"].join(delimiter);
+	const git = executableOnPath("git");
+	if (git !== null) symlinkSync(git, join(bin, "git"));
+	env["PATH"] = bin;
+	return env;
 }
-
-const WINDOWS_VARIABLES = ["SystemRoot", "PATHEXT", "ComSpec", "TEMP", "TMP"] as const;
 
 function sessionLogs(dir: string): StepRun["sessionLogs"] {
 	let names: string[];
@@ -119,10 +157,7 @@ export function runScenario(scenario: Scenario, spec: FixtureSpec, environment: 
 	}
 
 	const env: Record<string, string> = {
-		PATH: commandPath(dir),
-		HOME: home,
-		USERPROFILE: home,
-		XDG_CACHE_HOME: join(home, ".cache"),
+		...minimalHookEnvironment(dir),
 		// The hook must not find a repository above a temporary project directory.
 		GIT_CEILING_DIRECTORIES: dirname(environment.projectDir),
 		CLAUDE_PROJECT_DIR: environment.projectDir,
@@ -131,10 +166,6 @@ export function runScenario(scenario: Scenario, spec: FixtureSpec, environment: 
 		STOP_HANDOFF_DIR: handoffDir,
 		...environment.env,
 	};
-	for (const name of WINDOWS_VARIABLES) {
-		const value = process.env[name];
-		if (value !== undefined) env[name] = value;
-	}
 
 	const stdinOf = (step: Step): string => {
 		if (step.input.kind === "raw") return step.input.stdin;
