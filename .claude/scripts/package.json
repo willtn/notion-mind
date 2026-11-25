@@ -1,7 +1,10 @@
 {
   "private": true,
   "type": "module",
-  "description": "Hook scripts for obsidian-mind. Runtime has zero dependencies — executed by `node --experimental-strip-types`. This file exists only to mark .ts files as ESM for Node's module resolution and for CI typecheck (devDependencies installed ad hoc via `npm install --no-save typescript @types/node`).",
+  "description": "Hook scripts for obsidian-mind. The runtime has no npm dependency: node --experimental-strip-types runs each script, and the Notion client imports the runtime of the installed mcporter. This file marks the .ts files as ESM and holds the CI typecheck and test commands (CI installs typescript and @types/node with npm install --no-save).",
+  "engines": {
+    "node": ">=22.6.0"
+  },
   "scripts": {
     "test": "node --experimental-strip-types tests/_run-tests.ts",
     "typecheck": "tsc --noEmit"
