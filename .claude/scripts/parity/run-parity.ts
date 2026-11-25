@@ -6,7 +6,7 @@
  * which shows that the harness is stable. With `--notion`, the second run
  * is the hooks of this repository on the Notion form, for one hook.
  *
- * Usage: node --experimental-strip-types parity/run-parity.ts [--notion --hook <name> [--now <instant>] [--map <path>]]
+ * Usage: node --experimental-strip-types parity/run-parity.ts [--notion --hook <name> [--own-scenarios] [--now <instant>] [--map <path>]]
  */
 
 import { comparePasses, formatDifference } from "./compare.ts";

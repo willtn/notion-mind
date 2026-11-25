@@ -7,6 +7,7 @@
  *     --hook <name>       The hook to compare, such as validate-write. Necessary with --notion.
  *     --now <instant>     The instant that the note ages count from. Default the time of the run.
  *     --map <path>        The map file of the fixture root. Default notion-map.fixtures.json in the repository root.
+ *     --own-scenarios     Run only the scenarios in which each step runs the hook. A scenario that also runs a hook that is not ported yet is left out.
  *
  * A run with the same `--now` as the last write of the fixture changes no
  * `Changed` value. Only one run at a time can use the fixture root.
@@ -38,6 +39,7 @@ export interface NotionRun {
 }
 
 const VALUE_FLAGS = ["--hook", "--now", "--map"];
+const SWITCHES = ["--notion", "--own-scenarios"];
 
 /** The Notion run that `argv` asks for, or `null` for a run with no `--notion`. Each other argument stays in `rest`. */
 export async function notionRun(argv: readonly string[]): Promise<{ readonly run: NotionRun | null; readonly rest: string[] }> {
@@ -45,7 +47,7 @@ export async function notionRun(argv: readonly string[]): Promise<{ readonly run
 	const rest: string[] = [];
 	for (let i = 0; i < argv.length; i++) {
 		const name = argv[i] ?? "";
-		if (name === "--notion") flags["notion"] = "true";
+		if (SWITCHES.includes(name)) flags[name.slice(2)] = "true";
 		else if (VALUE_FLAGS.includes(name) && argv[i + 1] !== undefined) flags[name.slice(2)] = argv[++i] ?? "";
 		else rest.push(name);
 	}
@@ -68,6 +70,7 @@ export async function notionRun(argv: readonly string[]): Promise<{ readonly run
 			await client.close();
 		}
 	};
-	const spec: FixtureSpec = { ...FIXTURE, scenarios: FIXTURE.scenarios.filter(({ steps }) => steps.some((step) => step.hook === hook)) };
+	const ownOnly = flags["own-scenarios"] !== undefined;
+	const spec: FixtureSpec = { ...FIXTURE, scenarios: FIXTURE.scenarios.filter(({ steps }) => (ownOnly ? steps.every((step) => step.hook === hook) : steps.some((step) => step.hook === hook))) };
 	return { run: { hook: hook as HookName, now, spec, scriptsDir, form: await notionForms(FIXTURE, mapFile, now), restore }, rest };
 }
