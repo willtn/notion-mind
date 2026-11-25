@@ -26,11 +26,10 @@ import {
 	OPEN_LOOP_DAYS,
 	countOpenLoops,
 	formatActiveHygiene,
-	formatClusterHint,
 	formatMonolithHint,
 	namesCapped,
 	isMonolithExempt,
-	newNoteClusterCandidate,
+	topicClusters,
 	parseOpenLoopConfig,
 	scanActiveHygiene,
 	walkMarkdown,
@@ -279,14 +278,10 @@ describe("scanActiveHygiene — detectors", () => {
 		assert.doesNotMatch(over, /Done 10\.md|topic10|Big 10\.md/);
 	});
 
-	test("a cluster's file names are capped on its line and in the write-time hint (#254)", () => {
+	test("a cluster's file names are capped on its line (#254)", () => {
 		const files = Array.from({ length: HYGIENE_LIST_CAP + 3 }, (_, i) => `n${i}.md`);
 		assert.equal(namesCapped(files.slice(0, HYGIENE_LIST_CAP)), files.slice(0, HYGIENE_LIST_CAP).join(", "));
 		assert.match(namesCapped(files), /, n9\.md, … and 3 more$/);
-		const hint = formatClusterHint({ token: "topic", files });
-		assert.match(hint, /joins 12 loose sibling\(s\)/, "the count stays whole");
-		assert.match(hint, /… and 3 more\./);
-		assert.doesNotMatch(hint, /n10\.md/);
 	});
 
 	test("missing folders produce an empty report, not errors", () => {
@@ -306,32 +301,17 @@ describe("scanActiveHygiene — detectors", () => {
 });
 
 describe("write-time detectors", () => {
-	test("newNoteClusterCandidate fires for a loose root note in a cluster, not for subfoldered or outside paths", () => {
-		const hit = newNoteClusterCandidate(
-			join(ROOT, "work/active/Payments Migration.md"),
-			ROOT,
-		);
-		assert.ok(hit !== null && hit.token === "payments");
-		assert.equal(
-			newNoteClusterCandidate(
-				join(ROOT, "work/active/Grouped Topic/Done Sub.md"),
-				ROOT,
-			),
-			null,
-		);
-		assert.equal(
-			newNoteClusterCandidate(join(ROOT, "brain/Patterns.md"), ROOT),
-			null,
-		);
+	test("topicClusters gives the cluster of each title word that 2 or more names share, and none for fewer than 4 names", () => {
+		const names = ["Payments Migration", "Payments Ledger", "Search Ranking", "Login Latency"];
+		assert.deepEqual(topicClusters(names), [{ token: "payments", files: ["Payments Ledger", "Payments Migration"] }]);
+		assert.deepEqual(topicClusters(names.slice(0, 3)), []);
 	});
 
-	test("hints carry the judgment framing", () => {
-		const hint = formatClusterHint({
-			token: "payments",
-			files: ["Payments A.md", "Payments B.md"],
-		});
-		assert.match(hint, /Token overlap is BLIND/);
-		assert.match(hint, /active\/<Topic>\//);
+	test("a word in more than half of the names is not a topic", () => {
+		assert.deepEqual(topicClusters(["Payments A1", "Payments B2", "Payments C3", "Login Latency"]), []);
+	});
+
+	test("the size hint carries the judgment framing", () => {
 		const mono = formatMonolithHint("work/Fat.md", 42_000);
 		assert.match(mono, /Do NOT trim/);
 		assert.match(mono, /42KB/);

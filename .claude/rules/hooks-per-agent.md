@@ -8,6 +8,6 @@ The hook scripts in `.claude/scripts/` are agent-agnostic TypeScript and shell, 
 |--------|---------|--------------|
 | `session-start.ts` | Inject vault context at startup | SessionStart |
 | `classify-message.ts` | Classify messages, inject routing hints, hand over the last Stop report | UserPromptSubmit |
-| `validate-write.ts` | Validate frontmatter and wikilinks | PostToolUse |
+| `validate-write.ts` | Check a Notion write and set the derived properties of its row. Flag a misplaced memory file | PostToolUse, PostToolUseFailure |
 | `pre-compact.ts` | Back up transcript before compaction | PreCompact |
 | `stop-checklist.ts` | Wrap-up checklist and vault-hygiene drift findings, per response, deduped | Stop |

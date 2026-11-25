@@ -361,12 +361,17 @@ function findUngroupedClusters(root: string): TopicCluster[] {
 	} catch {
 		return [];
 	}
+	return topicClusters(entries.filter((e) => e.isFile() && isMarkdownFilename(e.name)).map((e) => e.name));
+}
+
+/**
+ * The topic clusters of the loose active notes. A name is a file name in
+ * `work/active/`, or the title of an active Work row with no `Project`.
+ */
+export function topicClusters(names: readonly string[]): TopicCluster[] {
 	// Sorted so token→file maps (and the signature dedup that keeps the
 	// first token per file-set) are deterministic across filesystems.
-	const rootFiles = entries
-		.filter((e) => e.isFile() && isMarkdownFilename(e.name))
-		.map((e) => e.name)
-		.sort();
+	const rootFiles = [...names].sort();
 
 	// Don't nag about grouping when the root is already small — folders are
 	// for taming size, not for ceremony.
@@ -488,41 +493,6 @@ function findInboxPressure(root: string, nowMs: number): InboxPressure | null {
 		if (ageDays > oldestDays) oldestDays = ageDays;
 	}
 	return count > 0 ? { count, oldestDays } : null;
-}
-
-// ---------------------------------------------------------------------------
-// Write-time detectors — the same logic the scan uses, moved to the moment
-// of write so drift is caught at the keystroke instead of the next session
-// boundary. validate-write.ts calls these.
-// ---------------------------------------------------------------------------
-
-/**
- * Write-time cluster sensor: when the just-written note sits loose in the
- * active/ root and joins a distinctive-token cluster, return that cluster.
- * Reuses findUngroupedClusters wholesale — same tokenizer, same DF guard,
- * same small-root skip — so scan-time and write-time can never disagree.
- */
-export function newNoteClusterCandidate(
-	filePath: string,
-	vaultRoot: string,
-): TopicCluster | null {
-	const normalized = filePath.replaceAll("\\", "/");
-	const rootPrefix = `${vaultRoot.replaceAll("\\", "/")}/${ACTIVE_REL}/`;
-	if (!normalized.startsWith(rootPrefix)) return null;
-	const base = normalized.slice(rootPrefix.length);
-	if (base.includes("/")) return null; // already in a topic folder
-	for (const cluster of findUngroupedClusters(vaultRoot)) {
-		if (cluster.files.includes(base)) return cluster;
-	}
-	return null;
-}
-
-export function formatClusterHint(cluster: TopicCluster): string {
-	return [
-		`🗂️  This note joins ${cluster.files.length - 1} loose sibling(s) in active/ sharing "${cluster.token}": ${namesCapped(cluster.files)}.`,
-		"Convention: once a workstream has >1 note it gets a folder (active/<Topic>/, `git mv`, mirror the folder in archive/ later).",
-		"Token overlap is BLIND — judge whether these genuinely share context before grouping; if they don't, say so and move on.",
-	].join("\n");
 }
 
 export function formatMonolithHint(path: string, sizeBytes: number): string {

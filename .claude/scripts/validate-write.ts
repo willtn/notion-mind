@@ -1,41 +1,31 @@
 #!/usr/bin/env node
 /**
- * PostToolUse hook — validate vault notes after Write/Edit operations.
+ * PostToolUse hook: the write check.
  *
- * Reads the hook JSON payload from stdin and inspects the file it wrote: the
- * tool_input.file_path (lib/write-targets.ts). It
- * skips files outside the vault-note scope (dotfiles, templates, root docs,
- * translated READMEs, thinking drafts), and emits a hookSpecificOutput with
- * vault hygiene warnings when frontmatter or wikilinks are missing.
+ * For `Bash`, it acts on a Notion write in the outbox form of
+ * lib/notion-write.ts. It reads the notes that the call wrote, prints the
+ * hygiene warnings of each one, sets the derived properties of each row,
+ * and deletes the outbox file. For a failed write (`PostToolUseFailure`),
+ * it adds the select options that the write needs and leaves the file.
+ *
+ * For `Write` and `Edit`, it flags a file in the automatic memory
+ * directory of the home directory (lib/write-targets.ts).
  */
 
-import { basename, join } from "node:path";
-import { readFileSync, realpathSync, statSync } from "node:fs";
-import {
-	debug,
-	readStdinJson,
-	writeHookOutput,
-	type PolicyResult,
-} from "./lib/hook-io.ts";
-import {
-	countTicketIdWikilinks,
-	isBlockedMemoryPath,
-	parseFrontmatterRequired,
-	shouldSkipFile,
-	validateContent,
-} from "./lib/frontmatter.ts";
-import {
-	MONOLITH_BYTES,
-	formatClusterHint,
-	formatMonolithHint,
-	isMonolithExempt,
-	newNoteClusterCandidate,
-} from "./lib/active-hygiene.ts";
-import { isInsideVault, resolveProjectDir } from "./lib/project-dir.ts";
+import { basename } from "node:path";
+import { realpathSync } from "node:fs";
+import { debug, readStdinJson, writeHookOutput, type PolicyResult } from "./lib/hook-io.ts";
+import { isBlockedMemoryPath } from "./lib/frontmatter.ts";
+import { isNotionCommand } from "./lib/notion-write.ts";
+import { resolveProjectDir } from "./lib/project-dir.ts";
+import type { NoteFindings } from "./lib/write-check.ts";
 import { writeTargets } from "./lib/write-targets.ts";
 
 type HookInput = {
 	readonly hook_event_name?: unknown;
+	readonly cwd?: unknown;
+	readonly tool_name?: unknown;
+	readonly tool_input?: { readonly command?: unknown } | null;
 };
 
 const input = await readStdinJson<HookInput>();
@@ -44,49 +34,20 @@ if (!input) {
 	process.exit(0);
 }
 
-// Boundary-safe vault root: "/vault" must not match "/vaulting/…"; an empty
-// env value falls back to cwd (lib/project-dir.ts).
-const vaultRoot = resolveProjectDir(process.cwd())
-	.replaceAll("\\", "/")
-	.replace(/\/+$/, "");
+const vaultRoot = resolveProjectDir(process.cwd());
 
-const targets = writeTargets(input);
-if (targets.length === 0) {
-	debug("validate: no file_path");
-	process.exit(0);
-}
-
-// The required fields come from the manifest's frontmatter_required, the
-// same declaration the docs point at; an unreadable manifest falls back to
-// the three global fields. Read lazily, once per call: a write the skip
-// ladder discards never pays for it.
-let manifest: unknown;
-const loadManifest = (): unknown => {
-	if (manifest !== undefined) return manifest;
-	try {
-		manifest = JSON.parse(readFileSync(join(vaultRoot, "vault-manifest.json"), "utf-8"));
-	} catch {
-		manifest = null;
-	}
-	return manifest;
-};
-
-/** What one written file adds to the call's single envelope. */
-type FileFindings = { readonly blocks: string[]; readonly policyResults: PolicyResult[] };
-
-function checkFile(filePath: string): FileFindings {
+function checkFile(filePath: string): NoteFindings {
 	const blocks: string[] = [];
 	const policyResults: PolicyResult[] = [];
 
-	// Memory-location guard (#81) runs BEFORE the vault-root skip: the
-	// auto-memory directory lives in ~/.claude/, outside the vault, and would
-	// otherwise be skipped. Only MEMORY.md (the auto-loaded index) belongs
-	// there — durable knowledge goes to brain/ topic notes per .claude/rules/memory.md.
-	// PostToolUse can't block the write, but a loud warning makes the
-	// violation immediately visible so the file gets migrated before the
-	// index drifts. The predicate checks the lexically-normalized path AND
-	// the realpath-resolved one (the file exists by PostToolUse time), so
-	// neither `..` spellings nor symlinks dodge it.
+	// Only MEMORY.md (the auto-loaded index) belongs in the auto-memory
+	// directory — durable knowledge goes to brain/ topic notes per
+	// .claude/rules/memory.md. PostToolUse can't block the write, but a loud
+	// warning makes the violation immediately visible so the file gets
+	// migrated before the index drifts. The predicate checks the
+	// lexically-normalized path AND the realpath-resolved one (the file
+	// exists by PostToolUse time), so neither `..` spellings nor symlinks
+	// dodge it.
 	let resolvedPath = filePath;
 	try {
 		resolvedPath = realpathSync(filePath);
@@ -120,113 +81,40 @@ function checkFile(filePath: string): FileFindings {
 			suggested_target: "brain/",
 			action: "warn",
 		});
-		return { blocks, policyResults };
 	}
-
-	// Vault-root skip AFTER the memory guard (which must inspect outside-vault
-	// paths): files outside the vault are not vault notes — no validation.
-	const filePathFwd = filePath.replaceAll("\\", "/");
-	if (!isInsideVault(filePathFwd, vaultRoot)) {
-		debug(`validate: skipped (outside vault root) ${filePath}`);
-		return { blocks, policyResults };
-	}
-
-	if (shouldSkipFile(filePath)) {
-		debug(`validate: skipped ${filePath}`);
-		return { blocks, policyResults };
-	}
-
-	// Single read: prose warnings AND policy results derive from the same
-	// content snapshot — no second read, no TOCTOU window between them.
-	let content: string;
-	try {
-		content = readFileSync(filePath, { encoding: "utf-8" });
-	} catch {
-		debug(`validate: could not read ${filePath}`);
-		return { blocks, policyResults };
-	}
-	// Inside the vault by now (the skip above), whatever the case of its drive.
-	const relPath = filePathFwd.slice(vaultRoot.length + 1);
-	const warnings = validateContent(content, {
-		required: parseFrontmatterRequired(loadManifest()),
-		relPath,
-	});
-	debug(`validate: ${filePath} — ${warnings.length} warning(s)`);
-
-	if (warnings.length > 0) {
-		const hintList = warnings.map((w) => `  - ${w}`).join("\n");
-		const base = basename(filePathFwd);
-		blocks.push(
-			`Vault hygiene warnings for \`${base}\`:\n${hintList}\nFix these before moving on.`,
-		);
-		// Phantom-edge findings ride the #117 contract like every other
-		// detector — counted from the SAME content snapshot the prose came from.
-		if (countTicketIdWikilinks(content) > 0) {
-			policyResults.push({
-				policy_id: "phantom-edge",
-				path: relPath,
-				classification: "ticket-id-wikilink",
-				action: "warn",
-			});
-		}
-	}
-
-	// Write-time organization flags (#103): the same detectors the scan hooks
-	// run, moved to the moment of growth — the session that just made a note
-	// oversized (or added the note that completes a cluster) has the context
-	// to organize it NOW. Each detector is isolated so a future unguarded
-	// edit inside one can't kill the sibling checks in the same write.
-	try {
-		const size = statSync(filePath).size;
-		if (
-			size >= MONOLITH_BYTES &&
-			!isMonolithExempt(basename(filePathFwd))
-		) {
-			blocks.push(formatMonolithHint(relPath, size));
-			policyResults.push({
-				policy_id: "organization-threshold",
-				path: relPath,
-				classification: "oversized-note",
-				action: "flag",
-			});
-		}
-	} catch {
-		debug("validate: monolith check failed — skipped");
-	}
-	try {
-		const cluster = newNoteClusterCandidate(filePath, vaultRoot);
-		if (cluster !== null) {
-			blocks.push(formatClusterHint(cluster));
-			policyResults.push({
-				policy_id: "topic-cluster",
-				path: relPath,
-				classification: "ungrouped-cluster",
-				suggested_target: "work/active/<Topic>/",
-				action: "flag",
-			});
-		}
-	} catch {
-		debug("validate: cluster check failed — skipped");
-	}
-
 	return { blocks, policyResults };
 }
 
-// One envelope for the call. A file that throws costs only its own findings.
-const findings = targets.map((t): FileFindings => {
-	try {
-		return checkFile(t);
-	} catch (err) {
-		debug(`validate: ${t} — check failed: ${(err as Error)?.message ?? err}`);
-		return { blocks: [], policyResults: [] };
+const NO_FINDINGS: NoteFindings = { blocks: [], policyResults: [] };
+
+/** The hook runs for each `Bash` call, so the Notion part loads only for a command that can be a Notion write. */
+async function checkCommand(payload: HookInput): Promise<NoteFindings[]> {
+	const command = payload.tool_name === "Bash" ? payload.tool_input?.command : undefined;
+	if (typeof command !== "string" || !isNotionCommand(command, [])) {
+		debug("validate: no file_path and no Notion command");
+		return [];
 	}
-});
+	const { checkBash } = await import("./lib/write-hook.ts");
+	return checkBash(payload, vaultRoot);
+}
+
+const targets = writeTargets(input);
+const findings =
+	targets.length > 0
+		? targets.map((target): NoteFindings => {
+				try {
+					return checkFile(target);
+				} catch (error) {
+					debug(`validate: ${target} — check failed: ${error instanceof Error ? error.message : String(error)}`);
+					return NO_FINDINGS;
+				}
+			})
+		: await checkCommand(input);
+
+// One envelope for the call. A note that throws costs only its own findings.
 const blocks = [...new Set(findings.flatMap((f) => f.blocks))];
 if (blocks.length > 0) {
-	const eventName =
-		typeof input.hook_event_name === "string"
-			? input.hook_event_name
-			: "PostToolUse";
+	const eventName = typeof input.hook_event_name === "string" ? input.hook_event_name : "PostToolUse";
 	const policies = new Map(findings.flatMap((f) => f.policyResults).map((p) => [JSON.stringify(p), p] as const));
 	writeHookOutput(eventName, blocks.join("\n\n"), [...policies.values()]);
 }
