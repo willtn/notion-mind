@@ -18,7 +18,7 @@ export type Difference = {
 export type Comparison = {
 	/** The zero-difference gate reads this list. */
 	readonly differences: readonly Difference[];
-	/** Differences inside a tolerance that part (d) states. */
+	/** Differences inside a tolerance that part (d) states. The summary of a run lists each one. */
 	readonly tolerated: readonly Difference[];
 	/** Findings of a row that part (d) marks "not applicable". The comparison ignores them. */
 	readonly notApplicable: readonly NotApplicable[];
@@ -45,20 +45,23 @@ function byIdentity(findings: readonly Finding[]): Map<string, Finding[]> {
 	return groups;
 }
 
-function pairDifference(original: Finding, port: Finding, rule: RowRule): Difference["kind"] | null {
-	if (original.count !== port.count) return "count differs";
+type Tolerance = Extract<RowRule, { rule: "size-tolerance" }>;
+
+/** The tolerance of the row, for the near-limit note only. Part (d) puts only that note outside the gate. */
+const toleranceOf = (finding: Finding, rule: RowRule, nearSizeLimit: ReadonlySet<string>): Tolerance | null =>
+	rule.rule === "size-tolerance" && finding.note !== null && nearSizeLimit.has(finding.note) ? rule : null;
+
+function pairDifference(original: Finding, port: Finding, tolerance: Tolerance | null): { kind: Difference["kind"]; tolerated: boolean } | null {
+	if (original.count !== port.count) return { kind: "count differs", tolerated: false };
 	if (original.sizeKb === port.sizeKb) return null;
-	if (rule.rule !== "size-tolerance" || original.sizeKb === undefined || port.sizeKb === undefined) return "size differs";
+	if (tolerance === null || original.sizeKb === undefined || port.sizeKb === undefined) return { kind: "size differs", tolerated: false };
 	const gap = Math.abs(original.sizeKb - port.sizeKb);
-	return gap * 100 <= rule.percent * Math.max(original.sizeKb, port.sizeKb) ? null : "size differs";
+	return { kind: "size differs", tolerated: gap * 100 <= tolerance.percent * Math.max(original.sizeKb, port.sizeKb) };
 }
 
-const loneIsTolerated = (finding: Finding, rule: RowRule, nearSizeLimit: ReadonlySet<string>): boolean =>
-	rule.rule === "size-tolerance" &&
-	finding.note !== null &&
-	nearSizeLimit.has(finding.note) &&
-	finding.sizeKb !== undefined &&
-	finding.sizeKb * 100 <= rule.limitKb * (100 + rule.percent);
+/** A finding with no size is the policy result of the same note, so it follows the finding with the size. */
+const loneIsTolerated = (finding: Finding, tolerance: Tolerance | null): boolean =>
+	tolerance !== null && (finding.sizeKb === undefined || finding.sizeKb * 100 <= tolerance.limitKb * (100 + tolerance.percent));
 
 export function compareFindings(
 	scenario: string,
@@ -82,10 +85,10 @@ export function compareFindings(
 			const a = left[i] ?? null;
 			const b = right[i] ?? null;
 			const one = (a ?? b)!;
-			const rule = ruleOf(one);
+			const tolerance = toleranceOf(one, ruleOf(one), nearSizeLimit);
 			if (a !== null && b !== null) {
-				const kind = pairDifference(a, b, rule);
-				if (kind !== null) differences.push({ scenario, row: one.row, kind, original: a, port: b });
+				const pair = pairDifference(a, b, tolerance);
+				if (pair !== null) (pair.tolerated ? tolerated : differences).push({ scenario, row: one.row, kind: pair.kind, original: a, port: b });
 				continue;
 			}
 			const difference: Difference = {
@@ -95,7 +98,7 @@ export function compareFindings(
 				original: a,
 				port: b,
 			};
-			(loneIsTolerated(one, rule, nearSizeLimit) ? tolerated : differences).push(difference);
+			(loneIsTolerated(one, tolerance) ? tolerated : differences).push(difference);
 		}
 	}
 	return { differences, tolerated, notApplicable: [...ignored("original", original), ...ignored("port", port)] };

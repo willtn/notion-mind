@@ -11,9 +11,10 @@ export type RowRule =
 	| { readonly rule: "not-applicable"; readonly reason: string }
 	/**
 	 * The finding states a size that the two forms measure in different
-	 * ways. Two sizes are equal inside `percent`. The near-limit note can
-	 * have the finding in one form only, when that size is at most `percent`
-	 * above `limitKb`.
+	 * ways. The rule applies only to the note that the fixture marks
+	 * `nearSizeLimit`. For that note, two sizes are equal inside `percent`,
+	 * and the finding can be in one form only when its size is at most
+	 * `percent` above `limitKb`. For each other note the sizes must be equal.
 	 */
 	| { readonly rule: "size-tolerance"; readonly percent: number; readonly limitKb: number };
 

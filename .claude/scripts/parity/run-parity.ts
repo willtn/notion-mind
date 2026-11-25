@@ -37,5 +37,6 @@ console.log(`original: the hooks at ${REFERENCE_COMMIT} on the Markdown form. po
 console.log(`scenarios ${FIXTURE.scenarios.length}, hook runs ${original.reduce((n, run) => n + run.runs.length, 0)}, findings ${findings}`);
 console.log(`median wall time of one run in ms: ${wallTimes(original)}`);
 console.log(`not applicable ${comparison.notApplicable.length}, tolerated ${comparison.tolerated.length}, differences ${comparison.differences.length}`);
+for (const difference of comparison.tolerated) console.log(`tolerated: ${formatDifference(difference)}`);
 for (const difference of comparison.differences) console.log(formatDifference(difference));
 process.exit(comparison.differences.length === 0 ? 0 : 1);

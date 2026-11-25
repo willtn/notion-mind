@@ -109,6 +109,13 @@ describe("the VW-14 size tolerance", () => {
 		assert.deepEqual(tolerated.map((d) => [d.row, d.kind]), [["VW-14", "only in the port"]]);
 	});
 
+	test("the policy result of the near-limit note follows its size finding", () => {
+		const policy = finding("VW-14", { note: "Near", detail: "policy organization-threshold, oversized-note, flag" });
+		assert.deepEqual(compare([], [flagged("Near", 26), policy]).differences, []);
+		assert.deepEqual(compare([policy], []).differences, []);
+		assert.equal(compare([], [{ ...policy, note: "Big" }]).differences.length, 1);
+	});
+
 	test("the near-limit note is a difference when the size is more than 10 percent above the limit", () => {
 		assert.equal(compare([], [flagged("Near", 28)]).differences.length, 1);
 		assert.equal(compare([], [flagged("Near", 27)]).differences.length, 0);
@@ -118,12 +125,26 @@ describe("the VW-14 size tolerance", () => {
 		assert.deepEqual(compare([flagged("Big", 26)], []).differences.map((d) => [d.row, d.kind]), [["VW-14", "only in the original"]]);
 	});
 
-	test("two sizes inside 10 percent are equal", () => {
-		assert.deepEqual(compare([flagged("Big", 40)], [flagged("Big", 43)]).differences, []);
+	test("two sizes of the near-limit note inside 10 percent are a tolerated pair that the result lists", () => {
+		const original = flagged("Near", 25);
+		const port = flagged("Near", 27);
+		assert.deepEqual(compare([original], [port]), {
+			differences: [],
+			tolerated: [{ scenario: "scenario", row: "VW-14", kind: "size differs", original, port }],
+			notApplicable: [],
+		});
 	});
 
-	test("two sizes outside 10 percent are a difference", () => {
-		assert.deepEqual(compare([flagged("Big", 40)], [flagged("Big", 46)]).differences.map((d) => d.kind), ["size differs"]);
+	test("two sizes of the near-limit note outside 10 percent are a difference", () => {
+		const { differences, tolerated } = compare([flagged("Near", 25)], [flagged("Near", 28)]);
+		assert.deepEqual(differences.map((d) => d.kind), ["size differs"]);
+		assert.deepEqual(tolerated, []);
+	});
+
+	test("two different sizes of a different note are a difference, also inside 10 percent", () => {
+		const { differences, tolerated } = compare([flagged("Big", 40)], [flagged("Big", 41)]);
+		assert.deepEqual(differences.map((d) => [d.row, d.kind]), [["VW-14", "size differs"]]);
+		assert.deepEqual(tolerated, []);
 	});
 });
 
