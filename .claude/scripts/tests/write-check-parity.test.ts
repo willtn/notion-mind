@@ -14,6 +14,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseOpenLoopConfig } from "../lib/active-hygiene.ts";
 import { noteMarkdown } from "../lib/notion-note.ts";
+import { parseNotePage } from "../lib/notion-parse.ts";
 import { writtenNotes } from "../lib/notion-written.ts";
 import { comparePasses, formatDifference, type Comparison } from "../parity/compare.ts";
 import { passOf } from "../parity/findings.ts";
@@ -27,7 +28,7 @@ import { REFERENCE_COMMIT, referenceCommitExists, runScenarios, withReferenceWor
 import type { FixtureNote, FixtureSpec } from "../parity/spec.ts";
 import type { FakeCall } from "./_fake-notion.ts";
 import { rmTemp } from "./_helpers.ts";
-import { offlineNotion } from "./_offline-notion-form.ts";
+import { offlineNotion, storedPageReply } from "./_offline-notion-form.ts";
 
 const SCRIPTS = join(dirname(fileURLToPath(import.meta.url)), "..");
 const skip = referenceCommitExists() ? false : `this clone does not hold the reference commit ${REFERENCE_COMMIT}`;
@@ -41,9 +42,8 @@ describe("the note that the hook reads against the Markdown file of the same not
 	async function written(note: FixtureNote): Promise<string> {
 		const page = pages.get(note.title);
 		const call = { tool: "notion-create-pages", args: createArguments([note], map, context), outbox: "", outcome: "done" as const, reply: { pages: [{ id: page?.id, url: page?.url }] }, error: "" };
-		const [made] = await writtenNotes(call, map, async () => {
-			throw new Error("a create call needs no fetch");
-		});
+		const text = storedPageReply(note, page?.id ?? "", map, context);
+		const [made] = await writtenNotes(call, map, async () => parseNotePage({ text, json: JSON.parse(text) as unknown }));
 		assert.ok(made !== undefined);
 		return noteMarkdown(made);
 	}
@@ -67,6 +67,7 @@ describe("the note that the hook reads against the Markdown file of the same not
 
 const WRITES: FixtureSpec = { ...FIXTURE, scenarios: FIXTURE.scenarios.filter(({ steps }) => steps.some((step) => step.hook === "validate-write")) };
 const MUTATIONS = portMutations("validate-write");
+const LOOSE_PAGES = FIXTURE.notes.filter(({ type }) => type === "Loose page").map(({ title }) => title);
 
 describe("the ported write check against the write check at the reference commit", { skip }, () => {
 	let comparison: Comparison;
@@ -92,10 +93,12 @@ describe("the ported write check against the write check at the reference commit
 		assert.deepEqual(comparison.tolerated.map(formatDifference), []);
 	});
 
-	test("the port makes no other Notion call than the query of the loose active view and one update for each written row", () => {
+	test("the port makes no other Notion call than the query of the loose active view, one fetch for each written page, and one update for each written row", () => {
 		const tools = new Set(calls.map(({ tool }) => tool));
-		assert.deepEqual([...tools].sort(), ["notion-query-data-sources", "notion-update-page"]);
-		const rows = WRITES.scenarios.flatMap(({ steps }) => steps.flatMap((step) => (step.input.kind === "write" ? step.input.notes : []))).filter((title) => title !== "Loose Draft");
+		assert.deepEqual([...tools].sort(), ["notion-fetch", "notion-query-data-sources", "notion-update-page"]);
+		const written = WRITES.scenarios.flatMap(({ steps }) => steps.flatMap((step) => (step.input.kind === "write" ? step.input.notes : [])));
+		const rows = written.filter((title) => !LOOSE_PAGES.includes(title));
+		assert.equal(calls.filter(({ tool }) => tool === "notion-fetch").length, written.length);
 		assert.equal(calls.filter(({ tool }) => tool === "notion-update-page").length, rows.length);
 	});
 

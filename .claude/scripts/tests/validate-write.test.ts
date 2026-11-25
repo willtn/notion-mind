@@ -56,6 +56,30 @@ interface WriteOptions {
 	readonly withoutMap?: true;
 }
 
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
+
+/**
+ * The fetch reply of each page that a create call made, as Notion stores
+ * it: the leading `# <title>` of the content is the title and not a body line.
+ */
+function createdPages(args: unknown, stdout: unknown): { readonly byId: Record<string, string> } {
+	const requested = isRecord(args) && Array.isArray(args["pages"]) ? args["pages"].filter(isRecord) : [];
+	const reply = isRecord(stdout) && Array.isArray(stdout["pages"]) ? stdout["pages"].filter(isRecord) : [];
+	const parent = isRecord(args) && isRecord(args["parent"]) ? args["parent"] : {};
+	const database = Object.values(map.databases).find((entry) => entry.data_source === parent["data_source_id"]);
+	const above = parent["page_id"] === map.root.id ? [map.root] : [{ id: String(parent["page_id"]), title: "Above" }, map.root];
+	const byId: Record<string, string> = {};
+	requested.forEach((page, index) => {
+		const id = reply[index]?.["id"];
+		if (typeof id !== "string") return;
+		const properties = isRecord(page["properties"]) ? page["properties"] : {};
+		const title = String(properties["Name"] ?? properties["title"] ?? "");
+		const content = String(page["content"] ?? "").replace(`# ${title}\n\n`, "");
+		byId[id] = fetchedPage({ id, title, properties, content, ...(database === undefined ? { under: above } : { rowOf: database, under: [map.root] }) });
+	});
+	return { byId };
+}
+
 /** Run the hook for one Notion write with `args` in its outbox file. Each run has its own project directory. */
 function write(args: unknown, stdout: unknown, options: WriteOptions = {}): Run {
 	const project = mkdtempSync(join(TMP, "project-"));
@@ -64,7 +88,8 @@ function write(args: unknown, stdout: unknown, options: WriteOptions = {}): Run 
 	const outbox = `${OUTBOX_DIR}/note.json`;
 	mkdirSync(join(project, OUTBOX_DIR), { recursive: true });
 	writeFileSync(join(project, outbox), JSON.stringify(args));
-	const fake = fakeNotion(join(project, "tools"), options.replies ?? { "notion-update-page": OK, "notion-query-data-sources": VIEW });
+	const stored = createdPages(args, stdout);
+	const fake = fakeNotion(join(project, "tools"), options.replies === undefined ? { "notion-update-page": OK, "notion-query-data-sources": VIEW, "notion-fetch": stored } : { "notion-fetch": stored, ...options.replies });
 	const payload = {
 		hook_event_name: "PostToolUse",
 		cwd: project,
@@ -92,7 +117,7 @@ describe("validate-write: a note with no finding", () => {
 		const id = nextId();
 		const run = create(workNote({ Name: "Clean Note" }, `- [ ] One task\n\nSee ${LINK}.`), {}, id);
 		assert.deepEqual([run.code, run.stdout, run.stderr], [0, "", ""]);
-		assert.equal(run.calls.length, 1);
+		assert.deepEqual(run.calls.map(({ tool }) => tool), ["notion-fetch", "notion-update-page"]);
 		const { page_id: page, command, properties } = updates(run)[0]!.args as { page_id: string; command: string; properties: Record<string, unknown> };
 		assert.deepEqual([page, command], [id, "update_properties"]);
 		assert.equal(properties["Open tasks"], 1);
@@ -127,10 +152,10 @@ describe("validate-write: the findings of a Notion write", () => {
 		assert.match(run.context?.additionalContext ?? "", /The property `Owner` is empty \(required by vault-manifest\.json frontmatter_required\)/);
 	});
 
-	test("a page under the root page gets the finding that it is not a row, and no update call (VW-07)", () => {
+	test("a page under the root page gets the finding that it is not a row, one fetch, and no update call (VW-07)", () => {
 		const run = write({ parent: { page_id: map.root.id }, allow_async: false, pages: [{ properties: { title: "Draft" }, content: `See ${LINK}.` }] }, made(nextId()));
 		assert.equal(run.context?.additionalContext, "Workspace hygiene warnings for `Draft`:\n  - The page is not a row of a note database\nFix these before moving on.");
-		assert.deepEqual(run.calls, []);
+		assert.deepEqual(run.calls.map(({ tool }) => tool), ["notion-fetch"]);
 		assert.equal(run.outboxExists, false);
 	});
 
@@ -157,7 +182,7 @@ describe("validate-write: the findings of a Notion write", () => {
 	test("a row that is not loose and active makes no query of the view", () => {
 		for (const properties of [{ Status: "completed" }, { Status: "active", Project: "Billing" }]) {
 			const run = create(workNote({ Name: "Billing Retry Design", ...properties }));
-			assert.deepEqual(run.calls.map(({ tool }) => tool), ["notion-update-page"], JSON.stringify(properties));
+			assert.deepEqual(run.calls.map(({ tool }) => tool), ["notion-fetch", "notion-update-page"], JSON.stringify(properties));
 		}
 	});
 

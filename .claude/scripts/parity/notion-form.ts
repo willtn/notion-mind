@@ -29,6 +29,7 @@ import {
 	propertyArguments,
 	sameContent,
 	stampIsStale,
+	storedBody,
 	targetOf,
 	userValues,
 	wantedOptions,
@@ -283,7 +284,7 @@ export async function writeFixture(client: NotionClient, spec: FixtureSpec, map:
 	/** Write what differs: the content first, then the properties with the stamp, as the write hook sets the stamp last. */
 	const apply = async (entry: LiveNote, content: string): Promise<void> => {
 		const { note, page, row } = entry;
-		const wanted = composeContent(notionBody(note, context.pages), content);
+		const wanted = composeContent(storedBody(note, context.pages), content);
 		const contentDiffers = !sameContent(wanted, content);
 		if (contentDiffers) await client.call("notion-update-page", { page_id: page.id, command: "replace_content", new_str: wanted });
 

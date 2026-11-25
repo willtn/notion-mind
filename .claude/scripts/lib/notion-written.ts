@@ -6,14 +6,14 @@
  *       const notes = await writtenNotes(call, map, fetchPage);
  *     }
  *
- * A `notion-create-pages` call holds each note in its arguments, so no
- * Notion call is necessary. A `notion-update-page` call holds only a part
- * of a note, so the page is fetched one time.
+ * Each written page is fetched one time, for a create and for an update, so
+ * the note is the body as Notion stores it and not the text of the outbox
+ * file.
  */
 
 import type { NotionMap } from "./notion-map.ts";
 import type { DatabaseKey } from "./notion-model.ts";
-import { DERIVED_PROPERTIES, type Place, type Properties, type WrittenNote } from "./notion-note.ts";
+import { DERIVED_PROPERTIES, type Place, type WrittenNote } from "./notion-note.ts";
 import { notionId, type Ancestors, type NotePage } from "./notion-parse.ts";
 import { parseCommand, type Host, type JsonObject } from "./notion-write.ts";
 
@@ -124,42 +124,31 @@ function changesNote(args: JsonObject): boolean {
 
 const text = (value: unknown): string => (typeof value === "string" ? value : "");
 
+/**
+ * The note of a fetched page. Every note that the hook checks comes from
+ * here, so a create and an update of one note give the same size, the same
+ * counts, and the same findings. The outbox content of a create is not
+ * the stored body: Notion moves a leading `# <title>` into the title,
+ * changes `**bold**` to `<b>`, and changes `*` bullets to `-` (measured).
+ */
+function noteOfPage(page: NotePage, map: NotionMap, changed: boolean): WrittenNote {
+	const { id, url, title, properties } = page;
+	return { id, url, title, place: placeOf(page, page.ancestors, map), properties, body: writtenForm(page.content), changed };
+}
+
 /** The notes of a done write. A tool that writes no note content gives none. */
 export async function writtenNotes(call: NotionCall, map: NotionMap, fetchPage: (id: string) => Promise<NotePage>): Promise<WrittenNote[]> {
 	if (call.tool === "notion-update-page") {
 		const id = text(call.args["page_id"]);
 		if (id === "") return [];
-		const page = await fetchPage(id);
-		const { url, title, properties } = page;
-		return [{ id: page.id, url, title, place: placeOf(page, page.ancestors, map), properties, body: writtenForm(page.content), changed: changesNote(call.args) }];
+		return [noteOfPage(await fetchPage(id), map, changesNote(call.args))];
 	}
 	if (call.tool !== "notion-create-pages") return [];
 
 	const requested = Array.isArray(call.args["pages"]) ? call.args["pages"].filter(isRecord) : [];
 	const made = isRecord(call.reply) && Array.isArray(call.reply["pages"]) ? call.reply["pages"].filter(isRecord) : [];
 	if (made.length !== requested.length) throw new Error(`The reply of notion-create-pages names ${made.length} pages for ${requested.length} pages of ${call.outbox}.`);
-	const first = made[0];
-	if (first === undefined) return [];
-
-	let place = placeOfParent(call.args["parent"], map);
-	if (place === null) {
-		const page = await fetchPage(text(first["id"]) || text(first["url"]));
-		place = placeOf(page, page.ancestors, map);
-	}
-	return requested.map((page, index): WrittenNote => {
-		const reply = made[index] ?? {};
-		const properties: Properties = isRecord(page["properties"]) ? page["properties"] : {};
-		const url = text(reply["url"]).replace(/\?.*$/, "");
-		return {
-			id: text(reply["id"]) || notionId(url),
-			url,
-			title: text(properties["Name"]) || text(properties["title"]),
-			place,
-			properties,
-			body: text(page["content"]),
-			changed: true,
-		};
-	});
+	return Promise.all(made.map(async (reply) => noteOfPage(await fetchPage(text(reply["id"]) || text(reply["url"])), map, true)));
 }
 
 /** The values that a create call puts in each select and multi-select of `properties`, for `ensureSelectOptions`. */

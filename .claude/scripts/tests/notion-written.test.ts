@@ -6,6 +6,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { noteMarkdown } from "../lib/notion-note.ts";
+import { derivedUpdate } from "../lib/write-check.ts";
 import { parseNotePage, type NotePage } from "../lib/notion-parse.ts";
 import { OUTBOX_DIR, outboxCommand } from "../lib/notion-write.ts";
 import { notionCall, placeOf, selectValues, writtenForm, writtenNotes, type NotionCall } from "../lib/notion-written.ts";
@@ -65,57 +66,109 @@ describe("the Notion write of a hook payload", () => {
 describe("the notes of a create call", () => {
 	const page = (title: string, content = "Body") => ({ properties: { Name: title, Type: "Work note" }, content });
 
-	test("each page of the arguments is one note of the row, with the ID of the reply in the same position", () => {
+	/** A fetch that answers with the stored page of each created ID. `stored` is the body as Notion keeps it. */
+	const storing = (pages: ReadonlyMap<string, { title: string; stored: string }>, where: { rowOf?: typeof map.databases.work; under: readonly { id: string; title: string }[] }) => {
+		const asked: string[] = [];
+		const fetchPage = async (id: string): Promise<NotePage> => {
+			asked.push(id);
+			const found = pages.get(id);
+			if (found === undefined) throw new Error(`no page ${id}`);
+			return parseNotePage(reply(fetchedPage({ id, title: found.title, properties: { Name: found.title, Type: "Work note" }, content: found.stored, ...where })));
+		};
+		return { fetchPage, asked };
+	};
+	const inWork = { rowOf: map.databases.work, under: [map.root] };
+
+	test("each page of the reply is fetched, and each note has the stored page with the ID of the reply in the same position", async () => {
 		const ids = [nextId(), nextId()];
 		const call = created({ parent: { data_source_id: map.databases.work.data_source }, pages: [page("One"), page("Two", "Second")] }, ids.map((id) => ({ id })));
-		return writtenNotes(call, map, noFetch).then((notes) => {
-			assert.deepEqual(
-				notes.map(({ id, url, title, place, body, changed }) => ({ id, url, title, place, body, changed })),
-				[
-					{ id: ids[0], url: fakeUrl(ids[0]!), title: "One", place: { kind: "row", database: "work" }, body: "Body", changed: true },
-					{ id: ids[1], url: fakeUrl(ids[1]!), title: "Two", place: { kind: "row", database: "work" }, body: "Second", changed: true },
-				],
-			);
-		});
+		const { fetchPage, asked } = storing(new Map([[ids[0]!, { title: "One", stored: "Body" }], [ids[1]!, { title: "Two", stored: "Second" }]]), inWork);
+		const notes = await writtenNotes(call, map, fetchPage);
+		assert.deepEqual(
+			notes.map(({ id, url, title, place, body, changed }) => ({ id, url, title, place, body, changed })),
+			[
+				{ id: ids[0], url: fakeUrl(ids[0]!), title: "One", place: { kind: "row", database: "work" }, body: "Body\n", changed: true },
+				{ id: ids[1], url: fakeUrl(ids[1]!), title: "Two", place: { kind: "row", database: "work" }, body: "Second\n", changed: true },
+			],
+		);
+		assert.deepEqual(asked, ids);
+	});
+
+	test("the note is the stored body and not the outbox content, so a leading title heading is not in the body", async () => {
+		const id = nextId();
+		const call = created({ parent: { data_source_id: map.databases.work.data_source }, pages: [page("Moved", "# Moved\n\nText with **bold**.\n")] }, [{ id }]);
+		const { fetchPage } = storing(new Map([[id, { title: "Moved", stored: "Text with <b>bold</b>.\n" }]]), inWork);
+		const [note] = await writtenNotes(call, map, fetchPage);
+		assert.equal(note?.body, "Text with <b>bold</b>.\n\n");
 	});
 
 	test("a data source with no scheme and a database ID name the same database", async () => {
 		for (const parent of [{ data_source_id: map.databases.people.data_source.replace("collection://", "") }, { database_id: map.databases.people.id }]) {
-			const [note] = await writtenNotes(created({ parent, pages: [page("Ada")] }, [{ id: nextId() }]), map, noFetch);
+			const id = nextId();
+			const { fetchPage } = storing(new Map([[id, { title: "Ada", stored: "Body" }]]), { rowOf: map.databases.people, under: [map.root] });
+			const [note] = await writtenNotes(created({ parent, pages: [page("Ada")] }, [{ id }]), map, fetchPage);
 			assert.deepEqual(note?.place, { kind: "row", database: "people" }, JSON.stringify(parent));
 		}
 	});
 
-	test("a page under the root page or under a page of the setup is a page outside the databases, with no fetch", async () => {
+	test("a page under the root page or under a page of the setup is a page outside the databases", async () => {
 		for (const parent of [map.root.id, map.pages.home.id]) {
-			const [note] = await writtenNotes(created({ parent: { page_id: parent }, pages: [{ properties: { title: "Draft" }, content: "Body" }] }, [{ id: nextId() }]), map, noFetch);
+			const id = nextId();
+			const { fetchPage } = storing(new Map([[id, { title: "Draft", stored: "Body" }]]), { under: [{ id: parent, title: "Above" }, map.root] });
+			const [note] = await writtenNotes(created({ parent: { page_id: parent }, pages: [{ properties: { title: "Draft" }, content: "Body" }] }, [{ id }]), map, fetchPage);
 			assert.deepEqual([note?.place, note?.title], [{ kind: "page" }, "Draft"]);
 		}
 	});
 
-	test("a page under a page that the map does not name is fetched one time, and its ancestors give the place", async () => {
+	test("a page under a page that the map does not name has its ancestors give the place", async () => {
 		const id = nextId();
 		const parent = nextId();
-		const fetched: string[] = [];
-		const under = (ancestors: readonly { id: string; title: string }[]) => async (asked: string) => {
-			fetched.push(asked);
-			return parseNotePage(reply(fetchedPage({ id, title: "Draft", properties: { title: "Draft" }, content: "Body", under: ancestors })));
-		};
 		const call = created({ parent: { page_id: parent }, pages: [{ properties: { title: "Draft" }, content: "Body" }] }, [{ id }]);
-		const [inside] = await writtenNotes(call, map, under([{ id: parent, title: "Drafts" }, { id: map.root.id, title: "root" }]));
-		const [outside] = await writtenNotes(call, map, under([{ id: parent, title: "Private" }]));
-		assert.deepEqual([inside?.place, outside?.place], [{ kind: "page" }, { kind: "outside" }]);
-		assert.deepEqual(fetched, [id, id]);
+		const placeUnder = async (ancestors: readonly { id: string; title: string }[]) => (await writtenNotes(call, map, storing(new Map([[id, { title: "Draft", stored: "Body" }]]), { under: ancestors }).fetchPage))[0]?.place;
+		assert.deepEqual(await placeUnder([{ id: parent, title: "Drafts" }, { id: map.root.id, title: "root" }]), { kind: "page" });
+		assert.deepEqual(await placeUnder([{ id: parent, title: "Private" }]), { kind: "outside" });
 	});
 
 	test("a call with no parent writes outside the root", async () => {
-		const [note] = await writtenNotes(created({ pages: [{ properties: { title: "Private" } }] }, [{ id: nextId() }]), map, noFetch);
+		const id = nextId();
+		const { fetchPage } = storing(new Map([[id, { title: "Private", stored: "" }]]), { under: [{ id: nextId(), title: "Private root" }] });
+		const [note] = await writtenNotes(created({ pages: [{ properties: { title: "Private" } }] }, [{ id }]), map, fetchPage);
 		assert.deepEqual(note?.place, { kind: "outside" });
 	});
 
 	test("a reply with a different number of pages is an error, so no note gets the ID of a different page", async () => {
 		const call = created({ parent: { data_source_id: map.databases.work.data_source }, pages: [page("One"), page("Two")] }, [{ id: nextId() }]);
 		await assert.rejects(writtenNotes(call, map, noFetch), /names 1 pages for 2 pages/);
+	});
+
+	test("a fetch that fails is an error of the write check and not a note from the outbox content", async () => {
+		const call = created({ parent: { data_source_id: map.databases.work.data_source }, pages: [page("One")] }, [{ id: nextId() }]);
+		await assert.rejects(writtenNotes(call, map, async () => Promise.reject(new Error("no reply"))), /no reply/);
+	});
+});
+
+describe("one note has one size after a create and after an update", () => {
+	const id = nextId();
+	const title = "Same Note";
+	const stored = "A line that<br />continues. See <mention url=\"" + fakeUrl(nextId()) + "\">Patterns</mention>.\n\n- [ ] One task\n";
+	const properties = { Name: title, Type: "Work note", Status: "active", Tags: ["work-note"], "date:Date:start": "2026-01-05", Description: "A note" };
+	const fetchRow = async (): Promise<NotePage> => parseNotePage(reply(fetchedPage({ id, title, properties, content: stored, rowOf: map.databases.work, under: [map.root] })));
+	const sections = /^$/;
+
+	const bytesAfter = async (call: NotionCall): Promise<unknown> => {
+		const [note] = await writtenNotes(call, map, fetchRow);
+		assert.ok(note !== undefined);
+		return (derivedUpdate(note, sections, new Date(0))?.["properties"] as Record<string, unknown>)["Bytes"];
+	};
+
+	test("a create whose outbox content opens with the title heading and an update of one property give the same Bytes, and the same stored size", async () => {
+		const create = created({ parent: { data_source_id: map.databases.work.data_source }, pages: [{ properties, content: `# ${title}\n\nA line that\ncontinues. See <mention url="x">Patterns</mention>.\n\n- [ ] One task\n` }] }, [{ id }]);
+		const update = notionCall(payload("notion-update-page", stdout({ result: "ok" })), host({ page_id: id, command: "update_properties", properties: { Status: "completed" } }));
+		assert.ok(update !== null);
+		const afterCreate = await bytesAfter(create);
+		assert.equal(afterCreate, await bytesAfter(update));
+		const [note] = await writtenNotes(create, map, fetchRow);
+		assert.equal(afterCreate, Buffer.byteLength(noteMarkdown(note!), "utf-8"));
 	});
 });
 

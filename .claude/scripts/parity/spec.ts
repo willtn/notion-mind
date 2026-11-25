@@ -66,6 +66,14 @@ export type FixtureNote = {
 	/** The one note that sits outside the zero-difference gate for VW-14. */
 	readonly nearSizeLimit?: true;
 	/**
+	 * The page holds the note as Notion stores a created page: the leading
+	 * `# <title>` is the title, and the body does not repeat it. The outbox
+	 * content of a write still opens with that heading. Other notes keep the
+	 * heading in the body, because the fixture writer replaces the content
+	 * of the page after the create (measured).
+	 */
+	readonly titleMoved?: true;
+	/**
 	 * Frontmatter keys that are not properties. Notion has no place for
 	 * them, so only the Markdown form writes them. Example: `update`, a key
 	 * that ends with the name of a required field and is not that field.

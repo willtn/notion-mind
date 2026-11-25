@@ -65,7 +65,7 @@ describe("the note as Markdown", () => {
 
 	test("`Type`, the title, a relation, and a derived property add no text", () => {
 		const written = workNote({ Name: "A Note", Person: ["00000000-0000-4000-8000-000000000009"], Bytes: 10, "date:Changed:start": "2026-01-05T00:00:00.000Z" }, { body: "Body" });
-		assert.equal(noteMarkdown(written), "---\ndate: 2026-01-05\ndescription: A note\ntags:\n  - work-note\n---\n\nBody");
+		assert.equal(noteMarkdown(written), "---\ndate: 2026-01-05\ndescription: A note\ntags:\n  - work-note\n---\n\n# A Note\n\nBody");
 	});
 
 	test("the `Role` of a person is the field `title`", () => {
@@ -76,11 +76,24 @@ describe("the note as Markdown", () => {
 
 	test("a mention that names its page is a link, and a mention with no name stays", () => {
 		const bare = '<mention url="https://app.notion.com/p/00000000000040008000000000000002"/>';
-		assert.equal(noteMarkdown(note({ place: { kind: "page" }, body: `See ${LINK} and ${bare}.` })), `See [[Patterns]] and ${bare}.`);
+		assert.equal(noteMarkdown(note({ place: { kind: "page" }, body: `See ${LINK} and ${bare}.` })), `# A Note\n\nSee [[Patterns]] and ${bare}.`);
 	});
 
-	test("a page that is not a row is its body only", () => {
-		assert.equal(noteMarkdown(note({ place: { kind: "page" }, properties: { title: "A Note" }, body: "Body" })), "Body");
+	test("a page that is not a row is its title heading and its body", () => {
+		assert.equal(noteMarkdown(note({ place: { kind: "page" }, properties: { title: "A Note" }, body: "Body" })), "# A Note\n\nBody");
+	});
+
+	test("the title heading is added when the body does not open with it, and not added when it does, so both forms of one note have one text", () => {
+		const moved = note({ place: { kind: "page" }, title: "Same", body: "Text\n" });
+		const kept = note({ place: { kind: "page" }, title: "Same", body: "# Same\n\nText\n" });
+		assert.equal(noteMarkdown(moved), "# Same\n\nText\n");
+		assert.equal(noteMarkdown(kept), noteMarkdown(moved));
+	});
+
+	test("a body of a different heading gets the title heading above it, and an empty body is the title heading only", () => {
+		assert.equal(noteMarkdown(note({ place: { kind: "page" }, title: "Same", body: "# Other\n\nText\n" })), "# Same\n\n# Other\n\nText\n");
+		assert.equal(noteMarkdown(note({ place: { kind: "page" }, title: "Same", body: "" })), "# Same\n");
+		assert.equal(noteMarkdown(note({ place: { kind: "page" }, title: "", body: "Text\n" })), "Text\n");
 	});
 });
 
@@ -169,7 +182,7 @@ describe("VW-09: the typed fields", () => {
 describe("VW-10: a note with no link", () => {
 	const NO_LINK = "No mentions or relations found — every note must link to at least one other note (vault convention)";
 	const filler = (length: number): string => "x".repeat(length);
-	const header = noteMarkdown(note({ place: row("knowledge"), properties: { ...GLOBAL, Type: "Reference" }, body: "" })).length;
+	const header = noteMarkdown(note({ place: row("knowledge"), properties: { ...GLOBAL, Type: "Reference" }, body: "x" })).length - 1;
 	const reference = (body: string, properties: Properties = {}): WrittenNote => note({ place: row("knowledge"), properties: { ...GLOBAL, Type: "Reference", ...properties }, body });
 
 	test("the limit is 300 characters of the note as Markdown: 301 gets the finding and 300 does not", () => {
@@ -193,10 +206,16 @@ describe("VW-11: a paragraph on more than one line", () => {
 	const wrapped = "# Title\n\nA paragraph that\ncontinues here\nand here.\n";
 
 	test("each line that continues a paragraph counts, and the finding names the first one by its line in the page content", () => {
-		const [found] = warnings(check(workNote({ Status: "active", Quarter: "Q1-2026" }, { body: `${wrapped}\n${LINK}` })));
+		const [found] = warnings(check(workNote({ Status: "active", Quarter: "Q1-2026" }, { title: "Title", body: `${wrapped}\n${LINK}` })));
 		assert.match(found ?? "", /^2 hard-wrapped paragraph line\(s\), first at line 4 — write each paragraph as one line/);
-		const [onPage] = warnings(check(note({ place: { kind: "scaffold" }, properties: { title: "Home" }, body: `${wrapped}\n${LINK}` })));
+		const [onPage] = warnings(check(note({ place: { kind: "scaffold" }, title: "Title", properties: { title: "Home" }, body: `${wrapped}\n${LINK}` })));
 		assert.match(onPage ?? "", /^2 hard-wrapped paragraph line\(s\), first at line 4 /);
+	});
+
+	test("a stored body with no title heading gives the same line as the body with it, so a moved heading does not shift the line", () => {
+		const stored = wrapped.replace("# Title\n\n", "");
+		const [found] = warnings(check(workNote({ Status: "active", Quarter: "Q1-2026" }, { title: "Title", body: `${stored}\n${LINK}` })));
+		assert.match(found ?? "", /^2 hard-wrapped paragraph line\(s\), first at line 4 /);
 	});
 
 	test("a row with the `Verbatim` box set is a raw capture and gets no wrap finding, and the box with no mark does not help", () => {

@@ -130,12 +130,25 @@ export function frontmatterBlock(note: WrittenNote): string {
 }
 
 /**
- * The note as a Markdown file: the frontmatter block, then the body. A
- * mention that names its page is the link `[[Title]]`, as in the vault. A
- * mention with no name stays as it is.
+ * The title heading of the Markdown file. Notion moves a leading
+ * `# <title>` of a created page into the title, and a body that a
+ * `replace_content` wrote keeps it (measured). So the heading is added
+ * only when the body does not open with it, and a note has the same text
+ * in both cases.
+ */
+function titleHeading(note: WrittenNote): string {
+	const opening = note.body.split("\n", 1)[0]?.trimEnd();
+	if (note.title === "" || opening === `# ${note.title}`) return "";
+	return note.body.trim() === "" ? `# ${note.title}\n` : `# ${note.title}\n\n`;
+}
+
+/**
+ * The note as a Markdown file: the frontmatter block, the title heading,
+ * then the body. A mention that names its page is the link `[[Title]]`, as
+ * in the vault. A mention with no name stays as it is.
  */
 export function noteMarkdown(note: WrittenNote): string {
-	return frontmatterBlock(note) + note.body.replace(LABELED_MENTION, (_, label: string) => `[[${label}]]`);
+	return frontmatterBlock(note) + titleHeading(note) + note.body.replace(LABELED_MENTION, (_, label: string) => `[[${label}]]`);
 }
 
 /** True when a relation of the row holds a page. A relation is the Notion form of a link in frontmatter or in the body. */

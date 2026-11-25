@@ -18,7 +18,7 @@ import type { NotionMap } from "../lib/notion-map.ts";
 import type { DatabaseKey } from "../lib/notion-model.ts";
 import { parsePage, parseRows } from "../lib/notion-parse.ts";
 import { markdownPath, renderNote } from "./markdown-form.ts";
-import { canonicalContent, composeContent, desiredValues, FIXTURE_DATABASES, liveValues, notionBody, targetOf, type NoteContext, type Value } from "./notion-pages.ts";
+import { canonicalContent, composeContent, desiredValues, FIXTURE_DATABASES, liveValues, storedBody, targetOf, type NoteContext, type Value } from "./notion-pages.ts";
 import type { FixtureNote, FixtureSpec } from "./spec.ts";
 
 export interface ViewExpectation {
@@ -112,7 +112,7 @@ export async function checkNote(client: NotionClient, note: FixtureNote, context
 			checks.push({ property, spec: show(value), notion: show(live[property]), same: show(value) === show(live[property]) });
 		}
 	}
-	const wanted = canonicalContent(composeContent(notionBody(note, context.pages), fetched.content));
+	const wanted = canonicalContent(composeContent(storedBody(note, context.pages), fetched.content));
 	const held = canonicalContent(fetched.content);
 	checks.push({ property: "content", spec: digest(wanted), notion: digest(held), same: wanted === held });
 	return checks;
