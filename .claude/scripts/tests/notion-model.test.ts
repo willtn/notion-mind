@@ -13,6 +13,7 @@ import {
 	columnType,
 	DATABASES,
 	droppedDirectives,
+	extraFilters,
 	firstParagraph,
 	mergeOptions,
 	PAGES,
@@ -125,17 +126,19 @@ describe("views", () => {
 	const saved = {
 		filters: [
 			{ property: "Open loops", operator: "number_greater_than", value: 0 },
-			{ property: "Type", operator: "enum_is", value: "1:1" },
-			{ property: "Type", operator: "enum_is", value: "Inbox item" },
-			{ property: "Type", operator: "enum_is", value: "Incident" },
 			{ property: "Stale", operator: "string_is", value: "yes" },
 		],
 		sorts: [],
 		groupBy: undefined,
 	};
+	/** The saved form of the view before the model lost its `Type` filter. */
+	const savedWithType = {
+		...saved,
+		filters: [...saved.filters, ...["1:1", "Inbox item", "Incident"].map((value) => ({ property: "Type", operator: "enum_is", value }))],
+	};
 
 	test("viewDirectives gives the view language text", () => {
-		assert.equal(viewDirectives(openLoops), 'FILTER "Open loops" > 0; FILTER "Type" IN ("1:1", "Inbox item", "Incident"); FILTER "Stale" = "yes"');
+		assert.equal(viewDirectives(openLoops), 'FILTER "Open loops" > 0; FILTER "Stale" = "yes"');
 		assert.equal(viewDirectives({ name: "v", filters: [{ property: "Project", empty: true }, { property: "Changed", since: "one_week_ago" }], sort: { property: "Changed", direction: "DESC" }, groupBy: "Team" }), 'FILTER "Project" IS EMPTY; FILTER "Changed" >= "one_week_ago"; SORT BY "Changed" DESC; GROUP BY "Team"');
 	});
 
@@ -144,7 +147,7 @@ describe("views", () => {
 	});
 
 	test("droppedDirectives names a formula filter that Notion saved as an empty filter", () => {
-		const withoutFormula = { ...saved, filters: saved.filters.slice(0, 4) };
+		const withoutFormula = { ...saved, filters: saved.filters.slice(0, 1) };
 		assert.deepEqual(droppedDirectives(openLoops, withoutFormula), ['FILTER "Stale" = "yes"']);
 	});
 
@@ -152,6 +155,21 @@ describe("views", () => {
 		const view: ViewSpec = { name: "v", filters: [{ property: "Type", in: ["a", "b"] }, { property: "Project", empty: true }], sort: { property: "Date", direction: "DESC" }, groupBy: "Quarter" };
 		const partial = { filters: [{ property: "Type", operator: "enum_is", value: "a" }], sorts: [{ property: "Date", direction: "ascending" }], groupBy: undefined };
 		assert.deepEqual(droppedDirectives(view, partial), ['FILTER "Type" IN ("a", "b")', 'FILTER "Project" IS EMPTY', 'SORT BY "Date" DESC', 'GROUP BY "Quarter"']);
+	});
+
+	test("extraFilters names a property that the saved view filters and the model view does not", () => {
+		assert.deepEqual(extraFilters(openLoops, saved), []);
+		assert.deepEqual(extraFilters(openLoops, savedWithType), ["Type"]);
+		assert.deepEqual(droppedDirectives(openLoops, savedWithType), [], "the saved view holds each directive of the model, so only the extra filter shows the change");
+	});
+
+	test("extraFilters is empty for a model view with no filter, because the setup has no filter to send", () => {
+		assert.deepEqual(extraFilters({ name: "Recently changed", sort: { property: "Changed", direction: "DESC" } }, savedWithType), []);
+	});
+
+	test("the open-loops view has no Type filter, so a row of each type can reach the scan", () => {
+		assert.deepEqual((openLoops.filters ?? []).map(({ property }) => property), ["Open loops", "Stale"]);
+		assert.ok(openLoops.probe?.include.some(({ properties }) => properties?.["Type"] === "Work note"));
 	});
 });
 

@@ -46,7 +46,7 @@ export function expectedViewRows(spec: FixtureSpec): ViewExpectation[] {
 	const titles = (test: (note: FixtureNote) => boolean): string[] => spec.notes.filter(test).map((note) => note.title).sort();
 	const looseActive = (note: FixtureNote): boolean => folder(note) === "work/active";
 	const hasOpenLoops = (note: FixtureNote): boolean =>
-		loops.dirs.includes(folder(note)) && note.changedDaysAgo >= OPEN_LOOP_DAYS && countOpenLoops(renderNote(note), loops.sectionRe) > 0;
+		inDatabase(note, "work") && note.changedDaysAgo >= OPEN_LOOP_DAYS && countOpenLoops(renderNote(note), loops.sectionRe) > 0;
 	const view = (database: DatabaseKey, name: string, test: (note: FixtureNote) => boolean, skippedByName: (note: FixtureNote) => boolean = () => false): ViewExpectation => ({
 		database,
 		view: name,
@@ -58,8 +58,9 @@ export function expectedViewRows(spec: FixtureSpec): ViewExpectation[] {
 		...FIXTURE_DATABASES.map((database) =>
 			view(database, "Hygiene: oversized", (note) => inDatabase(note, database) && Buffer.byteLength(renderNote(note)) >= MONOLITH_BYTES && !isMonolithExempt(`${note.title}.md`)),
 		),
-		// `findOpenLoops` of the original skips a note with "Archive" in its name.
-		view("work", "Hygiene: open loops", hasOpenLoops, (note) => note.title.includes("Archive")),
+		// The view has no filter for the watched places, because the manifest names them. So the ported hook leaves out a note
+		// that `findOpenLoops` of the original does not read: a note outside the watched folders, and a note with "Archive" in its name.
+		view("work", "Hygiene: open loops", hasOpenLoops, (note) => note.title.includes("Archive") || !loops.dirs.includes(folder(note))),
 		view("work", "Hygiene: inbox pressure", (note) => folder(note) === "work/meetings" && note.changedDaysAgo >= INBOX_PRESSURE_DAYS),
 		view("work", "Hygiene: loose active", looseActive),
 		view("work", "Open tasks", (note) => looseActive(note) && /^\s*- \[ \]/m.test(note.body)),

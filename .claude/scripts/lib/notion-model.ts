@@ -246,19 +246,21 @@ export const DATABASES: readonly DatabaseSpec[] = [
 			{ name: "Completed", filters: [{ property: "Status", is: "completed" }], groupBy: "Quarter" },
 			{ name: "Incidents", filters: [{ property: "Type", is: "Incident" }], sort: { property: "Date", direction: "DESC" } },
 			{ name: "1:1 History", filters: [{ property: "Type", is: "1:1" }], sort: { property: "Date", direction: "DESC" } },
+			// No `Type` filter: `open_loop_types` of the manifest names the types that count, and the hygiene scan applies it.
 			{
 				name: "Hygiene: open loops",
 				filters: [
 					{ property: "Open loops", above: 0 },
-					{ property: "Type", in: ["1:1", "Inbox item", "Incident"] },
 					{ property: "Stale", is: "yes" },
 				],
 				probe: {
-					include: [{ label: "old loops", properties: { Type: "1:1", "Open loops": 2 }, changedDaysAgo: 30 }],
+					include: [
+						{ label: "old loops", properties: { Type: "1:1", "Open loops": 2 }, changedDaysAgo: 30 },
+						{ label: "old loops of a work note", properties: { Type: "Work note", "Open loops": 2 }, changedDaysAgo: 30 },
+					],
 					exclude: [
 						{ label: "new loops", properties: { Type: "1:1", "Open loops": 2 }, changedDaysAgo: 0 },
 						{ label: "old no loops", properties: { Type: "1:1", "Open loops": 0 }, changedDaysAgo: 30 },
-						{ label: "old other type", properties: { Type: "Work note", "Open loops": 2 }, changedDaysAgo: 30 },
 					],
 				},
 			},
@@ -557,6 +559,18 @@ export function droppedDirectives(view: ViewSpec, saved: SavedView): string[] {
 	}
 	if (view.groupBy !== undefined && saved.groupBy !== view.groupBy) dropped.push(`GROUP BY ${JSON.stringify(view.groupBy)}`);
 	return dropped;
+}
+
+/**
+ * The properties that a saved view filters and the model view does not. A
+ * filter that the model lost stays in Notion until the setup sends the
+ * filters of the view again. A model view with no filter has none to send,
+ * so it gives no property here.
+ */
+export function extraFilters(view: ViewSpec, saved: SavedView): string[] {
+	const wanted = new Set((view.filters ?? []).map(({ property }) => property));
+	if (wanted.size === 0) return [];
+	return [...new Set(saved.filters.map(({ property }) => property).filter((property) => property !== "" && !wanted.has(property)))];
 }
 
 /**
