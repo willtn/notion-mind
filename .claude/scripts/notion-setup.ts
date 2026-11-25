@@ -15,7 +15,7 @@
  *   --root-title <title>   The title of the root page. Default "obsidian-mind".
  *   --map <path>           The map file. Default notion-map.json in the repository root.
  *   --workspace-id <id>    Stop when the login is in a different workspace.
- *   --ledger <path>        Append one JSON line for each object that the run makes.
+ *   --ledger <path>        Append one JSON line for each object of the model that the ledger lacks, made by this run or an earlier one.
  *   --ledger-tag <k=v>     Add one field to each ledger line.
  *   --check                Make nothing. Fetch each object of the map file and print the counts.
  */
@@ -92,6 +92,7 @@ export interface SetupResult {
 type Live = Readonly<Record<DatabaseKey, LiveDatabase>>;
 
 const ROOT_BODY = "The content model of obsidian-mind. The setup of the repository builds each page and database here. Change the model in the repository, then run the setup again.\n";
+const DEFAULT_VIEW_NAME = "Default view";
 const PROBE_TRIES = 4;
 const TRASH_BATCH = 20;
 
@@ -105,6 +106,8 @@ function oneByTitle<T extends { readonly title: string }>(items: readonly T[], t
 	if (matches.length > 1) fail(`${where} holds ${matches.length} objects with the title "${title}". Give one of them a different title, then run the setup again.`);
 	return matches[0];
 }
+
+const defaultViewTitle = (spec: DatabaseSpec, view: LiveView): string => `${spec.title}: ${view.name} (default view)`;
 
 const ref = (item: NotionRef): NotionRef => ({ id: item.id, url: item.url });
 
@@ -192,36 +195,82 @@ export interface LinkedViewDeps {
 	readonly fetchDatabase: (id: string) => Promise<LiveDatabase>;
 	readonly ensureView: (view: LinkedViewSpec, existing: readonly LiveView[]) => Promise<{ saved: LiveView; created: boolean }>;
 	readonly record: Recorder;
+	readonly reconcile: Recorder;
 }
 
-/** Make each linked view of a page that is missing, and log the linked database block that Notion adds with each new view. */
+/** Make each linked view of a page that is missing. Each view has one linked database block, so log the block of every view the page shows. */
 export async function ensureLinkedViews(deps: LinkedViewDeps, page: LivePage, specs: readonly LinkedViewSpec[]): Promise<Record<string, string>> {
 	const linkedIds = (children: readonly LiveChild[]): string[] => children.filter((child) => child.kind === "linked_view").map((child) => child.id);
-	const existing = (await Promise.all(linkedIds(page.children).map((id) => deps.fetchDatabase(id)))).flatMap((block) => block.views);
+	const blocks = await Promise.all(linkedIds(page.children).map(async (id) => ({ id, views: (await deps.fetchDatabase(id)).views })));
+	const existing = blocks.flatMap((block) => block.views);
+	const blockOfView = new Map(blocks.flatMap((block) => block.views.map((saved) => [saved.url, block.id] as const)));
 	const known = new Set(linkedIds(page.children));
 	const views: Record<string, string> = {};
 	for (const view of specs) {
 		const result = await deps.ensureView(view, existing);
 		views[view.name] = result.saved.url;
-		if (!result.created) continue;
+		const title = `the page "${page.title}": linked database block of ${view.name}`;
+		if (!result.created) {
+			const block = blockOfView.get(result.saved.url) ?? fail(`The view "${view.name}" of the page "${page.title}" is in none of the linked database blocks that the page shows.`);
+			deps.reconcile("block", block, title, { parent_id: page.id });
+			continue;
+		}
 		// The reply of a new linked view names no block, so the page shows which block is new.
 		const fresh = linkedIds((await deps.fetchPage(page.id)).children).filter((id) => !known.has(id));
 		const block = fresh.length === 1 ? fresh[0] : undefined;
 		if (block === undefined) return fail(`Notion made ${fresh.length} new linked database blocks on the page "${page.title}" for the view "${view.name}", and the setup expects 1.`);
 		known.add(block);
-		deps.record("block", block, `the page "${page.title}": linked database block of ${view.name}`, { parent_id: page.id });
+		deps.record("block", block, title, { parent_id: page.id });
 	}
 	return views;
 }
 
-/** Counts each object that the run makes and, with a ledger path, appends one JSON line for it. */
-export function createRecorder(options: Pick<SetupOptions, "ledgerPath" | "ledgerTag" | "log">, created: Record<CreatedKind, number>): Recorder {
-	return (kind, id, title, extra = {}) => {
-		created[kind]++;
-		options.log(`created ${kind}: ${title}`);
+const bare = (id: unknown): string => String(id).replaceAll("-", "").toLowerCase();
+
+/** A reference block has no ID, so its parent page and its original name it. */
+const ledgerKey = (id: unknown, parentId: unknown, syncedFrom: unknown): string => (typeof id === "string" ? bare(id) : `reference ${bare(parentId)} ${bare(syncedFrom)}`);
+
+/** The key of each object that the ledger file lists. A missing file lists none. */
+export function readLedgerKeys(ledgerPath: string | undefined): Set<string> {
+	if (ledgerPath === undefined || !existsSync(ledgerPath)) return new Set();
+	const parse = (line: string, index: number): Record<string, unknown> => {
+		try {
+			return JSON.parse(line) as Record<string, unknown>;
+		} catch {
+			return fail(`Line ${index + 1} of the ledger ${ledgerPath} is not JSON. Repair the ledger, then run the setup again.`);
+		}
+	};
+	const entries = readFileSync(ledgerPath, "utf8").split("\n").map((line, index) => [line, index] as const).filter(([line]) => line.trim() !== "").map(([line, index]) => parse(line, index));
+	return new Set(entries.map((entry) => ledgerKey(entry["id"], entry["parent_id"], entry["synced_from"])));
+}
+
+export interface Ledger {
+	/** An object that the run made: counts it, logs it, and appends its line. */
+	readonly record: Recorder;
+	/** An object of the model that the run found: appends its line only when the ledger lacks it, and counts nothing. */
+	readonly reconcile: Recorder;
+}
+
+/** With a ledger path, appends one JSON line for each object that the setup owns and the ledger lacks. */
+export function createLedger(options: Pick<SetupOptions, "ledgerPath" | "ledgerTag" | "log">, created: Record<CreatedKind, number>): Ledger {
+	const known = readLedgerKeys(options.ledgerPath);
+	const tag = options.ledgerTag === undefined ? {} : { [options.ledgerTag[0]]: options.ledgerTag[1] };
+	const append: Recorder = (kind, id, title, extra = {}) => {
 		if (options.ledgerPath === undefined) return;
-		const tag = options.ledgerTag === undefined ? {} : { [options.ledgerTag[0]]: options.ledgerTag[1] };
+		known.add(ledgerKey(id, extra["parent_id"], extra["synced_from"]));
 		appendFileSync(options.ledgerPath, `${JSON.stringify({ id, kind, title, ...extra, ...tag, at: new Date().toISOString() })}\n`);
+	};
+	return {
+		record: (kind, id, title, extra) => {
+			created[kind]++;
+			options.log(`created ${kind}: ${title}`);
+			append(kind, id, title, extra);
+		},
+		reconcile: (kind, id, title, extra) => {
+			if (options.ledgerPath === undefined || known.has(ledgerKey(id, extra?.["parent_id"], extra?.["synced_from"]))) return;
+			options.log(`added to the ledger: ${kind}: ${title}`);
+			append(kind, id, title, extra);
+		},
 	};
 }
 
@@ -232,7 +281,7 @@ export const recordBlock = (record: Recorder, block: CreatedBlock): void =>
 export async function runSetup(client: NotionClient, options: SetupOptions): Promise<SetupResult> {
 	const created: Record<CreatedKind, number> = { page: 0, database: 0, property: 0, option: 0, view: 0, row: 0, block: 0, probe_row: 0 };
 	const sleep = options.sleep ?? ((ms: number) => new Promise<void>((done) => setTimeout(done, ms)));
-	const record = createRecorder(options, created);
+	const { record, reconcile } = createLedger(options, created);
 
 	const workspaceId = parseWorkspaceId(await client.call("notion-get-self"));
 	const earlier = existsSync(options.mapPath) ? readNotionMap(options.mapPath) : undefined;
@@ -275,14 +324,19 @@ export async function runSetup(client: NotionClient, options: SetupOptions): Pro
 
 	const ensureDatabase = async (spec: DatabaseSpec): Promise<LiveDatabase> => {
 		const existing = oneByTitle(root.children.filter((child) => child.kind === "database"), spec.title, `The page "${options.rootTitle}"`);
-		if (existing !== undefined) return fetchDatabase(existing.id);
+		if (existing !== undefined) {
+			const found = await fetchDatabase(existing.id);
+			reconcile("database", found.id, spec.title);
+			for (const view of found.views.filter((v) => v.name === DEFAULT_VIEW_NAME)) reconcile("view", notionId(view.url), defaultViewTitle(spec, view));
+			return found;
+		}
 		const description = [spec.description, ...spec.descriptionSources.map((source) => firstParagraph(options.readSource(source)))].join(" ");
 		const reply = await client.call("notion-create-database", { parent: { page_id: rootId }, title: spec.title, description, schema: 'CREATE TABLE ("Name" TITLE)' });
 		const database = parseDatabase(reply);
 		record("database", database.id, spec.title);
 		// The reply of a new database lists no view, but Notion adds a default view that only a fetch shows.
 		const fetched = await fetchDatabase(database.id);
-		for (const view of fetched.views) record("view", notionId(view.url), `${spec.title}: ${view.name} (default view)`);
+		for (const view of fetched.views) record("view", notionId(view.url), defaultViewTitle(spec, view));
 		return fetched;
 	};
 	const live = {} as Record<DatabaseKey, LiveDatabase>;
@@ -325,6 +379,7 @@ export async function runSetup(client: NotionClient, options: SetupOptions): Pro
 		const pendingName = `${view.name}${UNVERIFIED_SUFFIX}`;
 		const found = existing.find((v) => v.name === view.name) ?? existing.find((v) => v.name === pendingName);
 		if (found !== undefined) {
+			reconcile("view", notionId(found.url), `${where}: ${found.name}`);
 			checkSaved(view, found, where);
 			return { saved: found, pending: found.name === pendingName, created: false };
 		}
@@ -416,6 +471,7 @@ export async function runSetup(client: NotionClient, options: SetupOptions): Pro
 				fetchDatabase,
 				ensureView: (view, existing) => ensureView(view, existing, { parent_page_id: page.id }, databases[view.database].data_source, `the page "${page.title}"`),
 				record,
+				reconcile,
 			},
 			page,
 			specs,
@@ -430,27 +486,31 @@ export async function runSetup(client: NotionClient, options: SetupOptions): Pro
 			spec.parent === "root"
 				? oneByTitle(root.children.filter((child) => child.kind === "page"), spec.title, `The page "${options.rootTitle}"`)
 				: await findRow(spec.parent, spec.title);
+		const kind = spec.parent === "root" ? "page" : "row";
 		let id = existing?.id;
 		if (id === undefined) {
 			const body = spec.body.map((part) => scaffoldBody(options.readSource(part.source), part.section)).join("\n") + quickLinks(spec);
 			const first = spec.body[0];
 			const row = spec.parent === "root" ? undefined : { Name: spec.title, Description: first === undefined ? "" : scaffoldDescription(options.readSource(first.source)), ...spec.properties, ...hookStamp(new Date()) };
 			const page = await createPage(spec.parent === "root" ? { page_id: rootId } : { data_source_id: databases[spec.parent].data_source }, row ?? { title: spec.title }, body);
-			record(spec.parent === "root" ? "page" : "row", page.id, spec.title);
+			record(kind, page.id, spec.title);
 			id = page.id;
+		} else {
+			reconcile(kind, id, spec.title);
 		}
 		const page = await fetchPage(id);
 		return { ...ref(page), title: spec.title, views: await linkedViews(page, spec.linkedViews) };
 	};
 	for (const spec of PAGES) pages[spec.key] = await ensurePage(spec);
 	for (const sync of SYNCED_SECTIONS) {
-		await ensureSyncedSection(client, sync, { original: pages[sync.original].id, copy: pages[sync.copy].id }, (block) => recordBlock(record, block));
+		await ensureSyncedSection(client, sync, { original: pages[sync.original].id, copy: pages[sync.copy].id }, (block) => recordBlock(record, block), (block) => recordBlock(reconcile, block));
 	}
 
 	const templates: Record<string, NotionRef> = {};
 	for (const template of TEMPLATES) {
 		const existing = await findRow("templates", template.title);
 		if (existing !== undefined) {
+			reconcile("row", existing.id, `template: ${template.title}`);
 			templates[template.title] = ref(existing);
 			continue;
 		}
@@ -464,6 +524,8 @@ export async function runSetup(client: NotionClient, options: SetupOptions): Pro
 	if (readerMap === undefined) {
 		readerMap = await createPage({ page_id: rootId }, { title: READER_MAP_TITLE }, "The setup fills this page.\n");
 		record("page", readerMap.id, READER_MAP_TITLE);
+	} else {
+		reconcile("page", readerMap.id, READER_MAP_TITLE);
 	}
 	pages.reader_map = { ...ref(readerMap), title: READER_MAP_TITLE, views: {} };
 

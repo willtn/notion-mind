@@ -161,7 +161,7 @@ describe("ensureSyncedSection", () => {
 	test("makes the block and the reference, then a second run makes nothing", async () => {
 		const { client, writes, pages } = fakeNotion(NORTH_STAR, HOME);
 		const created: CreatedBlock[] = [];
-		await ensureSyncedSection(client, sync, ids, (block) => created.push(block));
+		await ensureSyncedSection(client, sync, ids, (block) => created.push(block), () => {});
 		const originalBlock = notionId(`${"0".repeat(31)}1`);
 		assert.deepEqual(created.slice(), [
 			{ id: originalBlock, title: "synced block: Current Focus", parentId: ids.original },
@@ -170,7 +170,7 @@ describe("ensureSyncedSection", () => {
 		assert.deepEqual(writes, ["update_content 1", "insert_content 2"]);
 		assert.match(pages.get(ids.copy) ?? "", /^## Current Focus\n\n<synced-block-reference url="[^"]+"><\/synced-block-reference>\n/);
 
-		await ensureSyncedSection(client, sync, ids, (block) => created.push(block));
+		await ensureSyncedSection(client, sync, ids, (block) => created.push(block), () => {});
 		assert.equal(created.length, 2);
 		assert.equal(writes.length, 2);
 	});
@@ -178,14 +178,14 @@ describe("ensureSyncedSection", () => {
 	test("never reports the ID of the page that holds a block as the ID of the block", async () => {
 		const { client } = fakeNotion(NORTH_STAR, HOME);
 		const created: CreatedBlock[] = [];
-		await ensureSyncedSection(client, sync, ids, (block) => created.push(block));
+		await ensureSyncedSection(client, sync, ids, (block) => created.push(block), () => {});
 		for (const block of created) assert.ok(block.id !== ids.original && block.id !== ids.copy, `${block.title} has the ID of a page`);
 	});
 
 	test("keeps the text that the user wrote in the section, and Home shows it", async () => {
 		const edited = NORTH_STAR.replace("<ul>\n<li></li>\n</ul>\n\n## Goals", "<ul>\n<li>Ship the Notion port</li>\n</ul>\n\n## Goals");
 		const { client, pages } = fakeNotion(edited, HOME);
-		await ensureSyncedSection(client, sync, ids, () => {});
+		await ensureSyncedSection(client, sync, ids, () => {}, () => {});
 		assert.match(pages.get(ids.original) ?? "", /<synced-block url="[^"]+">\n<i>What am I working toward right now\?<\/i>\n\n<ul>\n<li>Ship the Notion port<\/li>\n<\/ul>\n<\/synced-block>/);
 		const shown = await client.call("notion-fetch", { id: ids.copy });
 		assert.match(shown.text, /<li>Ship the Notion port<\/li>/);
@@ -195,12 +195,30 @@ describe("ensureSyncedSection", () => {
 		const withReference = `## Current Focus\n\n<synced-block-reference url="${BLOCK_URL}"></synced-block-reference>\n\n${HOME}`;
 		const { client, writes } = fakeNotion(SYNCED_NORTH_STAR, HOME);
 		const created: CreatedBlock[] = [];
-		await ensureSyncedSection(client, sync, ids, (block) => created.push(block));
+		await ensureSyncedSection(client, sync, ids, (block) => created.push(block), () => {});
 		assert.deepEqual(created, [{ id: undefined, title: "synced block reference: Current Focus", parentId: ids.copy, syncedFrom: notionId(BLOCK_URL.split("#")[1] ?? "") }]);
 		assert.deepEqual(writes, ["insert_content 2"]);
 
 		const complete = fakeNotion(SYNCED_NORTH_STAR, withReference);
-		await ensureSyncedSection(complete.client, sync, ids, () => assert.fail("made a block"));
+		const existing: CreatedBlock[] = [];
+		await ensureSyncedSection(complete.client, sync, ids, () => assert.fail("made a block"), (block) => existing.push(block));
 		assert.deepEqual(complete.writes, []);
+		const originalBlock = notionId(BLOCK_URL.split("#")[1] ?? "");
+		assert.deepEqual(existing, [
+			{ id: originalBlock, title: "synced block: Current Focus", parentId: ids.original },
+			{ id: undefined, title: "synced block reference: Current Focus", parentId: ids.copy, syncedFrom: originalBlock },
+		]);
+	});
+
+	test("reports the original block that exists when it makes the reference, and never reports a block that it made as existing", async () => {
+		const existing: CreatedBlock[] = [];
+		const made: CreatedBlock[] = [];
+		await ensureSyncedSection(fakeNotion(SYNCED_NORTH_STAR, HOME).client, sync, ids, (block) => made.push(block), (block) => existing.push(block));
+		assert.deepEqual(existing.map((block) => block.title), ["synced block: Current Focus"]);
+		assert.deepEqual(made.map((block) => block.title), ["synced block reference: Current Focus"]);
+
+		const fresh: CreatedBlock[] = [];
+		await ensureSyncedSection(fakeNotion(NORTH_STAR, HOME).client, sync, ids, () => {}, (block) => fresh.push(block));
+		assert.deepEqual(fresh, []);
 	});
 });
