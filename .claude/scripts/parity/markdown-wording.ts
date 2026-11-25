@@ -25,15 +25,15 @@ const patterns: Readonly<Record<TextKind, RegExp>> = {
 	"recent change": /^.+$/,
 	"open task": /^\s*- \[ \] (?<detail>.+)$/,
 	"no open tasks": /^\(no open tasks\)$/,
-	"open tasks note": /^(?<note>.+)$/,
+	"open tasks note": /^(?<note>.+\.md)$/,
 	"no active work": /^\(none\)$/,
 	"active note": /^(?<note>.+)$/,
-	"listing collapsed": /^\.\/(?<group>.+)\/ — (?<count>\d+) notes \(listing collapsed/,
+	"listing collapsed": /^(?<group>\.\/.+\/) — (?<count>\d+) notes \(listing collapsed — (?<formText>.+) on demand\)$/,
 	"listing note": /^\.\/(?<note>.+)$/,
 	"context pointer": /^\(Re-entry via resume\/compact /,
 
 	"claim HY-07": /^(?<detail>\S+) present beside AGENTS\.md/,
-	"claim HY-09": /^AGENTS\.md is (?<sizeKb>\d+)KB(?<formText>.*)$/,
+	"claim HY-09": /^AGENTS\.md is (?<sizeKb>\d+)KB(?<formText>(?: — [^.(]+\([^)]+\))?)/,
 	"claim HY-01": /^(?<count>\d+) note\(s\) marked done but still in active\//,
 	"claim HY-02": /^Loose active\/ notes that look like one topic/,
 	"claim HY-03": /^(?<count>\d+) note\(s\) past the 25KB organization threshold/,
@@ -84,8 +84,6 @@ const patterns: Readonly<Record<TextKind, RegExp>> = {
  * The names of the Markdown objects in the instruction text. Part (d) gives
  * the Notion object for each one: the vault is the workspace, a folder is a
  * database, a `Type`, or a property, and the frontmatter is the properties.
- * The pull request that ports a hook adds a name here when the Notion
- * wording of that hook names a different object in its place.
  */
 const names: readonly ObjectName[] = [
 	["note(s) past the 25KB organization threshold", "{oversized notes}"],
@@ -97,10 +95,11 @@ const names: readonly ObjectName[] = [
 	["a folder (active/<Topic>/, `git mv`, mirror the folder in archive/ later)", "{a topic group}"],
 	["a folder (active/<Topic>/)", "{a topic group}"],
 	["work/active/<Topic>/", "{a topic group}"],
-	["Missing `{field}` in frontmatter", "{field} is missing"],
+	["Missing `{field}` in frontmatter", "{missing field}"],
 	["Missing YAML frontmatter", "{no properties}"],
 	["Vault Hygiene", "{hygiene}"],
 	["Vault hygiene", "{hygiene}"],
+	["Vault File Listing", "{listing}"],
 	["brain/North Star.md", "{North Star}"],
 	["brain/", "{brain topics}"],
 ];

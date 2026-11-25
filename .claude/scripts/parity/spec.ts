@@ -65,7 +65,27 @@ export type FixtureNote = {
 	readonly markdownFolder?: string;
 	/** The one note that sits outside the zero-difference gate for VW-14. */
 	readonly nearSizeLimit?: true;
+	/**
+	 * Frontmatter keys that are not properties. Notion has no place for
+	 * them, so only the Markdown form writes them. Example: `update`, a key
+	 * that ends with the name of a required field and is not that field.
+	 */
+	readonly otherKeys?: Readonly<Record<string, string>>;
+	/**
+	 * A raw capture that keeps its line breaks, so the hard-wrap check
+	 * (VW-11) leaves it out. The Markdown form writes `verbatim: true` in
+	 * the frontmatter. The Notion form gives the note the mark that the
+	 * port of VW-11 reads.
+	 */
+	readonly verbatim?: true;
 };
+
+/**
+ * A note of the active work that is in no project: a file at the top of
+ * `work/active/`, and an active Work row with an empty `Project`.
+ */
+export const isLooseActive = (note: FixtureNote): boolean =>
+	note.type === "Work note" && note.fields.status === "active" && note.fields.project === undefined && note.markdownFolder === undefined;
 
 /**
  * The instant of the last change of `note` for a run that starts at `now`.
@@ -103,6 +123,8 @@ export type Step = {
 	readonly removeRepoFile?: string;
 	/** A repository file that gets this content before the run. */
 	readonly replaceRepoFile?: RepoFile;
+	/** The payload has no `hook_event_name`, so the hook uses the name of its own event. */
+	readonly withoutEventName?: true;
 };
 
 /**
@@ -149,6 +171,8 @@ export type Scenario = {
 	readonly blockHandoff?: true;
 	/** The number of old transcript copies that exist before the first step (PC-04). */
 	readonly oldSessionLogs?: number;
+	/** A file that is not a transcript copy is in the folder of the copies before the first step, and it is older than each copy (PC-04). */
+	readonly foreignSessionLog?: true;
 };
 
 export type FixtureSpec = {

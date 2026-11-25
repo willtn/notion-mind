@@ -22,8 +22,7 @@ import type { RowId } from "./rows.ts";
  * - `items`: a list with " · " or a line break between the items. The count
  *   of the finding is the number of items.
  * - `formText`: text that the two forms cannot state in the same way. The
- *   harness does not compare it. Only a kind of this table can have it, so
- *   the table is the full list of the text that is not compared.
+ *   harness does not compare it. Only a kind with `notCompared` has it.
  */
 export type Capture = "note" | "notes" | "group" | "token" | "field" | "detail" | "count" | "sizeKb" | "items" | "formText";
 
@@ -59,7 +58,16 @@ type Text = {
 	/** A fixed start of the detail of the finding. */
 	readonly detail?: string;
 	/** The named groups that the pattern of each form must have. */
-	readonly captures?: readonly Capture[];
+	readonly captures?: readonly Exclude<Capture, "formText">[];
+	/**
+	 * The shape of the text that the harness does not compare. The pattern
+	 * of each form has the group `formText` for it. This table states the
+	 * shape, and not the form, so the pattern of a form cannot make the
+	 * part larger: text of a different shape is not text of this kind.
+	 * The kinds with this field are the full list of the text that is not
+	 * compared.
+	 */
+	readonly notCompared?: RegExp;
 	/** The place of each item of `items`, when an item gives a finding of its own. */
 	readonly each?: Place;
 	/** A start of the detail of each item, to tell this list from a different list of the same kinds. */
@@ -79,15 +87,15 @@ type Text = {
 export const TEXTS = {
 	"session title": { in: "session", row: "SS-19", detail: "session title" },
 	// The size of the context depends on the wording, so only the budget and the notes after it are compared.
-	"size meter": { in: "session", row: "SS-19", detail: "size meter", captures: ["formText"] },
-	"section date": { in: "section" },
-	"section north star": { in: "section" },
-	"section brain topics": { in: "section" },
-	"section recent changes": { in: "section" },
-	"section open tasks": { in: "section" },
-	"section active work": { in: "section" },
-	"section listing": { in: "section" },
-	"section context pointer": { in: "section" },
+	"size meter": { in: "session", row: "SS-19", detail: "size meter", notCompared: /^[\d.]+kB$/ },
+	"section date": { in: "section", row: "SS-19", detail: "header of date" },
+	"section north star": { in: "section", row: "SS-19", detail: "header of north star" },
+	"section brain topics": { in: "section", row: "SS-19", detail: "header of brain topics" },
+	"section recent changes": { in: "section", row: "SS-19", detail: "header of recent changes" },
+	"section open tasks": { in: "section", row: "SS-19", detail: "header of open tasks" },
+	"section active work": { in: "section", row: "SS-19", detail: "header of active work" },
+	"section listing": { in: "section", row: "SS-19", detail: "header of listing" },
+	"section context pointer": { in: "section", row: "SS-19", detail: "header of context pointer" },
 	"section hygiene": { in: "section", row: "SS-17" },
 	"date line": { in: "date", row: "SS-10", detail: "date line" },
 	"north star hidden items": { in: "north star", row: "SS-11", detail: "completed items hidden", captures: ["count"] },
@@ -100,14 +108,14 @@ export const TEXTS = {
 	"open tasks note": { in: "open tasks", captures: ["note"] },
 	"no active work": { in: "active work" },
 	"active note": { in: "active work", row: "SS-15", captures: ["note"], data: true },
-	// The end of a collapsed line names the search tools of the form.
-	"listing collapsed": { in: "listing", row: "SS-16", detail: "collapsed", captures: ["group", "count"], data: true },
+	// The line names the search tools of the form, and the port has different tools.
+	"listing collapsed": { in: "listing", row: "SS-16", detail: "collapsed", captures: ["group", "count"], notCompared: /^[^.!?()\n]{1,40}$/ },
 	"listing note": { in: "listing", row: "SS-16", detail: "listed", captures: ["note"], data: true },
 	"context pointer": { in: "context pointer", row: "SS-05", detail: "context pointer" },
 
 	"claim HY-07": { in: "claim", row: "HY-07", captures: ["detail"] },
-	// The end of the line names agents that are not in the port.
-	"claim HY-09": { in: "claim", row: "HY-09", captures: ["sizeKb", "formText"] },
+	// The line states where each agent stops reading the file, with the agent versions, and the port has fewer agents. The one-line summary has no such part.
+	"claim HY-09": { in: "claim", row: "HY-09", captures: ["sizeKb"], notCompared: /^(?: — \S+ stopped reading it at [^.()\n]{1,80}\([^()\n]{1,80}\))?$/ },
 	"claim HY-01": { in: "claim", row: "HY-01", captures: ["count"] },
 	"claim HY-02": { in: "claim", row: "HY-02" },
 	"claim HY-03": { in: "claim", row: "HY-03", captures: ["count"] },
@@ -140,7 +148,7 @@ export const TEXTS = {
 	"warning VW-09": { in: "warning", row: "VW-09", captures: ["field"] },
 	"warning VW-10": { in: "warning", row: "VW-10" },
 	// The line number counts the frontmatter lines, which only the Markdown form has.
-	"warning VW-11": { in: "warning", row: "VW-11", captures: ["count", "formText"] },
+	"warning VW-11": { in: "warning", row: "VW-11", captures: ["count"], notCompared: /^\d+$/ },
 	"warning VW-12": { in: "warning", row: "VW-12", captures: ["count"] },
 
 	"hints": { in: "prompt", row: "UP-12", captures: ["items"], each: "hint", ordered: true },
@@ -157,13 +165,52 @@ export const TEXTS = {
 export type TextKind = keyof typeof TEXTS;
 
 /**
- * An object name of one form, and the neutral name that both forms share
- * for the object. Example: `["work/meetings/", "{inbox}"]` in the Markdown
- * form and `["Inbox item rows", "{inbox}"]` in the Notion form. A name is
- * plain text and not a pattern, so a form can rename an object and cannot
- * hide an instruction.
+ * The neutral names. Both forms share one of them for each object that the
+ * instruction text names. The set is closed: it holds the objects that the
+ * Markdown wording names, and a form can map a name only to one of them.
  */
-export type ObjectName = readonly [name: string, neutral: string];
+export const NEUTRAL_NAMES = [
+	"{hygiene}",
+	"{North Star}",
+	"{brain topics}",
+	"{listing}",
+	"{loose active notes}",
+	"{a topic group}",
+	"{oversized notes}",
+	"{old open loops}",
+	"{old inbox items}",
+	"{notes + counts}",
+	"{no properties}",
+	"{missing field}",
+] as const;
+
+export type NeutralName = (typeof NEUTRAL_NAMES)[number];
+
+/**
+ * An object name of one form, and the neutral name that both forms share
+ * for the object. Example: `["Vault Hygiene", "{hygiene}"]` in the Markdown
+ * form and `["Workspace Hygiene", "{hygiene}"]` in the Notion form. A name
+ * is plain text and not a pattern.
+ */
+export type ObjectName = readonly [name: string, neutral: NeutralName];
+
+/** The most characters that an object name can have. The longest name of the Markdown wording has 72. */
+export const NAME_MAX_LENGTH = 80;
+
+/**
+ * Why `entry` is not an object name, or `null` when it is one. A name can
+ * rename an object, and it must not carry an instruction. So the neutral
+ * name is one of the closed set, and the name is short, on one line, and
+ * not a sentence. The harness applies no entry that has a problem.
+ */
+export function nameProblem([name, neutral]: readonly [string, string]): string | null {
+	if (!(NEUTRAL_NAMES as readonly string[]).includes(neutral)) return "the neutral name is not one of the closed set";
+	if (name === "") return "the name is empty";
+	if (name.length > NAME_MAX_LENGTH) return `the name has more than ${NAME_MAX_LENGTH} characters`;
+	if (/[\r\n]/.test(name)) return "the name has a line break";
+	if (/[.!?](?:\s|$)/.test(name)) return "the name holds the end of a sentence";
+	return null;
+}
 
 /**
  * The wording of one form.
@@ -176,6 +223,7 @@ export type ObjectName = readonly [name: string, neutral: string];
  * `names` has the object names of the form. The harness compares the text
  * of each matched line after it puts the neutral name in the place of each
  * object name. A longer name goes before a shorter name that it contains.
+ * An entry that `nameProblem` rejects becomes an `UNMAPPED` finding.
  */
 export type Wording = {
 	readonly patterns: Readonly<Partial<Record<TextKind, RegExp>>>;
@@ -185,7 +233,13 @@ export type Wording = {
 const textOf = (kind: TextKind): Text => TEXTS[kind];
 
 /** The named groups that the pattern of `kind` must have. */
-export const capturesOf = (kind: TextKind): readonly Capture[] => textOf(kind).captures ?? [];
+export const capturesOf = (kind: TextKind): readonly Capture[] => {
+	const { captures = [], notCompared } = textOf(kind);
+	return notCompared === undefined ? captures : [...captures, "formText"];
+};
+
+/** The shape of the text of `kind` that the harness does not compare, when the kind has such text. */
+export const notComparedOf = (kind: TextKind): RegExp | undefined => textOf(kind).notCompared;
 
 /** The kinds of `place`, in the order in which the harness tries them. */
 export const kindsIn = (place: Place): TextKind[] => (Object.keys(TEXTS) as TextKind[]).filter((kind) => textOf(kind).in === place);

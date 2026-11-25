@@ -12,9 +12,9 @@
 import { createHash } from "node:crypto";
 import { realpathSync } from "node:fs";
 import { ROWS, type RowId } from "./rows.ts";
-import { oldSessionLogName, TRANSCRIPT, type ScenarioRun, type StepRun } from "./runner.ts";
-import { PROPERTY_OF_FIELD, type Finding, type FixtureSpec, type HookEnvironment, type HookName, type Scenario, type Step } from "./spec.ts";
-import { capturesOf, findingOf, itemPlaceOf, kindsIn, type Capture, type Place, type TextKind } from "./wording.ts";
+import { FOREIGN_SESSION_LOG, oldSessionLogName, TRANSCRIPT, type ScenarioRun, type StepRun } from "./runner.ts";
+import { isLooseActive, PROPERTY_OF_FIELD, type Finding, type FixtureSpec, type HookEnvironment, type HookName, type Scenario, type Step } from "./spec.ts";
+import { capturesOf, findingOf, itemPlaceOf, kindsIn, nameProblem, notComparedOf, type Capture, type ObjectName, type Place, type TextKind } from "./wording.ts";
 
 type Found = Omit<Finding, "step">;
 
@@ -28,7 +28,7 @@ const found = (row: Found["row"], fields: Partial<Omit<Found, "row">> = {}): Fou
 
 const filled = (lines: readonly string[]): string[] => lines.filter((line) => line.trim() !== "");
 
-const unmapped = (text: string): Found => found("UNMAPPED", { detail: text.trim().slice(0, 120) });
+const unmapped = (text: string): Found => found("UNMAPPED", { detail: text.trim() });
 
 const isString = (value: unknown): value is string => typeof value === "string";
 
@@ -39,6 +39,8 @@ type Context = {
 	readonly home: string;
 	/** The directories of this run, and the name that both forms give each one. */
 	readonly paths: readonly (readonly [path: string, name: string])[];
+	/** The object names of the form that `nameProblem` accepts, the longest first. */
+	readonly names: readonly ObjectName[];
 };
 
 const noteOf = (context: Context, reference: string): string =>
@@ -79,11 +81,18 @@ function frameOf(kind: TextKind, text: string, match: RegExpExecArray): string {
 	return frame + text.slice(at);
 }
 
+/** The part that the harness does not compare has the shape that the kind states, or the kind has no such part. */
+function keepsTheShape(kind: TextKind, match: RegExpExecArray): boolean {
+	const shape = notComparedOf(kind);
+	const part = match.groups?.["formText"];
+	return shape === undefined || part === undefined || shape.test(part);
+}
+
 function matchOf(context: Context, kinds: readonly TextKind[], text: string): Match | null {
 	for (const kind of kinds) {
 		const pattern = context.environment.wording.patterns[kind];
 		const match = pattern === undefined ? null : indexed(pattern).exec(text);
-		if (match) return { kind, groups: match.groups ?? {}, frame: frameOf(kind, text, match) };
+		if (match && keepsTheShape(kind, match)) return { kind, groups: match.groups ?? {}, frame: frameOf(kind, text, match) };
 	}
 	return null;
 }
@@ -92,18 +101,19 @@ const escaped = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, "\
 
 /** `text` with the neutral name in the place of each object name of the form. A longer name wins at one position. */
 function neutral(context: Context, text: string): string {
-	const names = [...context.environment.wording.names].sort(([a], [b]) => b.length - a.length);
-	if (names.length === 0) return text;
-	const neutralOf = new Map(names);
-	return text.replace(new RegExp(names.map(([name]) => escaped(name)).join("|"), "g"), (name) => neutralOf.get(name) ?? name);
+	if (context.names.length === 0) return text;
+	const neutralOf = new Map<string, string>(context.names);
+	return text.replace(new RegExp(context.names.map(([name]) => escaped(name)).join("|"), "g"), (name) => neutralOf.get(name) ?? name);
 }
+
+/** `text` with the shared name in the place of each directory of this run. */
+const withoutRunPaths = (context: Context, text: string): string =>
+	context.paths.reduce((result, [path, name]) => result.replaceAll(path, name), text);
 
 /** The instruction text of matched text: the frame, with no path of this run and no object name of the form. */
 function instructionOf(match: Match, context: Context): string | undefined {
 	if (findingOf(match.kind).data) return undefined;
-	let text = match.frame;
-	for (const [path, name] of context.paths) text = text.replaceAll(path, name);
-	return neutral(context, text);
+	return neutral(context, withoutRunPaths(context, match.frame));
 }
 
 function captured(match: Match, capture: Capture): string {
@@ -156,10 +166,12 @@ function findingsFrom(match: Match, context: Context, label?: string, position?:
 		const note = captureOf(match, "note");
 		return [found(row, { ...fields, note: note === undefined ? null : noteOf(context, note) })];
 	}
+	// The line states one instruction for each note of the group, so each note has the text.
+	const ofGroup = text === undefined ? {} : { text };
 	const members = context.environment.notesIn(group);
 	return [
-		...members.map((note) => found(row, { note, detail: fields.detail })),
-		...(members.length === fields.count ? [] : [found(row, { detail: `${fields.detail} count`, count: fields.count })]),
+		...members.map((note) => found(row, { note, detail: fields.detail, ...ofGroup })),
+		...(members.length === fields.count ? [] : [found(row, { detail: `${fields.detail} count`, count: fields.count, ...ofGroup })]),
 	];
 }
 
@@ -293,20 +305,67 @@ function promptFindings(text: string, context: Context): Found[] {
 	];
 }
 
+/**
+ * The open tasks: a line that names a note, then the tasks of that note.
+ * Only a line that names a fixture note and has a task after it is such a
+ * header. Each other line that is not a task is `UNMAPPED`.
+ */
 function openTasks(lines: readonly string[], context: Context): Found[] {
 	const out: Found[] = [];
 	let note: string | null = null;
+	let headerWithNoTask: string | null = null;
+	const closeHeader = (): void => {
+		if (headerWithNoTask !== null) out.push(unmapped(headerWithNoTask));
+		headerWithNoTask = null;
+	};
 	for (const line of filled(lines)) {
 		const match = matchOf(context, kindsIn("open tasks"), line);
-		if (match === null) {
-			out.push(unmapped(line));
+		if (match?.kind === "open task") {
+			headerWithNoTask = null;
+			out.push(...findingsFrom(match, context).map((finding) => ({ ...finding, note })));
 			continue;
 		}
-		const header = findingOf(match.kind).row === undefined ? captureOf(match, "note") : undefined;
-		if (header !== undefined) note = noteOf(context, header);
-		out.push(...findingsFrom(match, context).map((finding) => ({ ...finding, note })));
+		closeHeader();
+		if (match?.kind === "no open tasks") continue;
+		note = match === null ? null : context.environment.noteOf(captured(match, "note"));
+		if (note === null) out.push(unmapped(line));
+		else headerWithNoTask = line;
 	}
+	closeHeader();
 	return out;
+}
+
+/** The brain topics, and their order. Both forms sort the topics by name. */
+function brainTopics(lines: readonly string[], context: Context): Found[] {
+	const topics = filled(lines).flatMap((line) => recognize(context, "brain topics", line));
+	const named = topics.flatMap(({ row, note }) => (row === "SS-12" && note !== null ? [note] : []));
+	return [...topics, found("SS-12", { detail: `order: ${named.join(", ")}` })];
+}
+
+/**
+ * The names of the active work. The section keeps a number of names from a
+ * source that has no order, so the two forms can keep different notes. The
+ * finding is the number of loose active notes that the section names. A
+ * line that names a different note, or the same note again, has a finding
+ * of its own.
+ */
+function activeWork(lines: readonly string[], context: Context): Found[] {
+	const loose = new Set(context.spec.notes.filter(isLooseActive).map(({ title }) => title));
+	const named = new Set<string>();
+	const other: Found[] = [];
+	for (const line of filled(lines)) {
+		const match = matchOf(context, kindsIn("active work"), line);
+		if (match === null) {
+			other.push(unmapped(line));
+			continue;
+		}
+		const reference = captureOf(match, "note");
+		if (reference === undefined) continue;
+		const title = context.environment.noteOf(reference);
+		if (title !== null && loose.has(title) && !named.has(title)) named.add(title);
+		else other.push(found("SS-15", { detail: `${title !== null && named.has(title) ? "named again" : "not a loose active note"}: ${reference}` }));
+	}
+	return [found("SS-15", { detail: "names", count: named.size }), ...other];
 }
 
 function listing(lines: readonly string[], context: Context): Found[] {
@@ -330,10 +389,10 @@ type SectionKind = Extract<TextKind, `section ${string}`>;
 const SECTION_LINES: Readonly<Record<SectionKind, (lines: readonly string[], context: Context) => Found[]>> = {
 	"section date": eachLine("date"),
 	"section north star": eachLine("north star"),
-	"section brain topics": eachLine("brain topics"),
+	"section brain topics": brainTopics,
 	"section recent changes": eachLine("recent changes"),
 	"section open tasks": openTasks,
-	"section active work": eachLine("active work"),
+	"section active work": activeWork,
 	"section listing": listing,
 	"section context pointer": eachLine("context pointer"),
 	"section hygiene": hygieneLines,
@@ -469,8 +528,7 @@ const POLICY_ROW: Readonly<Record<string, RowId | undefined>> = {
 };
 
 /** The neutral name of text that is one object name of the form as a whole. */
-const neutralName = (context: Context, text: string): string =>
-	context.environment.wording.names.find(([name]) => name === text)?.[1] ?? text;
+const neutralName = (context: Context, text: string): string => context.names.find(([name]) => name === text)?.[1] ?? text;
 
 /** One policy result: its ID, its class, its action, its target, and its note. A target is an object name of the form. */
 function policyFinding(policy: unknown, context: Context): Found {
@@ -544,14 +602,16 @@ function sessionLogFindings(run: StepRun, scenario: Scenario): Found[] {
 		...[...copies].map(([trigger, count]) => found("PC-03", { detail: trigger, count })),
 		found("PC-04", { count: run.sessionLogs.length }),
 		...(old.length === 0 ? [] : [found("PC-04", { detail: `old backups removed: ${removed.join(", ") || "none"}`, count: removed.length })]),
+		...(scenario.foreignSessionLog ? [found("PC-04", { detail: kept.has(FOREIGN_SESSION_LOG) ? "the foreign file stays" : "the foreign file is gone" })] : []),
 	];
 }
 
-/** Each line that a run added to the environment file of the session. */
+/** Each line that a run added to the environment file of the session, with its line break. The shell reads the file, so a line with no break joins the next line. */
 const envFileFindings = (run: StepRun, context: Context): Found[] =>
-	filled(run.envFileAdded.split("\n")).map((line) =>
-		found("SS-02", { detail: context.paths.reduce((text, [path, name]) => text.replaceAll(path, name), line) }),
-	);
+	run.envFileAdded
+		.split(/(?<=\n)/)
+		.filter((line) => line !== "")
+		.map((line) => found("SS-02", { detail: JSON.stringify(withoutRunPaths(context, line)).slice(1, -1) }));
 
 /** A directory under both of its names, because the temporary directory can be a link. */
 function bothNames(path: string): string[] {
@@ -569,7 +629,18 @@ export function findingsOf(scenarioRun: ScenarioRun, spec: FixtureSpec): Finding
 		...(projectDir === "" ? [] : bothNames(projectDir).map((path) => [path, "{project directory}"] as const)),
 		...(scenarioRun.home === "" ? [] : bothNames(scenarioRun.home).map((path) => [path, "~"] as const)),
 	];
-	const context: Context = { environment: scenarioRun.environment, spec, home: scenarioRun.home, paths };
+	const { names } = scenarioRun.environment.wording;
+	const context: Context = {
+		environment: scenarioRun.environment,
+		spec,
+		home: scenarioRun.home,
+		paths,
+		names: names.filter((entry) => nameProblem(entry) === null).sort(([a], [b]) => b.length - a.length),
+	};
+	const notNames = names.flatMap((entry) => {
+		const problem = nameProblem(entry);
+		return problem === null ? [] : [unmapped(`not an object name (${problem}): ${JSON.stringify(entry)}`)];
+	});
 	const stepOfKey = new Map<string, number>();
 	return scenarioRun.runs.flatMap((run, step) => {
 		const stepInput = scenarioRun.scenario.steps[step]!;
@@ -582,8 +653,9 @@ export function findingsOf(scenarioRun: ScenarioRun, spec: FixtureSpec): Finding
 			return stepOfKey.get(key)!;
 		};
 		const all = [
+			...(step === 0 ? notNames : []),
 			found(row, { detail: channelOf(output) + exit }),
-			...(stderr === "" ? [] : [found(row, { detail: `stderr: ${stderr.slice(0, 120)}` })]),
+			...(stderr === "" ? [] : [found(row, { detail: `stderr: ${withoutRunPaths(context, stderr)}` })]),
 			...(isString(output) ? [] : contentFindings(stepInput, output, firstStepOf, context)),
 			...(stepInput.hook === "pre-compact" ? sessionLogFindings(run, scenarioRun.scenario) : []),
 			...envFileFindings(run, context),

@@ -38,13 +38,17 @@ export function markdownPath(note: FixtureNote): string {
 const yamlValue = (value: string | readonly string[]): string =>
 	typeof value === "string" ? ` ${value}` : value.map((item) => `\n  - ${item}`).join("");
 
-/** The properties of a note as a YAML frontmatter block, or "" when the note has no property. */
-export function renderFrontmatter(fields: FixtureNote["fields"]): string {
-	const lines = (Object.keys(fields) as Field[]).map((field) => `${field}:${yamlValue(fields[field]!)}`);
+/** The properties and the other keys of a note as a YAML frontmatter block, or "" when the note has none. */
+export function renderFrontmatter({ fields, otherKeys = {}, verbatim }: Pick<FixtureNote, "fields" | "otherKeys" | "verbatim">): string {
+	const lines = [
+		...(Object.keys(fields) as Field[]).map((field) => `${field}:${yamlValue(fields[field]!)}`),
+		...Object.entries(otherKeys).map(([key, value]) => `${key}: ${value}`),
+		...(verbatim ? ["verbatim: true"] : []),
+	];
 	return lines.length === 0 ? "" : `---\n${lines.join("\n")}\n---\n\n`;
 }
 
-export const renderNote = (note: FixtureNote): string => renderFrontmatter(note.fields) + note.body;
+export const renderNote = (note: FixtureNote): string => renderFrontmatter(note) + note.body;
 
 /**
  * The Markdown form: a new vault for each scenario, and the hooks of
@@ -95,7 +99,11 @@ export function markdownForm(spec: FixtureSpec, options: { readonly scriptsDir: 
 			},
 			wording: MARKDOWN_WORDING,
 			noteOf: (reference) => titleOfReference.get(reference.replace(/^\.\//, "")) ?? null,
-			notesIn: (folder) => [...paths].filter(([, path]) => path.startsWith(`${folder}/`)).map(([title]) => title),
+			// The listing writes a folder as `./folder/`.
+			notesIn: (folder) => {
+				const prefix = `${folder.replace(/^\.\//, "").replace(/\/$/, "")}/`;
+				return [...paths].filter(([, path]) => path.startsWith(prefix)).map(([title]) => title);
+			},
 		};
 	};
 }

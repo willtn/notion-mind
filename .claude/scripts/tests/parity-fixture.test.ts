@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { FIXTURE } from "../parity/fixture.ts";
 import { markdownForm, markdownPath, renderNote } from "../parity/markdown-form.ts";
 import { ROWS, type RowId } from "../parity/rows.ts";
-import type { ExpectedFinding, FixtureNote } from "../parity/spec.ts";
+import { isLooseActive, type ExpectedFinding, type FixtureNote } from "../parity/spec.ts";
 
 const note = (title: string): FixtureNote => {
 	const found = FIXTURE.notes.find((candidate) => candidate.title === title);
@@ -115,8 +115,31 @@ describe("fixture spec", () => {
 		assert.ok(sizes[0]! < sizes[1]!, "the note that the list does not show must not depend on the order of the files");
 	});
 
-	test("10 loose notes are active, the number that the Active Work section keeps", () => {
-		assert.equal(FIXTURE.notes.filter((n) => markdownPath(n).startsWith("work/active/") && markdownPath(n).split("/").length === 3).length, 10);
+	test("11 loose notes are active, one more than the Active Work section keeps, and each one is a file at the top of the active work", () => {
+		const atTheTop = FIXTURE.notes.filter((n) => markdownPath(n).startsWith("work/active/") && markdownPath(n).split("/").length === 3);
+		assert.equal(atTheTop.length, 11);
+		assert.deepEqual(FIXTURE.notes.filter(isLooseActive), atTheTop);
+	});
+
+	test("a note of 26,600 bytes has a different size in KB when the size is rounded and when it is floored", () => {
+		assert.equal(bytesOf("Runbook"), 26_600);
+	});
+
+	test("the note with a link to a person only is above the 300-character limit of the no-link check", () => {
+		const text = renderNote(note("Fixture Work Note"));
+		assert.ok(text.length > 300, `${text.length} characters`);
+		assert.deepEqual(text.match(/\[\[[^\]]+\]\]/g), ["[[Ada Park]]"]);
+	});
+
+	test("a key that is not a property goes in the frontmatter of the Markdown form only", () => {
+		const undated = note("Undated Plan");
+		assert.match(renderNote(undated), /^update: 2026-01-05$/m);
+		assert.doesNotMatch(renderNote(undated), /^date:/m);
+		assert.equal("date" in undated.fields, false);
+	});
+
+	test("a raw capture has `verbatim: true` in its frontmatter", () => {
+		assert.match(renderNote(note("Outage Call Transcript")), /^verbatim: true$/m);
 	});
 
 	test("11 tasks are open in the loose active notes and in Home, one more than the Open Tasks section keeps, and Home holds the last one", () => {
@@ -208,6 +231,7 @@ describe("Markdown form", () => {
 	});
 
 	test("a folder names the notes below it", () => {
-		assert.deepEqual([...environment.notesIn("work/archive")].sort(), ["Legacy Importer", "Search Migration"]);
+		assert.deepEqual([...environment.notesIn("work/archive")].sort(), ["Legacy Importer", "Search Migration", "Undated Plan"]);
+		assert.deepEqual(environment.notesIn("./work/archive/"), environment.notesIn("work/archive"));
 	});
 });

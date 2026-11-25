@@ -30,6 +30,9 @@ export type StepRun = {
 	readonly envFileAdded: string;
 };
 
+/** The name of the file that is not a transcript copy (`Scenario.foreignSessionLog`). */
+export const FOREIGN_SESSION_LOG = "notes.jsonl";
+
 /** The name of an old transcript copy that exists before the first step. Number 0 is the oldest. */
 export const oldSessionLogName = (index: number): string => `session_auto_20200101_0000${String(index).padStart(2, "0")}.jsonl`;
 
@@ -156,7 +159,13 @@ export function runScenario(scenario: Scenario, spec: FixtureSpec, environment: 
 		writeFileSync(file, "");
 		handoffDir = join(file, "stop-handoff");
 	}
-	if (scenario.oldSessionLogs) mkdirSync(environment.sessionLogDir, { recursive: true });
+	if (scenario.oldSessionLogs || scenario.foreignSessionLog) mkdirSync(environment.sessionLogDir, { recursive: true });
+	if (scenario.foreignSessionLog) {
+		const foreign = join(environment.sessionLogDir, FOREIGN_SESSION_LOG);
+		writeFileSync(foreign, "not a transcript copy\n");
+		const older = new Date(Date.UTC(2019, 0, 1));
+		utimesSync(foreign, older, older);
+	}
 	for (let i = 0; i < (scenario.oldSessionLogs ?? 0); i++) {
 		const log = join(environment.sessionLogDir, oldSessionLogName(i));
 		writeFileSync(log, `old ${i}\n`);
@@ -182,7 +191,7 @@ export function runScenario(scenario: Scenario, spec: FixtureSpec, environment: 
 			session_id: scenario.id,
 			transcript_path: transcript,
 			cwd: environment.projectDir,
-			hook_event_name: HOOKS[step.hook].event,
+			...(step.withoutEventName ? {} : { hook_event_name: HOOKS[step.hook].event }),
 		};
 		if (step.input.kind === "payload") return JSON.stringify({ ...base, ...step.input.fields });
 		if (step.input.kind === "memory-write") {

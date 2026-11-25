@@ -27,7 +27,7 @@ function paddedTo(text: string, bytes: number): string {
 
 /** `note` with a longer body, so that its properties and its body together have exactly `bytes` bytes. */
 function sized(note: FixtureNote, bytes: number): FixtureNote {
-	const properties = renderFrontmatter(note.fields);
+	const properties = renderFrontmatter(note);
 	return { ...note, body: paddedTo(properties + note.body, bytes).slice(properties.length) };
 }
 
@@ -102,12 +102,21 @@ const notes: readonly FixtureNote[] = [
 		body: "# Key Decisions\n\n- Keep one store for the notes.\n",
 		changedDaysAgo: 9,
 	},
+	// The index of the brain topics. The Brain Topics section leaves it out.
+	{
+		title: "Memories",
+		type: "Brain topic",
+		fields: global("The index of the memory topics", ["brain", "index"]),
+		body: "# Memories\n\n- [[Patterns]]\n- [[Gotchas]]\n",
+		changedDaysAgo: 9,
+	},
 
 	{
+		// Above the length limit of the no-link check. Its one link names a note that no other note links in this way.
 		title: "Fixture Work Note",
 		type: "Work note",
 		fields: workNote("A work note with no finding"),
-		body: linked("Fixture Work Note", "This note has each required field and one link."),
+		body: "# Fixture Work Note\n\nThis note has each required field and no finding. It has more characters than the limit of the no-link check, and its one link names a person and not a brain topic: [[Ada Park]].\n",
 		changedDaysAgo: 2,
 	},
 	{
@@ -157,6 +166,14 @@ const notes: readonly FixtureNote[] = [
 			changedDaysAgo: 4,
 		}),
 	),
+	// The 11th loose active note, one more than the Active Work section keeps. It has no quarter.
+	{
+		title: "Roadmap Sketch",
+		type: "Work note",
+		fields: { ...global("A first sketch of the roadmap", ["work-note"]), status: "active" },
+		body: linked("Roadmap Sketch", "The roadmap has three themes."),
+		changedDaysAgo: 4,
+	},
 	{
 		title: "Pricing Rollout",
 		type: "Work note",
@@ -176,15 +193,24 @@ const notes: readonly FixtureNote[] = [
 		title: "Legacy Importer",
 		type: "Work note",
 		fields: { ...workNote("The importer that the pipeline replaced"), status: "completed" },
-		body: linked("Legacy Importer", "The importer is off."),
+		body: linked("Legacy Importer", "The importer is off.") + "\nWaiting on the data team for the last export.\n",
 		changedDaysAgo: 90,
 	},
 	{
 		title: "Search Migration",
 		type: "Work note",
 		fields: { ...workNote("The move to the new search cluster"), status: "archived" },
-		body: linked("Search Migration", "The move is complete."),
+		body: linked("Search Migration", "The move is complete.") + "\nWatch for stale results in the old index.\n",
 		changedDaysAgo: 80,
+	},
+	// No `date`. The key `update` ends with the name of that field and is not that field.
+	{
+		title: "Undated Plan",
+		type: "Work note",
+		fields: { description: "A plan with no date", tags: ["work-note"], status: "completed", quarter: "Q1-2026" },
+		otherKeys: { update: "2026-01-05" },
+		body: linked("Undated Plan", "This plan is done."),
+		changedDaysAgo: 70,
 	},
 
 	...(
@@ -229,8 +255,26 @@ const notes: readonly FixtureNote[] = [
 		title: "Checkout Outage RCA",
 		type: "Incident",
 		fields: global("The root cause analysis of the checkout outage", ["work-note"]),
-		body: linked("Checkout Outage RCA", "The analysis sits beside [[Checkout Outage]]."),
+		// The lines of the code block are not prose, so they are not a wrapped paragraph.
+		body: linked("Checkout Outage RCA", "The analysis sits beside [[Checkout Outage]].") + "\n```text\ngateway: refused\nretries: 3\n```\n",
 		changedDaysAgo: 20,
+	},
+	// A raw capture: its paragraph has line breaks, and `verbatim` keeps the hard-wrap check away.
+	{
+		title: "Outage Call Transcript",
+		type: "Incident",
+		fields: global("The raw transcript of the outage call", ["work-note"]),
+		verbatim: true,
+		body: "# Outage Call Transcript\n\nThe gateway refused each request\nfrom the start of the call\nto its end. See [[Checkout Outage]].\n",
+		changedDaysAgo: 20,
+	},
+	// Old, with an open item, in a watched folder. The open loops leave out a note with "Archive" in its name.
+	{
+		title: "Outage Log Archive",
+		type: "Incident",
+		fields: global("The old entries of the outage log", ["work-note"]),
+		body: linked("Outage Log Archive", "The log of the outages before this year.") + "\n## Action Items\n\n- [ ] Sort the old entries\n",
+		changedDaysAgo: 40,
 	},
 	{
 		title: "Payments Latency",
@@ -264,7 +308,10 @@ const notes: readonly FixtureNote[] = [
 			title,
 			type: "Inbox item",
 			fields: { ...global("A raw meeting export", ["meeting"]), status: "inbox" },
-			body: `${linked(title, "The raw export of one meeting.")}\n${heading}\n\n- [ ] Send the summary\n`,
+			body:
+				`${linked(title, "The raw export of one meeting.")}\n${heading}\n\n- [ ] Send the summary\n` +
+				// A heading that is not a follow-up heading ends the follow-up section, so this item is not an open loop.
+				(title === "Planning Export" ? "\n## Background\n\n- [ ] Read the old plan\n" : ""),
 			changedDaysAgo,
 		}),
 	),
@@ -348,16 +395,20 @@ const notes: readonly FixtureNote[] = [
 		title: "Ticket Links",
 		type: "Reference",
 		fields: global("A note that links two ticket IDs", ["reference"]),
-		body: "# Ticket Links\n\nThe work is in [[PROJ-123]] and [[OPS-9]]. See [[Patterns]].\n",
+		body: "# Ticket Links\n\nThe work is in [[INFRA-123]] and [[OPS-9]]. See [[Patterns]].\n",
 		changedDaysAgo: 1,
 	},
-	{
-		title: "Runbook",
-		type: "Reference",
-		fields: global("A runbook past the size limit", ["reference"]),
-		body: filler("Runbook", 26_000),
-		changedDaysAgo: 12,
-	},
+	// 26,600 bytes: 27 KB when the size is rounded, and 26 KB when it is floored.
+	sized(
+		{
+			title: "Runbook",
+			type: "Reference",
+			fields: global("A runbook past the size limit", ["reference"]),
+			body: head("Runbook"),
+			changedDaysAgo: 12,
+		},
+		26_600,
+	),
 	{
 		title: "Near Limit Runbook",
 		type: "Reference",
@@ -409,33 +460,47 @@ const notes: readonly FixtureNote[] = [
 /** The size from which the hygiene scan flags `AGENTS.md`. The fixture file is exactly at it. */
 const AGENTS_FLAG_BYTES = 23_000;
 
-const repoFiles: readonly RepoFile[] = [
-	{
-		path: "vault-manifest.json",
-		content: `${JSON.stringify(
-			{
-				template: "obsidian-mind",
-				version: "10.0.0",
-				open_loop_dirs: ["work/1-1", "work/meetings", "work/incidents"],
-				// "follow ups" is not a default, so a finding under that heading shows that the hook read this file.
-				open_loop_sections: ["action items", "what to watch", "follow ups"],
-				listing_collapse_threshold: 12,
-				infrastructure: ["AGENTS.md", "CLAUDE.md", "vault-manifest.json"],
-				frontmatter_required: {
-					global: ["date", "description", "tags"],
-					"work-note": ["date", "status", "quarter"],
-					incident: ["date", "status", "quarter", "ticket", "severity", "role"],
-					person: ["date", "title"],
-					team: ["date"],
-					"1-1": ["date", "quarter"],
-				},
+const WATCHED_FOLDERS = ["work/1-1", "work/meetings", "work/incidents"];
+
+const manifest = (openLoopDirs: readonly string[]): RepoFile => ({
+	path: "vault-manifest.json",
+	content: `${JSON.stringify(
+		{
+			template: "obsidian-mind",
+			version: "10.0.0",
+			open_loop_dirs: openLoopDirs,
+			// "follow ups" is not a default, so a finding under that heading shows that the hook read this file.
+			open_loop_sections: ["action items", "what to watch", "follow ups"],
+			listing_collapse_threshold: 12,
+			infrastructure: ["AGENTS.md", "CLAUDE.md", "vault-manifest.json"],
+			frontmatter_required: {
+				global: ["date", "description", "tags"],
+				"work-note": ["date", "status", "quarter"],
+				incident: ["date", "status", "quarter", "ticket", "severity", "role"],
+				person: ["date", "title"],
+				team: ["date"],
+				"1-1": ["date", "quarter"],
 			},
-			null,
-			2,
-		)}\n`,
-	},
+		},
+		null,
+		2,
+	)}\n`,
+});
+
+/**
+ * The manifest that also watches the archived work. Two archived notes are
+ * old and hold a follow-up line, so 6 notes have open loops, one more than
+ * the list keeps. With the manifest of the fixture, 4 notes have open
+ * loops, and the list shows the notes at the age limit.
+ */
+const MANIFEST_WITH_ARCHIVE_WATCHED = manifest([...WATCHED_FOLDERS, "work/archive"]);
+
+const repoFiles: readonly RepoFile[] = [
+	manifest(WATCHED_FOLDERS),
 	{ path: "AGENTS.md", content: paddedTo(head("AGENTS"), AGENTS_FLAG_BYTES) },
 	{ path: "CLAUDE.md", content: "Read AGENTS.md.\n" },
+	// Past the size limit. The size scan leaves out the folder of the templates.
+	{ path: "templates/Work Note.md", content: filler("Work Note", 26_000) },
 ];
 
 const payload = (hook: Step["hook"], fields: Readonly<Record<string, unknown>> = {}): Step => ({
@@ -475,24 +540,49 @@ const without = (row: "HY-07" | "HY-09", findings: readonly ExpectedFinding[]): 
 /**
  * 11 notes are past the size limit. The report shows the 10 largest, and
  * the note that is exactly at the limit is the one that it does not show.
+ * "Runbook" has 26,600 bytes, so its size in KB shows that the hook rounds.
  */
-const OVERSIZED_SHOWN = ["Runbook", ...[2, 3, 4, 5].map((n) => `Runbook Part ${n}`), ...[1, 2, 3, 4, 5].map((n) => `Workshop Export ${n}`)];
+const OVERSIZED_SHOWN: readonly (readonly [note: string, sizeKb: number])[] = [
+	["Runbook", 27],
+	...[2, 3, 4, 5].map((n) => [`Runbook Part ${n}`, 26] as const),
+	...[1, 2, 3, 4, 5].map((n) => [`Workshop Export ${n}`, 26] as const),
+];
 
 /**
  * Four notes have open items and an age of 14 days or more. The youngest is
- * at 14 days exactly. "Retro Export" has open items at 13 days and is not here.
+ * at 14 days exactly. "Retro Export" has open items at 13 days and is not
+ * here. "Outage Log Archive" is older and is not here, because of its name.
+ * "Planning Export" has one open item: its second item is below a heading
+ * that is not a follow-up heading.
  */
-const hygiene = (step: number): ExpectedFinding[] => [
+const OPEN_LOOPS: readonly (readonly [note: string, openItems: number])[] = [
+	["Payments Latency", 1],
+	["Checkout Outage", 2],
+	["Planning Export", 1],
+	["Ada Park 2026-02-07", 2],
+];
+
+/**
+ * The open loops when the manifest also watches the archived work: 6 notes
+ * have open loops, and the list keeps the 5 oldest. The note at the age
+ * limit is the one that it does not show.
+ */
+const OPEN_LOOPS_AT_THE_CAP: readonly (readonly [note: string, openItems: number])[] = [
+	["Legacy Importer", 1],
+	["Search Migration", 1],
+	["Payments Latency", 1],
+	["Checkout Outage", 2],
+	["Planning Export", 1],
+];
+
+const hygiene = (step: number, openLoops = OPEN_LOOPS): ExpectedFinding[] => [
 	{ row: "HY-10", step, detail: "order: HY-07, HY-09, HY-02, HY-03, HY-04, HY-05" },
-	...hygieneClaims(step),
+	...hygieneClaims(step).map((claim) => (claim.row === "HY-04" ? { ...claim, count: openLoops.length } : claim)),
 	{ row: "HY-01", step, note: "Old Pricing Plan" },
 	{ row: "HY-02", step, detail: BILLING_CLUSTER, count: 2 },
-	...OVERSIZED_SHOWN.map((note): ExpectedFinding => ({ row: "HY-03", step, note, sizeKb: 26 })),
+	...OVERSIZED_SHOWN.map(([note, sizeKb]): ExpectedFinding => ({ row: "HY-03", step, note, sizeKb })),
 	{ row: "HY-10", step, detail: "HY-03 more", count: 1 },
-	{ row: "HY-04", step, note: "Payments Latency", count: 1 },
-	{ row: "HY-04", step, note: "Checkout Outage", count: 2 },
-	{ row: "HY-04", step, note: "Planning Export", count: 1 },
-	{ row: "HY-04", step, note: "Ada Park 2026-02-07", count: 2 },
+	...openLoops.map(([note, count]): ExpectedFinding => ({ row: "HY-04", step, note, count })),
 ];
 
 const checklistItems = (step: number, detail: "item" | "summary item"): ExpectedFinding[] =>
@@ -521,7 +611,9 @@ const reportData = (step: number, key: number): ExpectedFinding[] => [
 
 const HYGIENE_ROWS = ["HY-01", "HY-02", "HY-03", "HY-04", "HY-05", "HY-07", "HY-09", "HY-10"] as const;
 
-/** The 10 loose notes of the active work. 10 is also the number of names that the Active Work section keeps. */
+/** The Active Work section keeps 10 names. The fixture has 11 loose active notes, so no form can state which 10. */
+const ACTIVE_WORK_KEPT = 10;
+
 const LOOSE_ACTIVE = [
 	"Fixture Work Note",
 	"Billing Export Pipeline",
@@ -533,6 +625,7 @@ const LOOSE_ACTIVE = [
 	"Audit Trail Schema",
 	"Invoice Template Refresh",
 	"Quota Alert Thresholds",
+	"Roadmap Sketch",
 ];
 
 /**
@@ -571,6 +664,7 @@ const LISTED = [
 	"Patterns",
 	"Gotchas",
 	"Key Decisions",
+	"Memories",
 	...LOOSE_ACTIVE,
 	"Pricing Rollout",
 	"Old Pricing Plan",
@@ -580,6 +674,8 @@ const LISTED = [
 	"Ben Ortiz 2026-03-01",
 	"Checkout Outage",
 	"Checkout Outage RCA",
+	"Outage Call Transcript",
+	"Outage Log Archive",
 	"Payments Latency",
 	...INBOX,
 	"Ada Park",
@@ -591,6 +687,7 @@ const LISTED = [
 const COLLAPSED = [
 	"Legacy Importer",
 	"Search Migration",
+	"Undated Plan",
 	"Missing Fields",
 	"No Links",
 	"Short No Links",
@@ -603,14 +700,19 @@ const COLLAPSED = [
 	...[2, 3, 4, 5].map((n) => `Runbook Part ${n}`),
 ];
 
-/** The line that SessionStart adds to the environment file of the session. */
-const vaultPathExport = (step: number): ExpectedFinding => ({ row: "SS-02", step, detail: "export VAULT_PATH='{project directory}'" });
+/** The line that SessionStart adds to the environment file of the session. It ends with a line break. */
+const vaultPathExport = (step: number): ExpectedFinding => ({ row: "SS-02", step, detail: "export VAULT_PATH='{project directory}'\\n" });
+
+type Section = "date" | "north star" | "brain topics" | "recent changes" | "open tasks" | "active work" | "listing" | "context pointer";
+
+const headers = (step: number, sections: readonly Section[]): ExpectedFinding[] =>
+	sections.map((section): ExpectedFinding => ({ row: "SS-19", step, detail: `header of ${section}` }));
 
 /** The sections that each SessionStart gives: the changes, the tasks, and the active work. */
 const volatileSections = (step: number): ExpectedFinding[] => [
 	{ row: "SS-13", step, detail: "no history" },
 	...OPEN_TASKS.map(([note, detail]): ExpectedFinding => ({ row: "SS-14", step, note, detail })),
-	...LOOSE_ACTIVE.map((note): ExpectedFinding => ({ row: "SS-15", step, note })),
+	{ row: "SS-15", step, detail: "names", count: ACTIVE_WORK_KEPT },
 ];
 
 /** The full context. `channel` is the row of the payload read: SS-19, or SS-01 when stdin is not a payload. */
@@ -619,6 +721,7 @@ const fullContext = (step: number, channel: "SS-19" | "SS-01"): ExpectedFinding[
 	{ row: "SS-19", step, detail: "session title" },
 	{ row: "SS-19", step, detail: "size meter" },
 	{ row: "SS-19", step, detail: "sections: date, north star, brain topics, recent changes, open tasks, active work, listing, hygiene" },
+	...headers(step, ["date", "north star", "brain topics", "recent changes", "open tasks", "active work", "listing"]),
 	{ row: "SS-10", step, detail: "date line" },
 	{ row: "SS-11", step, detail: "## Current Focus" },
 	{ row: "SS-11", step, detail: "completed items hidden", count: 1 },
@@ -629,6 +732,8 @@ const fullContext = (step: number, channel: "SS-19" | "SS-01"): ExpectedFinding[
 	{ row: "SS-12", step, note: "Patterns", detail: "The patterns that repeat" },
 	{ row: "SS-12", step, note: "Gotchas", detail: "The traps that cost time (empty)" },
 	{ row: "SS-12", step, note: "Key Decisions", detail: "(no description)" },
+	// The topics are in the order of their names. "Memories" is a brain topic that the section leaves out.
+	{ row: "SS-12", step, detail: "order: Gotchas, Key Decisions, Patterns" },
 	...volatileSections(step),
 	...LISTED.map((note): ExpectedFinding => ({ row: "SS-16", step, note, detail: "listed" })),
 	...COLLAPSED.map((note): ExpectedFinding => ({ row: "SS-16", step, note, detail: "collapsed" })),
@@ -643,6 +748,7 @@ const pointerContext = (step: number): ExpectedFinding[] => [
 	{ row: "SS-19", step, detail: "session title" },
 	{ row: "SS-19", step, detail: "size meter" },
 	{ row: "SS-19", step, detail: "sections: date, recent changes, open tasks, active work, context pointer, hygiene" },
+	...headers(step, ["date", "recent changes", "open tasks", "active work", "context pointer"]),
 	{ row: "SS-10", step, detail: "date line" },
 	...volatileSections(step),
 	{ row: "SS-05", step, detail: "context pointer" },
@@ -653,6 +759,25 @@ const pointerContext = (step: number): ExpectedFinding[] => [
 
 /** `AGENTS.md` one byte below the size from which the hygiene scan flags it. */
 const AGENTS_BELOW_FLAG: RepoFile = { path: "AGENTS.md", content: paddedTo(head("AGENTS"), AGENTS_FLAG_BYTES - 1) };
+
+/** `AGENTS.md` with a different size in KB, and with the flag as before. */
+const AGENTS_ONE_KB_LARGER: RepoFile = { path: "AGENTS.md", content: paddedTo(head("AGENTS"), AGENTS_FLAG_BYTES + 1000) };
+
+/** A prompt of no session, so each prompt gets its hints again. */
+const KEYWORD_PROMPTS: readonly (readonly [text: string, rows: readonly ("UP-03" | "UP-04" | "UP-05" | "UP-06")[]])[] = [
+	["We chose the nightly export.", ["UP-03"]],
+	["The call is to keep the cache.", ["UP-03"]],
+	["方針を決定した。", ["UP-03"]],
+	["We decided to keep the queue, so the old plan is overturned.", ["UP-03", "UP-04"]],
+	["The login page is a p0 for the team.", ["UP-05"]],
+	["I had a sync with the vendor.", ["UP-06"]],
+];
+
+const MISSING_ROLE_WARNING: readonly ExpectedFinding[] = [
+	{ row: "VW-17", detail: WRITE_CONTEXT },
+	{ row: "VW-13", note: "Ben Ortiz", count: 1 },
+	{ row: "VW-09", note: "Ben Ortiz", detail: "Role" },
+];
 
 const scenarios: readonly Scenario[] = [
 	{
@@ -684,8 +809,15 @@ const scenarios: readonly Scenario[] = [
 
 	{
 		id: "write-clean",
-		rows: ["VW-17"],
+		// The note is above the no-link length, and its one link names a person. So a link to any note is enough.
+		rows: ["VW-10", "VW-17"],
 		steps: [write("Fixture Work Note")],
+		expect: [{ row: "VW-17", detail: "silent" }],
+	},
+	{
+		id: "write-memory-index",
+		rows: ["VW-03"],
+		steps: [{ hook: "validate-write", input: { kind: "memory-write", file: "MEMORY.md" } }],
 		expect: [{ row: "VW-17", detail: "silent" }],
 	},
 	{
@@ -723,19 +855,48 @@ const scenarios: readonly Scenario[] = [
 		],
 	},
 	{
-		id: "write-missing-typed-field",
-		rows: ["VW-09"],
-		steps: [write("Ben Ortiz")],
+		id: "write-without-date",
+		rows: ["VW-08"],
+		steps: [write("Undated Plan")],
 		expect: [
 			{ row: "VW-17", detail: WRITE_CONTEXT },
-			{ row: "VW-13", note: "Ben Ortiz", count: 1 },
-			{ row: "VW-09", note: "Ben Ortiz", detail: "Role" },
+			{ row: "VW-13", note: "Undated Plan", count: 1 },
+			{ row: "VW-08", note: "Undated Plan", detail: "Date" },
 		],
 	},
 	{
-		id: "write-incident-without-tag",
+		id: "write-active-without-quarter",
 		rows: ["VW-09"],
+		steps: [write("Roadmap Sketch")],
+		expect: [
+			{ row: "VW-17", detail: WRITE_CONTEXT },
+			{ row: "VW-13", note: "Roadmap Sketch", count: 1 },
+			{ row: "VW-09", note: "Roadmap Sketch", detail: "Quarter" },
+		],
+	},
+	{
+		id: "write-missing-typed-field",
+		rows: ["VW-09"],
+		steps: [write("Ben Ortiz")],
+		expect: MISSING_ROLE_WARNING,
+	},
+	{
+		id: "write-without-event-name",
+		rows: ["VW-17"],
+		steps: [{ ...write("Ben Ortiz"), withoutEventName: true }],
+		expect: MISSING_ROLE_WARNING,
+	},
+	{
+		id: "write-incident-without-tag",
+		// The note also holds a code block of two lines, which is not a wrapped paragraph.
+		rows: ["VW-09", "VW-11"],
 		steps: [write("Checkout Outage RCA")],
+		expect: [{ row: "VW-17", detail: "silent" }],
+	},
+	{
+		id: "write-verbatim",
+		rows: ["VW-11"],
+		steps: [write("Outage Call Transcript")],
 		expect: [{ row: "VW-17", detail: "silent" }],
 	},
 	{
@@ -781,7 +942,7 @@ const scenarios: readonly Scenario[] = [
 		steps: [write("Runbook")],
 		expect: [
 			{ row: "VW-17", detail: WRITE_CONTEXT },
-			{ row: "VW-14", note: "Runbook", sizeKb: 26 },
+			{ row: "VW-14", note: "Runbook", sizeKb: 27 },
 			{ row: "VW-14", note: "Runbook", detail: "policy organization-threshold, oversized-note, flag" },
 		],
 	},
@@ -895,6 +1056,22 @@ const scenarios: readonly Scenario[] = [
 		]),
 	},
 	{
+		id: "prompt-keywords",
+		rows: ["UP-03", "UP-04", "UP-05", "UP-06"],
+		steps: KEYWORD_PROMPTS.map(([text]) => prompt(text, { session_id: "" })),
+		expect: KEYWORD_PROMPTS.flatMap(([, rows], step): ExpectedFinding[] => [
+			{ row: "UP-14", step, detail: PROMPT_CONTEXT },
+			{ row: "UP-12", step, detail: rows.join(", "), count: rows.length },
+			...rows.map((row): ExpectedFinding => ({ row, step })),
+		]),
+	},
+	{
+		id: "prompt-without-event-name",
+		rows: ["UP-14"],
+		steps: [{ ...prompt("We decided to keep the nightly export."), withoutEventName: true }],
+		expect: [{ row: "UP-14", detail: PROMPT_CONTEXT }, { row: "UP-12", detail: "UP-03", count: 1 }, { row: "UP-03" }],
+	},
+	{
 		id: "prompt-no-signal",
 		rows: ["UP-14"],
 		steps: [prompt("What is the time in Lisbon?")],
@@ -951,6 +1128,27 @@ const scenarios: readonly Scenario[] = [
 		],
 	},
 	{
+		id: "stop-then-prompt-of-other-session",
+		rows: ["ST-09", "UP-02"],
+		// The report waits for the session of the Stop. A prompt of a different session does not get it.
+		steps: [
+			payload("stop-checklist"),
+			prompt("What is the time in Lisbon?", { session_id: "a-different-session" }),
+			prompt("What is the time in Lisbon?"),
+		],
+		expect: [
+			{ row: "ST-09", step: 0, detail: "system message" },
+			...summary(0, "ST-09"),
+			{ row: "UP-14", step: 1, detail: "silent" },
+			{ row: "UP-14", step: 2, detail: PROMPT_CONTEXT },
+			{ row: "UP-02", step: 2 },
+			{ row: "ST-09", step: 2, detail: "preface" },
+			...checklist(2),
+			{ row: "ST-04", step: 2 },
+			...hygiene(2),
+		],
+	},
+	{
 		id: "stop-twice",
 		rows: ["ST-06", "ST-07", "ST-09"],
 		steps: [payload("stop-checklist"), payload("stop-checklist")],
@@ -974,6 +1172,17 @@ const scenarios: readonly Scenario[] = [
 			{ row: "ST-09", step: 1, detail: "system message" },
 			...without("HY-07", summary(1, "ST-09")),
 			{ row: "ST-07", step: 2, detail: "empty envelope" },
+		],
+	},
+	{
+		id: "stop-after-size-change",
+		rows: ["ST-06", "ST-07", "HY-09"],
+		// The size of `AGENTS.md` in KB is a measure and not a part of the report key, so the second Stop is silent.
+		steps: [payload("stop-checklist"), { ...payload("stop-checklist"), replaceRepoFile: AGENTS_ONE_KB_LARGER }],
+		expect: [
+			{ row: "ST-09", step: 0, detail: "system message" },
+			...summary(0, "ST-09"),
+			{ row: "ST-07", step: 1, detail: "empty envelope" },
 		],
 	},
 	{
@@ -1040,6 +1249,13 @@ const scenarios: readonly Scenario[] = [
 	},
 
 	{
+		id: "stop-open-loops-at-the-cap",
+		rows: ["HY-04", "ST-05"],
+		steps: [{ ...payload("stop-checklist", { session_id: "" }), replaceRepoFile: MANIFEST_WITH_ARCHIVE_WATCHED }],
+		expect: [{ row: "ST-11", detail: "system message" }, ...checklist(0), { row: "ST-04" }, ...hygiene(0, OPEN_LOOPS_AT_THE_CAP)],
+	},
+
+	{
 		id: "pre-compact-backup",
 		rows: ["PC-03", "PC-04"],
 		steps: [payload("pre-compact", { trigger: "auto", custom_instructions: "" })],
@@ -1054,12 +1270,14 @@ const scenarios: readonly Scenario[] = [
 		rows: ["PC-03", "PC-04"],
 		steps: [payload("pre-compact", { trigger: "manual", custom_instructions: "" })],
 		oldSessionLogs: 31,
+		foreignSessionLog: true,
 		expect: [
 			{ row: "PC-01", detail: "silent" },
 			{ row: "PC-03", detail: "manual", count: 1 },
-			{ row: "PC-04", count: 30 },
-			// The new copy and the 29 newest old copies stay.
+			// The new copy and the 29 newest old copies stay. The foreign file is not a copy, so it stays and is not one of the 30.
+			{ row: "PC-04", count: 31 },
 			{ row: "PC-04", detail: "old backups removed: 0, 1", count: 2 },
+			{ row: "PC-04", detail: "the foreign file stays" },
 		],
 	},
 	{
