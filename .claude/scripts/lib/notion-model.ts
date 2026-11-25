@@ -129,7 +129,7 @@ const WORK_TYPES = ["Work note", "Decision", "Incident", "1:1", "Inbox item", "T
 export const LOOSE_ACTIVE_TYPES = ["Work note", "Decision"] as const;
 const PERF_TYPES = ["PR evidence", "Review brief", "Review artifact", "Brag quarter"] as const;
 const KNOWLEDGE_TYPES = ["Brain topic", "Reference", "Domain note", "Event-log satellite", "Archive note"] as const;
-const STATUSES = ["active", "completed", "archived", "proposed", "accepted", "deprecated", "draft", "inbox"] as const;
+const STATUSES = ["active", "completed", "archived", "proposed", "accepted", "deprecated", "superseded", "draft", "inbox"] as const;
 const TAGS = ["work-note", "decision", "incident", "perf", "review", "thinking", "north-star", "competency", "person", "team", "brain", "org", "index", "moc"] as const;
 
 /**
