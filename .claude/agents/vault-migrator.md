@@ -4,8 +4,6 @@ description: "Classify, transform, and migrate vault content from a source vault
 tools: Read, Write, Edit, Grep, Glob, Bash
 model: sonnet
 maxTurns: 50
-skills:
-  - qmd
 ---
 
 You are the vault migrator for an obsidian-mind vault. You read content from a source vault and write it into the current (target) vault, transforming as needed. You NEVER modify the source vault.

@@ -4,7 +4,8 @@
  * The static check proves that no text orders a read of a local vault path, a
  * search tool, the cross-repository server, or the Obsidian CLI. The link
  * check proves that each Notion name in the text exists: each tool in the
- * schema of the server, each argument key of a read call in that schema, and
+ * schema of the server, each top-level argument key of a read call in that
+ * schema (a keys check needs a schema, so only the live listing gives it), and
  * each database, property, option, view, scaffold page, and template in
  * `notion-model.ts`.
  *
@@ -66,7 +67,6 @@ export const STATIC_GROUPS: readonly StaticGroup[] = [
 	{ name: "I", proves: "agent skill lines for the local search tool and Obsidian", pattern: /^\s+-\s+(q[m]d|obsidian-[a-z-]+)\s*$/ },
 ];
 
-/** The files that the checks cover: each `.md` file of the two folders, except the exempt files. */
 export function targetFiles(root: string): SourceFile[] {
 	const files: SourceFile[] = [];
 	for (const dir of [COMMANDS_DIR, AGENTS_DIR]) {

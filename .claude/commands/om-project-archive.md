@@ -1,6 +1,12 @@
 # Project Archive
 
-Move a completed project from `work/active/` to `work/archive/YYYY/` and update all indexes.
+Mark a completed project as done, so it leaves the active views and joins the completed views. Notion has no folders, so a property change replaces the file move.
+
+## Notion access
+
+Read with `mcporter call notion.<tool> --args '<JSON>' --output json`. Use no pipe and no redirect. Put no single quote in the JSON. Read `notion-map.json` in the project root for the `data_source` URL and the view URLs of each database.
+
+Write in two steps. First use the `Write` tool to make `.claude/state/outbox/<name>.json` with the JSON arguments. Then run `mcporter call notion.<tool> --args "$(cat .claude/state/outbox/<name>.json)"`.
 
 ## Usage
 
@@ -10,46 +16,42 @@ Move a completed project from `work/active/` to `work/archive/YYYY/` and update 
 
 ## Workflow
 
-### 1. Find the Note
+### 1. Find the Row
 
-Search `work/active/` for the project name. Confirm with the user before proceeding.
+Query `Work > Active Work` and look for the project name. If the view does not show it, run `notion-search`. Confirm with the user before proceeding.
 
-### 2. Update Frontmatter
+### 2. Update Properties
 
-- Set `status: completed`
-- Verify `quarter` property is set correctly
-- Verify `description` reflects the final state
+Use `notion-update-page` with `update_properties`. For example, the outbox file holds:
 
-### 3. Move the File
-
-```bash
-git mv "work/active/<Note>.md" "work/archive/YYYY/"
+```json
+{"page_id":"<page URL>","command":"update_properties","properties":{"Status":"completed"}}
 ```
 
-Use the year from the note's `date` field.
+- Set `Work.Status = completed`
+- Verify `Work.Quarter` is set correctly
+- Verify `Description` reflects the final state
 
-**Clustered workstreams**: when the project lives in a topic folder (`work/active/<Topic>/` — the grouping convention for >1-note workstreams), move the WHOLE folder and keep the grouping:
+### 3. Archive the Row
 
-```bash
-git mv "work/active/<Topic>" "work/archive/YYYY/<Topic>"
-```
+The `Work.Status` change is the move. The row leaves `Work > Active Work` and joins `Work > Completed`. Do not move the page.
 
-Every note inside keeps its cluster context, and wikilinks resolve by basename so nothing breaks.
+**Clustered workstreams**: when the project is a group of rows that share one `Work.Project` value, set `Work.Status = completed` on EVERY row of the group. Every row keeps its `Work.Project` value, so the grouping stays.
 
-### 4. Update Indexes
+### 4. Update Related Pages
 
-- **`work/Index.md`**: Move from Active Projects to the appropriate Completed quarter section
-- **`brain/North Star.md`**: Mark as completed in Current Focus if listed there
-- **`perf/Brag Doc.md`**: Verify the project is captured in the relevant quarter's highlights
-- **`brain/Memories.md`**: Update Recent Context if the project is mentioned as "in progress"
+- **`Page > North Star`**: Mark as completed in Current Focus if listed there. Use `notion-update-page` with `update_content`
+- **`Perf docs > Brag quarters`**: Verify the project is captured in the highlights of the relevant quarter
+- **`Page > North Star`, Recent Context section**: Update it if the project is mentioned as "in progress"
+- The hand-kept index of projects is gone. `Work > Active Work` and `Work > Completed` replace it, so there is nothing to move
 
 ### 5. Verify
 
-- Run a quick check that no wikilinks are broken (Obsidian resolves by name, so moves shouldn't break links)
-- Confirm the Work Dashboard Base shows the note in "Completed" view, not "Active Work"
+- Run `notion-list-page-backlinks` on the row and check that its relations (`Work.Related`, `Work.Decisions`, `Work.Competencies`) still hold their pages
+- Query `Work > Completed` and confirm the row is there, and that `Work > Active Work` no longer has it
 
 ## Important
 
-- Always use `git mv` — never copy+delete
+- Archive by a property change. Never copy the row and delete the old one
 - Don't archive without user confirmation
-- If the project has sub-notes (like incidents have RCA + deep dive), ask if those should move too
+- If the project has sub-rows (like incidents have RCA + deep dive), ask if those should be set to completed too

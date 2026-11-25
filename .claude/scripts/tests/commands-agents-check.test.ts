@@ -213,3 +213,25 @@ describe("form problems", () => {
 		assert.deepEqual(formProblems([file(`Use notion-create-pages with "allow_async": false. ${outbox}`)]), []);
 	});
 });
+
+describe("this repository", () => {
+	const files = targetFiles(repoRoot);
+	const offline: ToolTable = new Map(Object.keys(NOTION_TOOLS).map((name) => [name, undefined]));
+
+	test("the commands and the subagents are found", () => {
+		assert.equal(files.filter((f) => f.path.startsWith(".claude/commands/")).length, 19);
+		assert.equal(files.filter((f) => f.path.startsWith(".claude/agents/")).length, 9);
+	});
+
+	test("the static check has no hit", () => {
+		assert.deepEqual(staticFindings(files), []);
+	});
+
+	test("each Notion name resolves", () => {
+		assert.deepEqual(linkProblems(files, offline), []);
+	});
+
+	test("each file names a Notion tool, each subagent can run Bash, and each write uses the outbox form", () => {
+		assert.deepEqual([...reachProblems(files), ...formProblems(files)], []);
+	});
+});

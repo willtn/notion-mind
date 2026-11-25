@@ -1,6 +1,12 @@
 # Peer Review Writer
 
-Write a peer review for a colleague on your company's review tool. Produces project feedback, principles, and performance summary — all within 1000-char limits, fact-checked against vault evidence.
+Write a peer review for a colleague on your company's review tool. Produces project feedback, principles, and performance summary — all within 1000-char limits, fact-checked against Notion evidence.
+
+## Notion access
+
+Read with `mcporter call notion.<tool> --args '<JSON>' --output json`. Use no pipe and no redirect. Put no single quote in the JSON. Read `notion-map.json` in the project root for the `data_source` URL and the view URLs of each database.
+
+Write in two steps. First use the `Write` tool to make `.claude/state/outbox/<name>.json` with the JSON arguments. Then run `mcporter call notion.<tool> --args "$(cat .claude/state/outbox/<name>.json)"`. `notion-create-pages` needs `"allow_async": false`.
 
 ## Usage
 
@@ -21,11 +27,11 @@ Adapt to your company's review system. Common patterns:
 ### 1. Gather Evidence
 
 Load in order:
-1. Person note from `org/people/<Name>.md`
-2. PR evidence from `perf/evidence/<Name> PRs - <cycle>.md` (run `/om-peer-scan` if missing)
-3. Peer review notes from `work/active/` (any active review writing notes)
+1. The `People` row of the person (`notion-search`, then `notion-fetch`)
+2. PR evidence: the `Perf docs` row with `Perf docs.Type = PR evidence` for the person and the cycle (run `/om-peer-scan` if missing). The `Perf docs.Person` relation finds it
+3. Peer review notes: the `Work` rows with `Work.Status = active` that hold review writing notes (`Work > Active Work`)
 4. Any brag sheet or impact overview the person shared (user provides)
-5. Relevant work notes (search vault for their name)
+5. Relevant work rows (`notion-search` for their name, or the `People.Work` property of the person)
 6. Slack context if available
 
 ### 2. Assess Visibility
@@ -39,7 +45,7 @@ Be explicit about this in the review text. Never overclaim visibility.
 
 ### 3. Draft
 
-For each section, draft within your tool's character limit. Use `node --experimental-strip-types .claude/scripts/charcount.ts <file> "<section>" "" <limit>` to verify.
+For each section, draft within your tool's character limit. Count to verify: use the `Write` tool to put the section in `.claude/state/count/<name>.txt`, then run `wc -m .claude/state/count/<name>.txt`.
 
 **Project feedback** (per project):
 - Lead with your relationship to the work ("worked alongside daily" vs "less direct visibility")
@@ -70,7 +76,7 @@ For each section, draft within your tool's character limit. Use `node --experime
 
 Run these before presenting the draft:
 
-- [ ] All sections within your tool's character limit (use `node --experimental-strip-types .claude/scripts/charcount.ts <file> "<section>" "" <limit>`)
+- [ ] All sections within your tool's character limit (count with `wc -m` as in step 3)
 - [ ] No PR numbers (e.g., #21579) — describe what was done instead
 - [ ] No line counts (e.g., +4,743/-3,362) — these look like an audit
 - [ ] No "weekend work visible in timestamps" — don't track when people work
@@ -82,7 +88,7 @@ Run these before presenting the draft:
 
 ### 5. Fact-Check
 
-Enter plan mode and verify every factual claim against vault sources:
+Enter plan mode and verify every factual claim against Notion sources:
 - Dates, timelines, sequences
 - Specific contributions attributed to the person
 - Claims about "first," "only," or "every" — these are easy to get wrong
@@ -90,8 +96,8 @@ Enter plan mode and verify every factual claim against vault sources:
 
 ### 6. Save
 
-Save draft to `thinking/<name>-peer-review.md` for copy-pasting.
-After submission, promote to `perf/<cycle>/Peer Review - <Full Name>.md`.
+Save the draft as a row of `Work` with `Work.Type = Thinking` and the title `<name>-peer-review`, for copy-pasting.
+After submission, promote it: create a row of `Perf docs` with `Perf docs.Type = Review artifact`, the title `Peer Review - <Full Name>`, `Perf docs.Person` set to the `People` row, and `Perf docs.Cycle` set. Then set `Work.Status = completed` on the draft row.
 
 ## Tone Rules
 

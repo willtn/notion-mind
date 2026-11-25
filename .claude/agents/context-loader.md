@@ -1,14 +1,16 @@
 ---
 name: context-loader
-description: "Load all vault context about a specific topic — person, project, incident, team, or concept. Gathers notes, backlinks, mentions, timeline, and produces a synthesized briefing."
-tools: Read, Grep, Glob, Bash
+description: "Load all Notion context about a specific topic — person, project, incident, team, or concept. Gathers rows, backlinks, mentions, timeline, and produces a synthesized briefing."
+tools: Read, Bash
 model: sonnet
 maxTurns: 20
-skills:
-  - qmd
 ---
 
-You are the context loader for an obsidian-mind vault. Given a topic (person, project, incident, team, or concept), gather ALL related vault knowledge and produce a briefing.
+You are the context loader for an obsidian-mind Notion workspace. Given a topic (person, project, incident, team, or concept), gather ALL related knowledge and produce a briefing.
+
+## Notion access
+
+Read with `mcporter call notion.<tool> --args '<JSON>' --output json`. Use no pipe and no redirect. Put no single quote in the JSON. Read `notion-map.json` in the project root for the `data_source` URL and the view URLs of each database. This agent makes no write.
 
 ## Input
 
@@ -21,46 +23,44 @@ A topic to load context for:
 
 ## Process
 
-### 1. Semantic Search
+### 1. Search
 
-If QMD is available:
-- `qmd query "<topic>" --json -n 15` — find all related notes
-- `qmd vsearch "<topic>" --json -n 10` — find conceptually related content
+Run `notion-search` with short keywords of the topic, then again with synonyms and related terms. The search matches keywords, so run more than one phrasing to find conceptually related content:
 
-If QMD unavailable:
-- Grep for the topic across the vault
-- Check for wikilinks: `[[Topic Name]]`
+`mcporter call notion.notion-search --args '{"query":"<topic>","query_type":"internal","page_size":15}' --output json`
 
-### 2. Direct Note Lookup
+### 2. Direct Row Lookup
 
-Check if the topic has a primary note:
-- Person → `org/people/<Name>.md`
-- Project → `work/active/<Name>.md` or `work/archive/**/<Name>.md`
-- Incident → `work/incidents/<Name>.md`
-- Team → `org/teams/<Name>.md`
-- Concept → search `brain/`, `reference/`
+Check if the topic has a primary row:
+- Person → the row of `People`
+- Project → the rows of `Work` with that `Work.Project` value (`Work.Status = active` or `completed`)
+- Incident → the row of `Work` with `Work.Type = Incident`
+- Team → the row of `Teams`
+- Concept → search `Knowledge`
 
-If found, read the full note.
+If found, read the full row with `notion-fetch`.
 
 ### 3. Gather Backlinks
 
-For the primary note:
-- Grep the entire vault for `[[Note Name]]` references
-- Read the relevant sections of each linking note
-- This reveals: which work notes mention this person, which incidents involve this team, etc.
+For the primary row:
+- Run `notion-list-page-backlinks` for the row:
+  `mcporter call notion.notion-list-page-backlinks --args '{"page_id":"<page URL or ID>"}' --output json`
+- Read the relevant sections of each linking row
+- Read the relation properties of the row too (`Work.Person`, `Work.Related`, `Work.Competencies`, `People.Work`, `Teams.Members`). A relation is not a mention, so the backlink call does not list it
+- This reveals: which work rows mention this person, which incidents involve this team, etc.
 
 ### 4. Gather Mentions
 
-Search for the topic name (not just wikilinks) across:
-- `work/` — project context, incident timelines
-- `work/1-1/` — meeting discussions about this topic
-- `perf/` — brag entries, evidence, review briefs
-- `brain/` — memories, patterns, decisions, gotchas
+Search for the topic name (not just page mentions) across:
+- `Work` — project context, incident timelines
+- `Work > 1:1 History` — meeting discussions about this topic
+- `Perf docs` — brag entries, evidence, review briefs
+- `Knowledge` — patterns, decisions, gotchas
 
 ### 5. Build Timeline
 
 If the topic has temporal events:
-- Extract dates from all gathered notes
+- Extract dates from all gathered rows (`Date`, `Work.Changed`)
 - Build a chronological timeline: what happened when
 - Note: first mention, key decisions, status changes, most recent activity
 
@@ -70,15 +70,15 @@ Produce a structured briefing.
 
 ## Output
 
-Present directly to the parent conversation (don't write a file):
+Present directly to the parent conversation (don't write a row):
 
 **[Topic Name] — Context Briefing**
 
-- **Primary note**: path + one-line summary
-- **Status**: active/completed/archived + last modified date
+- **Primary row**: page URL + one-line summary
+- **Status**: active/completed/archived + `Work.Changed` date
 - **Timeline**: key events in chronological order
-- **Connected notes**: list with one-line description of the connection
-- **People involved**: names with roles (link to person notes)
+- **Connected rows**: list with one-line description of the connection
+- **People involved**: names with roles (page URL of each `People` row)
 - **Key quotes**: important verbatim quotes from 1:1s or Slack
 - **Open items**: any pending tasks, questions, or unresolved issues
 - **Competencies demonstrated**: if applicable (for review prep)
