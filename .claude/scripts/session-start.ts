@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 /**
- * SessionStart hook — inject vault context into the agent's first turn.
+ * SessionStart hook — inject workspace context into the agent's first turn.
  *
  * Emits a markdown block on stdout with: date header, North Star excerpt,
- * brain-topics index, recent git changes (last 48h), open tasks aggregated
- * from work/active/ and the vault root, active work listing, and a full
- * vault markdown file listing.
+ * brain-topics index, the rows that changed in the last 48h, open tasks of
+ * the loose active work and of Home, active work listing, and a listing of
+ * the notes by database and type. Each part comes from the Notion workspace
+ * (lib/session-sources.ts).
  *
  * Also persists VAULT_PATH to CLAUDE_ENV_FILE when Claude Code provides it.
  *
@@ -18,32 +19,16 @@
  * sends the flag.
  */
 
+import { readFileSync, appendFileSync } from "node:fs";
 import {
-	readFileSync,
-	appendFileSync,
-	readdirSync,
-	statSync,
-	type Dirent,
-} from "node:fs";
-import { spawnSync } from "node:child_process";
-import { join } from "node:path";
-import {
-	take,
 	formatDateHeader,
 	formatEnvExport,
 	injectionMode,
 	formatInjectionSize,
 	formatActiveWork,
 	formatRecentChanges,
-	isSkippedPath,
-	MACHINERY_DIRS,
-	extractFrontmatterField,
 	formatBrainIndex,
-	stripFrontmatter,
-	hasBrainContent,
-	parseInfraRootFilenames,
-	isInfraFilename,
-	isMarkdownFilename,
+	formatListing,
 	collectOpenTasks,
 	applyInjectionBudget,
 	effectiveInjectionBudget,
@@ -55,25 +40,22 @@ import {
 	utf8Bytes,
 	type InjectionBudget,
 	parseListingCollapseThreshold,
-	shouldCollapseDir,
-	formatCollapsedDir,
 	DEFAULT_LISTING_COLLAPSE_THRESHOLD,
 	type BudgetSection,
 	type BudgetLevel,
-	type NorthStarLadder,
 	northStarLadder,
 	renderHeadlines,
 	topHeadlines,
 	NORTH_STAR_POINTER,
 } from "./lib/session-start.ts";
-import {
-	formatActiveHygiene,
-	parseOpenLoopConfig,
-	scanActiveHygiene,
-} from "./lib/active-hygiene.ts";
-import { debug, envelopedLimit, fitWithMeter, type OutputLimit, readStdinJson, writeHookOutput } from "./lib/hook-io.ts";
+import { parseOpenLoopConfig } from "./lib/active-hygiene.ts";
+import { formatHygiene } from "./lib/hygiene-scan.ts";
+import { envelopedLimit, fitWithMeter, type OutputLimit, readStdinJson, writeHookOutput } from "./lib/hook-io.ts";
+import { notionMapPath, readNotionMap, type NotionMap } from "./lib/notion-map.ts";
 import { readOmMod } from "./lib/om-mod.ts";
 import { resolveProjectDir } from "./lib/project-dir.ts";
+import { readSessionSources, sessionSourcesNotRead, type Read, type SessionSources } from "./lib/session-sources.ts";
+import { lazyNotion } from "./lib/write-hook.ts";
 
 type HookInput = { readonly source?: unknown };
 
@@ -142,58 +124,66 @@ const mode = delivering ? "full" : injectionMode(hookInput?.source);
 
 process.chdir(cwd);
 
-// Manifest is read once and reused: the infrastructure allowlist for
-// openTasks(), and any future manifest-driven sections all derive from the
-// same source. Both helpers tolerate a null source so a
-// missing/malformed manifest degrades quietly.
+// The manifest is read once: the listing limit, the watched types of the
+// hygiene scan, and the budgets all come from it. A missing or malformed
+// manifest gives the default of each.
 const manifestJson = readManifestRaw();
-const infraRootFilenames = parseInfraRootFilenames(manifestJson);
 
-type CmdResult =
-	| { readonly kind: "ok"; readonly stdout: string }
-	| { readonly kind: "missing" }
-	| { readonly kind: "failed" };
+const RECENT_CHANGES_LIMIT = 15;
+const ACTIVE_WORK_LIMIT = 10;
+const OPEN_TASKS_LIMIT = 10;
 
-function runCmd(
-	cmd: string,
-	args: readonly string[],
-	timeoutMs = 5_000,
-): CmdResult {
-	const r = spawnSync(cmd, args as string[], {
-		encoding: "utf-8",
-		timeout: timeoutMs,
-		windowsHide: true,
-	});
-	if (
-		r.error &&
-		(r.error as NodeJS.ErrnoException).code === "ENOENT"
-	) {
-		return { kind: "missing" };
-	}
-	if (r.status !== 0) return { kind: "failed" };
-	return { kind: "ok", stdout: r.stdout ?? "" };
-}
+/**
+ * The time that this run has for all its Notion calls. The hook timeout of
+ * `settings.json` is 30 s, and a run that passes it gives the session no
+ * context. So the calls stop first, and each part that got no reply says
+ * so in its section.
+ */
+const NOTION_BUDGET_MS = 20_000;
+/** The calls in flight at one time. A full context makes about 30 calls in two rounds (measured on the fixture root). */
+const NOTION_CONCURRENCY = 16;
 
-
-function northStar(): NorthStarLadder | null {
-	// Filesystem-only: the path is fixed by template convention, so there's no
-	// wikilink-resolution value worth a CLI hop — and `spawnSync("obsidian", …)`
-	// launches the Electron app on macOS when no instance is running (#83).
-	//
-	// The slice must carry LIVE goals (#107), and degrade by levels rather
-	// than vanish when it does not fit (#304): see `northStarLadder`.
+async function readSources(): Promise<SessionSources> {
+	let map: NotionMap;
 	try {
-		return northStarLadder(readFileSync("brain/North Star.md", { encoding: "utf-8" }));
-	} catch {
-		return null;
+		map = readNotionMap(notionMapPath(cwd));
+	} catch (error) {
+		return sessionSourcesNotRead(mode, cwd, "the Notion map file", error);
 	}
+	const notion = lazyNotion(NOTION_BUDGET_MS, { concurrency: NOTION_CONCURRENCY });
+	const read = await readSessionSources({
+		call: notion.call,
+		map,
+		projectDir: cwd,
+		nowMs: Date.now(),
+		mode,
+		watchedTypes: parseOpenLoopConfig(manifestJson).types,
+		openTaskLimit: OPEN_TASKS_LIMIT,
+	});
+	await notion.close();
+	return read;
 }
+const sources = await readSources();
+
+/**
+ * A section body with what was cut from its source, so the meter can say so
+ * (no section may present a cut as whole).
+ */
+type Built = { readonly body: string; readonly cut?: string | undefined };
+
+const keptOf = (kept: number, total: number): string | undefined =>
+	total > kept ? `${kept} of ${total}` : undefined;
+
+const notReadLine = (cause: string): string => `(not read: ${cause})`;
+
+/** The section of a part: what `build` makes of its value, or a line that says that the hook did not read it. */
+const built = <T>(read: Read<T>, build: (value: T) => Built): Built => ("notRead" in read ? { body: notReadLine(read.notRead) } : build(read.value));
 
 /** The North Star section, with its ladder: full → focus → headlines → top-N → pointer. */
-function northStarSection(priority: number): BudgetSection {
-	const ladder = northStar();
+function northStarSection(read: Read<string>, priority: number): BudgetSection {
 	const header = "### North Star (current goals)";
-	if (ladder === null) return { header, body: "(not found)", priority, fallback: NORTH_STAR_POINTER };
+	if ("notRead" in read) return { header, body: notReadLine(read.notRead), priority, fallback: NORTH_STAR_POINTER };
+	const ladder = northStarLadder(read.value);
 	const levels: BudgetLevel[] = [];
 	if (ladder.focus !== null) levels.push({ name: "focus", body: ladder.focus });
 	if (ladder.headlines.length > 0) {
@@ -205,239 +195,37 @@ function northStarSection(priority: number): BudgetSection {
 	return { header, body: ladder.full, priority, fallback: NORTH_STAR_POINTER, levels };
 }
 
-/**
- * A section body with what was cut from its source, so the meter can say so
- * (no section may present a cut as whole).
- */
-type Built = { readonly body: string; readonly cut?: string | undefined };
-
-const keptOf = (kept: number, total: number): string | undefined =>
-	total > kept ? `${kept} of ${total}` : undefined;
-
-const RECENT_CHANGES_LIMIT = 15;
-const ACTIVE_WORK_LIMIT = 10;
-const OPEN_TASKS_LIMIT = 10;
-
 function recentChanges(): Built {
-	const r = runCmd("git", [
-		"log",
-		"--oneline",
-		"--since=48 hours ago",
-		"--no-merges",
-	]);
-	if (r.kind !== "ok") return { body: "(no git history)" };
-	const total = r.stdout.split("\n").filter((l) => l.length > 0).length;
-	return {
-		body: formatRecentChanges(r.stdout, RECENT_CHANGES_LIMIT),
-		cut: keptOf(RECENT_CHANGES_LIMIT, total),
-	};
-}
-
-function readMarkdownSource(
-	path: string,
-): { path: string; content: string } | null {
-	try {
-		return { path, content: readFileSync(path, { encoding: "utf-8" }) };
-	} catch {
-		return null;
-	}
-}
-
-function listMarkdownSources(
-	dir: string,
-	pathFor: (name: string) => string,
-	skip: (name: string) => boolean = () => false,
-): { path: string; content: string }[] {
-	let entries: Dirent[];
-	try {
-		entries = readdirSync(dir, { withFileTypes: true });
-	} catch {
-		return [];
-	}
-	const sources: { path: string; content: string }[] = [];
-	for (const e of entries) {
-		if (!e.isFile() || !isMarkdownFilename(e.name) || skip(e.name)) continue;
-		const src = readMarkdownSource(pathFor(e.name));
-		if (src !== null) sources.push(src);
-	}
-	return sources;
+	return built(sources.recentChanges, (titles) => ({
+		body: formatRecentChanges(titles, RECENT_CHANGES_LIMIT),
+		cut: keptOf(RECENT_CHANGES_LIMIT, titles.length),
+	}));
 }
 
 function openTasks(): Built {
-	// Filesystem scan, not `obsidian tasks daily todo` (#83 — that CLI flashes
-	// the Electron app on macOS). Order matters: project tasks in work/active/
-	// surface first, then vault-root notes (which is where daily notes live by
-	// Obsidian's default — empirically the dominant task store in user vaults).
-	// Infra files (AGENTS.md, README.*.md, …) are excluded so the section is
-	// user content only. Paths use forward slashes so the output reads the same
-	// in Claude's context on any OS.
-	const sources = [
-		...listMarkdownSources("work/active", (name) => `work/active/${name}`),
-		...listMarkdownSources(
-			".",
-			(name) => name,
-			(name) => isInfraFilename(name, infraRootFilenames),
-		),
-	];
-	const total = sources.reduce(
-		(n, s) => n + s.content.split(/\r?\n/).filter((line) => /^\s*- \[ \]/.test(line)).length,
-		0,
-	);
-	return { body: collectOpenTasks(sources, OPEN_TASKS_LIMIT), cut: keptOf(OPEN_TASKS_LIMIT, total) };
-}
-
-function brainIndex(): string {
-	let entries: Dirent[];
-	try {
-		entries = readdirSync("brain", { withFileTypes: true });
-	} catch {
-		return "(none)";
-	}
-	const files = entries
-		.filter((e) => e.isFile() && isMarkdownFilename(e.name))
-		.map((e) => e.name)
-		.sort();
-	const parsed = files.map((f) => {
-		const name = f.replace(/\.md$/i, "");
-		let description: string | null = null;
-		let hasContent = false;
-		try {
-			const content = readFileSync(join("brain", f), { encoding: "utf-8" });
-			description = extractFrontmatterField(content, "description");
-			hasContent = hasBrainContent(stripFrontmatter(content));
-		} catch {
-			/* unreadable file → show name with no description, treat as empty */
-		}
-		return { name, description, hasContent };
+	return built(sources.openTasks, ({ notes, notFetched }) => {
+		const byNote = notes.map(({ title, content }) => ({ path: title, content }));
+		const total = byNote.reduce((n, { content }) => n + content.split(/\r?\n/).filter((line) => /^\s*- \[ \]/.test(line)).length, notFetched);
+		return { body: collectOpenTasks(byNote, OPEN_TASKS_LIMIT), cut: keptOf(OPEN_TASKS_LIMIT, total) };
 	});
-	return formatBrainIndex(parsed);
 }
 
 function activeWork(): Built {
-	let entries: Dirent[];
-	try {
-		entries = readdirSync("work/active", { withFileTypes: true });
-	} catch {
-		return { body: "(none)" };
-	}
-	const files = entries.filter((e) => e.isFile()).map((e) => e.name);
-	const notes = files.filter((f) => isMarkdownFilename(f)).length;
-	return { body: formatActiveWork(files, ACTIVE_WORK_LIMIT), cut: keptOf(ACTIVE_WORK_LIMIT, notes) };
+	return built(sources.activeWork, (titles) => ({ body: formatActiveWork(titles, ACTIVE_WORK_LIMIT), cut: keptOf(ACTIVE_WORK_LIMIT, titles.length) }));
 }
-
-// Machinery (shared with the oversize scan) plus `thinking/` — scratchpads
-// are real notes, just not orientation material for the listing.
-const SKIP_PREFIXES: readonly string[] = [...MACHINERY_DIRS, "thinking"];
-
-// Dirs that collapse to one count line regardless of size (#107): the
-// archive is orientation noise whether it holds 3 notes or 300 — Glob
-// reaches it on demand. Everything else collapses by SIZE instead, via
-// the threshold below, so a vault cannot grow past the ceiling through
-// whichever folder nobody remembered to list here.
-const ALWAYS_COLLAPSED_DIRS: readonly string[] = ["work/archive"];
 
 const listingCollapseThreshold =
 	parseListingCollapseThreshold(manifestJson) ??
 	DEFAULT_LISTING_COLLAPSE_THRESHOLD;
 
-/**
- * One traversal that carries its own subtree count, so the collapse decision
- * costs nothing extra. (A separate recursive counter would re-walk every
- * subtree the listing walk already visited.)
- *
- * The count reflects what the listing WOULD have printed — skipped prefixes
- * are excluded — so a collapsed line never claims notes the expanded listing
- * would not have shown.
- */
-type WalkResult = {
-	readonly lines: readonly string[];
-	readonly count: number;
-	readonly hasSubdirs: boolean;
-};
-
-/**
- * Count-only recursion for directories that are collapsing regardless of
- * size. Building their descendant lines just to discard them is wasted work
- * on a large archive, so the always-collapse branch counts without walking.
- */
-function countMdOnly(dir: string): number {
-	let entries: Dirent[];
-	try {
-		entries = readdirSync(dir, { withFileTypes: true });
-	} catch {
-		return 0;
-	}
-	let n = 0;
-	for (const e of entries) {
-		const posix = (dir === "." ? e.name : join(dir, e.name)).replaceAll("\\", "/");
-		if (isSkippedPath(posix, SKIP_PREFIXES)) continue;
-		if (e.isDirectory()) n += countMdOnly(posix);
-		else if (e.isFile() && isMarkdownFilename(e.name)) n += 1;
-	}
-	return n;
-}
-
-function walkMd(dir: string): WalkResult {
-	let entries: Dirent[];
-	try {
-		entries = readdirSync(dir, { withFileTypes: true });
-	} catch {
-		return { lines: [], count: 0, hasSubdirs: false };
-	}
-	const lines: string[] = [];
-	let count = 0;
-	let hasSubdirs = false;
-	for (const e of entries) {
-		// Normalise to posix BEFORE the skip check: `isSkippedPath` matches on
-		// `prefix + "/"`, so a Windows `\` separator would let nested paths
-		// under a skipped prefix through.
-		const full = (dir === "." ? e.name : join(dir, e.name)).replaceAll("\\", "/");
-		if (isSkippedPath(full, SKIP_PREFIXES)) continue;
-		if (e.isDirectory()) {
-			hasSubdirs = true;
-			const posix = full;
-			// Always-collapse dirs never render their descendants — count only.
-			if (ALWAYS_COLLAPSED_DIRS.includes(posix)) {
-				const n = countMdOnly(full);
-				count += n;
-				lines.push(formatCollapsedDir(posix, n));
-				continue;
-			}
-			const sub = walkMd(full);
-			count += sub.count;
-			if (
-				shouldCollapseDir(
-					sub.count,
-					listingCollapseThreshold,
-					ALWAYS_COLLAPSED_DIRS,
-					posix,
-					sub.hasSubdirs,
-				)
-			) {
-				lines.push(formatCollapsedDir(posix, sub.count));
-			} else {
-				lines.push(...sub.lines);
-			}
-		} else if (e.isFile() && isMarkdownFilename(e.name)) {
-			lines.push(`./${full}`);
-			count += 1;
-		}
-	}
-	return { lines, count, hasSubdirs };
-}
-
-function listMd(): string[] {
-	return [...walkMd(".").lines].sort();
-}
-
 // Source-aware assembly (#107): on resume/compact the static bulk (North
-// Star, brain index, file listing) is already in-conversation — a pointer
+// Star, brain index, listing) is already in-conversation — a pointer
 // replaces it, and only the volatile sections (recent changes, tasks,
 // active work, hygiene) re-inject.
 // `priority` orders SURRENDER under budget, highest first. Sections with no
 // fallback are load-bearing and never degrade. The listing goes first: it is
-// the section that grows with every note and is fully reconstructible with
-// one Glob. Hygiene never degrades — it is small and it is actionable.
+// the section that grows with every note, and a query of each database gives
+// it again. Hygiene never degrades — it is small and it is actionable.
 const PRIORITY = {
 	LOAD_BEARING: 0,
 	HYGIENE: 5,
@@ -456,14 +244,14 @@ const sections: BudgetSection[] = [
 		priority: PRIORITY.LOAD_BEARING,
 	},
 ];
-if (mode === "full") {
+if (sources.mode === "full") {
 	sections.push(
-		northStarSection(PRIORITY.NORTH_STAR),
+		northStarSection(sources.northStar, PRIORITY.NORTH_STAR),
 		{
 			header: "### Brain Topics (read on demand)",
-			body: brainIndex(),
+			...built(sources.brainTopics, (topics) => ({ body: formatBrainIndex(topics) })),
 			priority: PRIORITY.BRAIN_INDEX,
-			fallback: "(Over budget — list brain/ on demand.)",
+			fallback: '(Over budget — query the view "Brain index" on demand.)',
 		},
 	);
 }
@@ -472,39 +260,32 @@ sections.push(
 		header: "### Recent Changes (last 48h)",
 		...recentChanges(),
 		priority: PRIORITY.RECENT_CHANGES,
-		fallback: "(Over budget — run git log on demand.)",
+		fallback: '(Over budget — query the view "Recently changed" of a database on demand.)',
 	},
 	{ header: "### Open Tasks", ...openTasks(), priority: PRIORITY.VOLATILE },
 	{ header: "### Active Work", ...activeWork(), priority: PRIORITY.VOLATILE },
 );
-if (mode === "full") {
+if (sources.mode === "full") {
 	sections.push({
-		header: "### Vault File Listing",
-		body: listMd().join("\n"),
+		header: "### Workspace Listing",
+		...built(sources.listing, ({ pages, groups }) => ({ body: formatListing(pages, groups, listingCollapseThreshold).join("\n") })),
 		priority: PRIORITY.FILE_LISTING,
-		fallback: "(Over budget — Glob the vault on demand.)",
+		fallback: "(Over budget — query the databases on demand.)",
 	});
 } else {
 	sections.push({
 		header: "### Context Pointer",
-		body: "(Re-entry via resume/compact — North Star, brain index, and the file listing were injected at session start and are unchanged; re-read on demand.)",
+		body: "(Re-entry via resume/compact — North Star, brain index, and the workspace listing were injected at session start and are unchanged; re-read on demand.)",
 		priority: PRIORITY.LOAD_BEARING,
 	});
 }
 
-// Hygiene drift flags (#98/#103/#106): silent when the vault is clean, so
+// Hygiene drift flags (#98/#103/#106): silent when the workspace is clean, so
 // the section only spends tokens when it has something to say.
-const hygieneLines = formatActiveHygiene(
-	scanActiveHygiene(
-		cwd,
-		Date.now(),
-		parseOpenLoopConfig(manifestJson),
-		infraRootFilenames,
-	),
-);
+const hygieneLines = formatHygiene(sources.hygiene);
 if (hygieneLines.length > 0) {
 	sections.push({
-		header: "### Vault Hygiene (drift detected)",
+		header: "### Workspace Hygiene (drift detected)",
 		body: hygieneLines.join("\n"),
 		priority: PRIORITY.HYGIENE,
 	});
