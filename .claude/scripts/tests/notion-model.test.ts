@@ -106,7 +106,7 @@ describe("columnType", () => {
 		assert.equal(type("Ticket"), "RICH_TEXT");
 		assert.equal(type("Quarter"), "SELECT()");
 		assert.equal(type("Severity"), "SELECT('high':blue, 'medium':green, 'low':purple)");
-		assert.equal(type("Stale"), `FORMULA('if(dateBetween(now(), prop("Changed"), "days") > 14, "yes", "no")')`);
+		assert.equal(type("Stale"), `FORMULA('if(dateBetween(now(), prop("Changed"), "days") >= 14, "yes", "no")')`);
 		assert.equal(type("Team"), "RELATION('ds-teams')");
 		assert.equal(type("Competencies"), "RELATION('ds-competencies', DUAL 'Evidence')");
 		assert.equal(type("Decisions"), "RELATION('ds-work', DUAL 'Decision of' 'decision_of')");

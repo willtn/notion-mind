@@ -113,7 +113,12 @@ export const SCAFFOLD_SOURCES = {
 export type ScaffoldSource = keyof typeof SCAFFOLD_SOURCES;
 
 const yesNo = (test: string): string => `if(${test}, "yes", "no")`;
-const olderThan = (days: number): string => yesNo(`dateBetween(now(), prop("Changed"), "days") > ${days}`);
+/**
+ * "yes" from the day that the age reaches `days`. The original hooks count a
+ * note with `floor(age in days) >= days`, and `dateBetween` also gives whole
+ * days that are complete (measured: 14 days and 23 hours give 14).
+ */
+const atLeastDaysOld = (days: number): string => yesNo(`dateBetween(now(), prop("Changed"), "days") >= ${days}`);
 
 const WORK_TYPES = ["Work note", "Decision", "Incident", "1:1", "Inbox item", "Thinking"] as const;
 /**
@@ -137,7 +142,7 @@ const COMMON_PROPERTIES: Readonly<Record<string, PropertySpec>> = {
 	Changed: { type: "date" },
 	Bytes: { type: "number" },
 	"Hook stamp": { type: "date" },
-	Stale: { type: "formula", expression: olderThan(14) },
+	Stale: { type: "formula", expression: atLeastDaysOld(14) },
 	Oversized: { type: "formula", expression: yesNo('prop("Bytes") >= 25000 and not contains(prop("Name"), "Archive")') },
 	// Notion keeps a date and time to the minute (measured). So a stamp can read up to
 	// one minute before the write that set it, and the limit of 2 minutes covers that.
@@ -208,7 +213,7 @@ export const DATABASES: readonly DatabaseSpec[] = [
 			"Feeds into": { type: "relation", target: "work" },
 			Parent: { type: "relation", target: "work", reverse: "Children" },
 			"Days untouched": { type: "formula", expression: 'dateBetween(now(), prop("Changed"), "days")' },
-			"Older than 7 days": { type: "formula", expression: olderThan(7) },
+			"Older than 7 days": { type: "formula", expression: atLeastDaysOld(7) },
 			"Open tasks": { type: "number" },
 			"Open loops": { type: "number" },
 		},

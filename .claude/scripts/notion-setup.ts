@@ -17,6 +17,9 @@
  *   --workspace-id <id>    Stop when the login is in a different workspace.
  *   --ledger <path>        Append one JSON line for each object of the model that the ledger lacks, made by this run or an earlier one.
  *   --ledger-tag <k=v>     Add one field to each ledger line.
+ *   --reapply-formulas     Send each formula of the model again, and test each view on a formula again.
+ *                          Notion does not return the text of a formula, so the setup cannot see that
+ *                          the model changed one. Use this option after such a change.
  *   --check                Make nothing. Fetch each object of the map file and print the counts.
  */
 
@@ -80,6 +83,8 @@ export interface SetupOptions {
 	readonly readSource: (source: ScaffoldSource) => string;
 	readonly log: (line: string) => void;
 	readonly sleep?: (ms: number) => Promise<void>;
+	/** Send each formula of the model again, and run the test rows of each view on a formula. */
+	readonly reapplyFormulas?: boolean;
 }
 
 export type CreatedKind = "page" | "database" | "property" | "option" | "view" | "row" | "block" | "probe_row";
@@ -357,6 +362,15 @@ export async function runSetup(client: NotionClient, options: SetupOptions): Pro
 		schemaChanged = true;
 	}
 	if (schemaChanged) await refresh();
+	if (options.reapplyFormulas === true) {
+		for (const spec of DATABASES) {
+			const statements = Object.entries(spec.properties)
+				.filter(([, property]) => property.type === "formula")
+				.map(([name, property]) => `ALTER COLUMN "${name}" SET ${columnType(property, dataSourceOf, spec.key)}`);
+			await client.call("notion-update-data-source", { data_source_id: dataSourceOf(spec.key), statements: statements.join("; ") });
+			options.log(`sent again ${spec.title}: ${statements.length} formulas`);
+		}
+	}
 	let rollupsAdded = false;
 	for (const spec of DATABASES) {
 		const statements = rollupStatements(spec, live[spec.key].properties, dataSourceOf);
@@ -380,7 +394,7 @@ export async function runSetup(client: NotionClient, options: SetupOptions): Pro
 		const found = existing.find((v) => v.name === view.name) ?? existing.find((v) => v.name === pendingName);
 		if (found !== undefined) {
 			reconcile("view", notionId(found.url), `${where}: ${found.name}`);
-			const wasPending = found.name === pendingName;
+			const wasPending = found.name === pendingName || (options.reapplyFormulas === true && view.probe !== undefined);
 			const modelChanged = droppedDirectives(view, found).length > 0;
 			if (!modelChanged) return { saved: found, pending: wasPending, created: false };
 			await client.call("notion-update-view", { view_id: found.url, configure: viewDirectives(view) });
@@ -583,7 +597,7 @@ function parseArgs(argv: readonly string[]): Record<string, string> {
 	const flags: Record<string, string> = {};
 	for (let i = 0; i < argv.length; i++) {
 		const name = argv[i] ?? "";
-		if (name === "--check") flags["check"] = "true";
+		if (name === "--check" || name === "--reapply-formulas") flags[name.slice(2)] = "true";
 		else if (["--root-title", "--map", "--workspace-id", "--ledger", "--ledger-tag"].includes(name) && argv[i + 1] !== undefined) flags[name.slice(2)] = argv[++i] ?? "";
 		else fail(`Unknown option or missing value: ${name}. Read the header of notion-setup.ts for the options.`);
 	}
@@ -610,6 +624,7 @@ async function main(): Promise<void> {
 			mapPath,
 			...(flags["workspace-id"] === undefined ? {} : { workspaceId: flags["workspace-id"] }),
 			...(flags["ledger"] === undefined ? {} : { ledgerPath: flags["ledger"] }),
+			...(flags["reapply-formulas"] === undefined ? {} : { reapplyFormulas: true }),
 			...(tag?.[0] === undefined ? {} : { ledgerTag: [tag[0], numeric] as const }),
 			readSource: (source) => readFileSync(join(repoRoot, SCAFFOLD_SOURCES[source]), "utf8"),
 			log: (line) => console.log(line),
