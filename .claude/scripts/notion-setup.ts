@@ -380,8 +380,15 @@ export async function runSetup(client: NotionClient, options: SetupOptions): Pro
 		const found = existing.find((v) => v.name === view.name) ?? existing.find((v) => v.name === pendingName);
 		if (found !== undefined) {
 			reconcile("view", notionId(found.url), `${where}: ${found.name}`);
-			checkSaved(view, found, where);
-			return { saved: found, pending: found.name === pendingName, created: false };
+			const wasPending = found.name === pendingName;
+			const modelChanged = droppedDirectives(view, found).length > 0;
+			if (!modelChanged) return { saved: found, pending: wasPending, created: false };
+			await client.call("notion-update-view", { view_id: found.url, configure: viewDirectives(view) });
+			const saved = parseViews(await client.call("notion-fetch", { id: found.url }))[0] ?? fail(`Notion did not return the view "${found.name}" of ${where} after its update.`);
+			options.log(`updated view: ${where}: ${found.name}`);
+			checkSaved(view, saved, where);
+			const mustRunTestRowsAgain = view.probe !== undefined;
+			return { saved, pending: wasPending || mustRunTestRowsAgain, created: false };
 		}
 		const pending = view.probe !== undefined;
 		const name = pending ? pendingName : view.name;
