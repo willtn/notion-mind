@@ -332,6 +332,8 @@ describe("the text that makes a Notion command", () => {
 		["a read of the outbox", `cat ${OUTBOX}`],
 		["a script file that holds the call", `bash ${OUTBOX_DIR}/run.sh`],
 		["a variable that builds the word", "m=mcp; ${m}orter call $SELECTOR"],
+		["a variable inside the word, with the selector in plain text", "mc${EMPTY}porter call notion.notion-update-page --args '{}'"],
+		["base64 that builds the word", `eval "$(echo bWNwb3J0ZXI= | base64 -d) call notion.notion-create-pages"`],
 		["a folder beside the runtime folder", "ls /usr/local/lib/node_modules/pkg-1"],
 		["mcporter alone", "mcporter --version"],
 		["mcporter in a path", "/usr/local/bin/mcporter --version"],
