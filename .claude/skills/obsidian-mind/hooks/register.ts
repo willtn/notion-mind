@@ -150,7 +150,7 @@ export const register: Register = (on) => {
 		const root = await $.session.root();
 		let report: ReturnType<typeof parseStopReport>;
 		try {
-			report = parseStopReport(await runScript($, root, "stop-checklist.ts", { ...e, om_mod: "report" }, 5_000));
+			report = parseStopReport(await runScript($, root, "stop-checklist.ts", { ...e, om_mod: "report" }, 15_000));
 		} catch (error) {
 			// The settings hook runs in this hook's place and hands over its own
 			// report; one still queued here would ride the same prompt beside it.

@@ -102,6 +102,8 @@ const names: readonly ObjectName[] = [
 	["Vault Hygiene", "{hygiene}"],
 	["Vault hygiene", "{hygiene}"],
 	["Vault File Listing", "{listing}"],
+	["work/active/ -> work/archive/YYYY/", "{the archive move}"],
+	["Index.md, Memories.md, People & Context, Brag Doc", "{indexes}"],
 	["brain/North Star.md", "{North Star}"],
 	["brain/", "{brain topics}"],
 ];

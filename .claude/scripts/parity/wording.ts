@@ -184,6 +184,8 @@ export const NEUTRAL_NAMES = [
 	"{missing field}",
 	"{no links}",
 	"{verbatim mark}",
+	"{the archive move}",
+	"{indexes}",
 ] as const;
 
 export type NeutralName = (typeof NEUTRAL_NAMES)[number];
