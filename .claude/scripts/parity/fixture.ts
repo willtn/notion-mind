@@ -4,14 +4,31 @@
  * the conditions of that part give.
  */
 
+import { renderFrontmatter } from "./markdown-form.ts";
 import type { ExpectedFinding, FixtureNote, FixtureSpec, RepoFile, Scenario, Step } from "./spec.ts";
 
 const LINE = "This line is filler text that keeps each paragraph on one line.";
+const PARAGRAPH = `\n${LINE}\n`;
+
+const head = (title: string): string => `# ${title}\n\nSee [[Patterns]] for the context.\n`;
 
 function filler(title: string, bytes: number): string {
-	const head = `# ${title}\n\nSee [[Patterns]] for the context.\n`;
-	const paragraphs = Math.ceil((bytes - head.length) / (LINE.length + 2));
-	return head + `\n${LINE}\n`.repeat(paragraphs);
+	const paragraphs = Math.ceil((bytes - head(title).length) / PARAGRAPH.length);
+	return head(title) + PARAGRAPH.repeat(paragraphs);
+}
+
+/** `text` with filler paragraphs at its end, so that the result has exactly `bytes` bytes. */
+function paddedTo(text: string, bytes: number): string {
+	const room = bytes - Buffer.byteLength(text);
+	const paragraphs = Math.floor((room - 3) / PARAGRAPH.length);
+	const last = room - paragraphs * PARAGRAPH.length;
+	return `${text}${PARAGRAPH.repeat(paragraphs)}\n${"x".repeat(last - 2)}\n`;
+}
+
+/** `note` with a longer body, so that its properties and its body together have exactly `bytes` bytes. */
+function sized(note: FixtureNote, bytes: number): FixtureNote {
+	const properties = renderFrontmatter(note.fields);
+	return { ...note, body: paddedTo(properties + note.body, bytes).slice(properties.length) };
 }
 
 const global = (description: string, tags: readonly string[]) => ({
@@ -33,7 +50,7 @@ const notes: readonly FixtureNote[] = [
 		title: "Home",
 		type: "Home",
 		fields: {},
-		body: "# Home\n\nStart at [[North Star]].\n\n- [ ] Review the quarter goals\n- [x] Set up the workspace\n",
+		body: "# Home\n\nStart at [[North Star]].\n\n- [ ] Review the quarter goals\n- [ ] Plan the team offsite\n- [x] Set up the workspace\n",
 		changedDaysAgo: 1,
 	},
 	{
@@ -123,6 +140,23 @@ const notes: readonly FixtureNote[] = [
 		body: linked("Login Latency Budget", "The login path has a limit of 300 ms."),
 		changedDaysAgo: 6,
 	},
+	...(
+		[
+			["Cache Warmup Steps", "The cache fills before the first request.", ["Record the cold start time", "Pick the warmup keys"]],
+			["Mobile Onboarding Flow", "The first run shows three screens.", ["Draw the three screens", "Count the drop-off"]],
+			["Audit Trail Schema", "Each change gets one row.", ["Name the columns"]],
+			["Invoice Template Refresh", "The template gets the new logo.", ["Get the logo file"]],
+			["Quota Alert Thresholds", "An alert goes out at 80 percent.", []],
+		] as const
+	).map(
+		([title, text, tasks]): FixtureNote => ({
+			title,
+			type: "Work note",
+			fields: workNote(`The work note "${title}"`),
+			body: linked(title, text) + (tasks.length === 0 ? "" : `\n${tasks.map((task) => `- [ ] ${task}`).join("\n")}\n`),
+			changedDaysAgo: 4,
+		}),
+	),
 	{
 		title: "Pricing Rollout",
 		type: "Work note",
@@ -156,7 +190,8 @@ const notes: readonly FixtureNote[] = [
 	...(
 		[
 			["Ada Park 2026-01-10", "Ada Park", 60],
-			["Ada Park 2026-02-07", "Ada Park", 30],
+			// Exactly at the age limit of the open loops.
+			["Ada Park 2026-02-07", "Ada Park", 14],
 			["Ben Ortiz 2026-01-15", "Ben Ortiz", 50],
 			["Ben Ortiz 2026-03-01", "Ben Ortiz", 3],
 		] as const
@@ -216,9 +251,13 @@ const notes: readonly FixtureNote[] = [
 		[
 			["Vendor Sync Export", "## Action Items", 10],
 			["Planning Export", "## Follow Ups", 21],
-			["Retro Export", "## Action Items", 18],
-			["Offsite Export", "## Action Items", 16],
-			["Fresh Standup Export", "## Action Items", 2],
+			// One day below the age limit of the open loops.
+			["Retro Export", "## Action Items", 13],
+			// Exactly at the age limit of the inbox, and one day below it.
+			["Offsite Export", "## Action Items", 7],
+			["Fresh Standup Export", "## Action Items", 6],
+			["Kickoff Export", "## Action Items", 4],
+			["Demo Export", "## Action Items", 5],
 		] as const
 	).map(
 		([title, heading, changedDaysAgo]): FixtureNote => ({
@@ -227,6 +266,16 @@ const notes: readonly FixtureNote[] = [
 			fields: { ...global("A raw meeting export", ["meeting"]), status: "inbox" },
 			body: `${linked(title, "The raw export of one meeting.")}\n${heading}\n\n- [ ] Send the summary\n`,
 			changedDaysAgo,
+		}),
+	),
+	// With these five, the inbox holds 12 notes, the largest group that the listing does not collapse.
+	...[1, 2, 3, 4, 5].map(
+		(n): FixtureNote => ({
+			title: `Workshop Export ${n}`,
+			type: "Inbox item",
+			fields: { ...global("A long raw export of one workshop", ["meeting"]), status: "inbox" },
+			body: `${filler(`Workshop Export ${n}`, 26_000)}\n## Action Items\n\n- [ ] Send the summary\n`,
+			changedDaysAgo: 3,
 		}),
 	),
 
@@ -267,13 +316,27 @@ const notes: readonly FixtureNote[] = [
 		body: linked("Missing Fields", "This note has no description and no tags."),
 		changedDaysAgo: 1,
 	},
-	{
-		title: "No Links",
-		type: "Reference",
-		fields: global("A long note with no link", ["reference"]),
-		body: `# No Links\n\n${`${LINE} `.repeat(6).trim()}\n`,
-		changedDaysAgo: 1,
-	},
+	// One character above the length limit of the no-link check, and exactly at it.
+	sized(
+		{
+			title: "No Links",
+			type: "Reference",
+			fields: global("A long note with no link", ["reference"]),
+			body: "# No Links\n",
+			changedDaysAgo: 1,
+		},
+		301,
+	),
+	sized(
+		{
+			title: "Short No Links",
+			type: "Reference",
+			fields: global("A note with no link at the length limit", ["reference"]),
+			body: "# Short No Links\n",
+			changedDaysAgo: 1,
+		},
+		300,
+	),
 	{
 		title: "Wrapped Prose",
 		type: "Reference",
@@ -303,6 +366,37 @@ const notes: readonly FixtureNote[] = [
 		changedDaysAgo: 12,
 		nearSizeLimit: true,
 	},
+	// Exactly at the size limit, and one byte below it.
+	sized(
+		{
+			title: "Size Limit Note",
+			type: "Reference",
+			fields: global("A note at the size limit", ["reference"]),
+			body: head("Size Limit Note"),
+			changedDaysAgo: 12,
+		},
+		25_000,
+	),
+	sized(
+		{
+			title: "Below Size Limit Note",
+			type: "Reference",
+			fields: global("A note one byte below the size limit", ["reference"]),
+			body: head("Below Size Limit Note"),
+			changedDaysAgo: 12,
+		},
+		24_999,
+	),
+	// With these four, 13 notes have the type "Reference", the smallest group that the listing collapses.
+	...[2, 3, 4, 5].map(
+		(n): FixtureNote => ({
+			title: `Runbook Part ${n}`,
+			type: "Reference",
+			fields: global(`Part ${n} of the runbook, past the size limit`, ["reference"]),
+			body: filler(`Runbook Part ${n}`, 26_000),
+			changedDaysAgo: 12,
+		}),
+	),
 	{
 		title: "Runbook Archive",
 		type: "Archive note",
@@ -310,16 +404,10 @@ const notes: readonly FixtureNote[] = [
 		body: filler("Runbook Archive", 30_000),
 		changedDaysAgo: 100,
 	},
-	...[1, 2, 3, 4, 5].map(
-		(n): FixtureNote => ({
-			title: `Reference Card ${n}`,
-			type: "Reference",
-			fields: global(`The reference card number ${n}`, ["reference"]),
-			body: linked(`Reference Card ${n}`, "A short reference."),
-			changedDaysAgo: 15,
-		}),
-	),
 ];
+
+/** The size from which the hygiene scan flags `AGENTS.md`. The fixture file is exactly at it. */
+const AGENTS_FLAG_BYTES = 23_000;
 
 const repoFiles: readonly RepoFile[] = [
 	{
@@ -346,7 +434,7 @@ const repoFiles: readonly RepoFile[] = [
 			2,
 		)}\n`,
 	},
-	{ path: "AGENTS.md", content: filler("AGENTS", 23_500) },
+	{ path: "AGENTS.md", content: paddedTo(head("AGENTS"), AGENTS_FLAG_BYTES) },
 	{ path: "CLAUDE.md", content: "Read AGENTS.md.\n" },
 ];
 
@@ -356,9 +444,11 @@ const payload = (hook: Step["hook"], fields: Readonly<Record<string, unknown>> =
 });
 const prompt = (text: string, fields: Readonly<Record<string, unknown>> = {}): Step =>
 	payload("classify-message", { prompt: text, ...fields });
-const write = (note: string): Step => ({ hook: "validate-write", input: { kind: "write", note } });
+const write = (...notes: readonly string[]): Step => ({ hook: "validate-write", input: { kind: "write", notes } });
 
 const BILLING_CLUSTER = "billing: Billing Export Pipeline, Billing Retry Design";
+
+const CLUSTER_POLICY = "policy topic-cluster, ungrouped-cluster, flag, with the target {a topic group}";
 
 const WRITE_CONTEXT = "additional context, event PostToolUse";
 const PROMPT_CONTEXT = "additional context, event UserPromptSubmit";
@@ -368,35 +458,52 @@ type ClaimPlace = "claim" | "summary claim" | "data claim";
 
 const hygieneClaims = (step: number, place: ClaimPlace = "claim"): ExpectedFinding[] => [
 	{ row: "HY-07", step, detail: `${place} CLAUDE.md` },
-	{ row: "HY-09", step, detail: place, sizeKb: 24 },
+	{ row: "HY-09", step, detail: place, sizeKb: 23 },
 	{ row: "HY-01", step, detail: place, count: 1 },
 	{ row: "HY-02", step, detail: place },
-	{ row: "HY-03", step, detail: place, count: 1 },
-	{ row: "HY-04", step, detail: place, count: 5 },
+	{ row: "HY-03", step, detail: place, count: 11 },
+	{ row: "HY-04", step, detail: place, count: 4 },
 	{ row: "HY-05", step, detail: place, count: 4 },
 ];
 
-/** The hygiene findings after `CLAUDE.md` goes away: each finding but the one of that file. */
-const withoutClaudeFile = (findings: readonly ExpectedFinding[]): ExpectedFinding[] => findings.filter(({ row }) => row !== "HY-07");
+/** The findings with no finding of `row`: the state after the cause of that row goes away. */
+const without = (row: "HY-07" | "HY-09", findings: readonly ExpectedFinding[]): ExpectedFinding[] =>
+	findings
+		.filter((finding) => finding.row !== row)
+		.map((finding) => (finding.row === "HY-10" ? { ...finding, detail: finding.detail!.replace(`${row}, `, "") } : finding));
 
-/** Six notes have open items, and the report keeps the five oldest. */
+/**
+ * 11 notes are past the size limit. The report shows the 10 largest, and
+ * the note that is exactly at the limit is the one that it does not show.
+ */
+const OVERSIZED_SHOWN = ["Runbook", ...[2, 3, 4, 5].map((n) => `Runbook Part ${n}`), ...[1, 2, 3, 4, 5].map((n) => `Workshop Export ${n}`)];
+
+/**
+ * Four notes have open items and an age of 14 days or more. The youngest is
+ * at 14 days exactly. "Retro Export" has open items at 13 days and is not here.
+ */
 const hygiene = (step: number): ExpectedFinding[] => [
+	{ row: "HY-10", step, detail: "order: HY-07, HY-09, HY-02, HY-03, HY-04, HY-05" },
 	...hygieneClaims(step),
 	{ row: "HY-01", step, note: "Old Pricing Plan" },
 	{ row: "HY-02", step, detail: BILLING_CLUSTER, count: 2 },
-	{ row: "HY-03", step, note: "Runbook", sizeKb: 26 },
+	...OVERSIZED_SHOWN.map((note): ExpectedFinding => ({ row: "HY-03", step, note, sizeKb: 26 })),
+	{ row: "HY-10", step, detail: "HY-03 more", count: 1 },
 	{ row: "HY-04", step, note: "Payments Latency", count: 1 },
-	{ row: "HY-04", step, note: "Ada Park 2026-02-07", count: 2 },
 	{ row: "HY-04", step, note: "Checkout Outage", count: 2 },
 	{ row: "HY-04", step, note: "Planning Export", count: 1 },
-	{ row: "HY-04", step, note: "Retro Export", count: 1 },
+	{ row: "HY-04", step, note: "Ada Park 2026-02-07", count: 2 },
 ];
 
-const checklist = (step: number): ExpectedFinding => ({ row: "ST-03", step, count: 5 });
+const checklistItems = (step: number, detail: "item" | "summary item"): ExpectedFinding[] =>
+	[1, 2, 3, 4, 5].map((position): ExpectedFinding => ({ row: "ST-03", step, detail: `${detail} ${position}` }));
+
+const checklist = (step: number): ExpectedFinding[] => [{ row: "ST-03", step, count: 5 }, ...checklistItems(step, "item")];
 
 /** The one-line summary of a Stop report. `trailer` is the row of the line that says where the full report goes. */
 const summary = (step: number, trailer: "ST-09" | "ST-10"): ExpectedFinding[] => [
 	{ row: "ST-03", step, detail: "summary", count: 5 },
+	...checklistItems(step, "summary item"),
 	...hygieneClaims(step, "summary claim"),
 	{ row: trailer, step, detail: "trailer" },
 ];
@@ -407,24 +514,64 @@ const reportData = (step: number, key: number): ExpectedFinding[] => [
 	{ row: "ST-06", step, detail: `key first given at step ${key}` },
 	...hygieneClaims(step, "data claim"),
 	{ row: "ST-08", step, detail: "preface" },
-	checklist(step),
+	...checklist(step),
 	{ row: "ST-04", step },
 	...hygiene(step),
 ];
 
-const HYGIENE_ROWS = ["HY-01", "HY-02", "HY-03", "HY-04", "HY-05", "HY-07", "HY-09"] as const;
+const HYGIENE_ROWS = ["HY-01", "HY-02", "HY-03", "HY-04", "HY-05", "HY-07", "HY-09", "HY-10"] as const;
 
-const LISTED = [
-	"Home",
-	"North Star",
-	"Patterns",
-	"Gotchas",
-	"Key Decisions",
+/** The 10 loose notes of the active work. 10 is also the number of names that the Active Work section keeps. */
+const LOOSE_ACTIVE = [
 	"Fixture Work Note",
 	"Billing Export Pipeline",
 	"Billing Retry Design",
 	"Search Ranking Tuning",
 	"Login Latency Budget",
+	"Cache Warmup Steps",
+	"Mobile Onboarding Flow",
+	"Audit Trail Schema",
+	"Invoice Template Refresh",
+	"Quota Alert Thresholds",
+];
+
+/**
+ * 11 tasks are open: 9 in the loose active notes, then 2 in Home. The
+ * section keeps 10, so the second task of Home is not here.
+ */
+const OPEN_TASKS: readonly (readonly [note: string, task: string])[] = [
+	["Billing Export Pipeline", "Write the export schema"],
+	["Billing Export Pipeline", "Measure the run time"],
+	["Search Ranking Tuning", "Collect the click data"],
+	["Cache Warmup Steps", "Record the cold start time"],
+	["Cache Warmup Steps", "Pick the warmup keys"],
+	["Mobile Onboarding Flow", "Draw the three screens"],
+	["Mobile Onboarding Flow", "Count the drop-off"],
+	["Audit Trail Schema", "Name the columns"],
+	["Invoice Template Refresh", "Get the logo file"],
+	["Home", "Review the quarter goals"],
+];
+
+/** The inbox holds 12 notes, so the listing shows each one. */
+const INBOX = [
+	"Vendor Sync Export",
+	"Planning Export",
+	"Retro Export",
+	"Offsite Export",
+	"Fresh Standup Export",
+	"Kickoff Export",
+	"Demo Export",
+	...[1, 2, 3, 4, 5].map((n) => `Workshop Export ${n}`),
+];
+
+const LISTED = [
+	"Home",
+	"Loose Draft",
+	"North Star",
+	"Patterns",
+	"Gotchas",
+	"Key Decisions",
+	...LOOSE_ACTIVE,
 	"Pricing Rollout",
 	"Old Pricing Plan",
 	"Ada Park 2026-01-10",
@@ -434,64 +581,105 @@ const LISTED = [
 	"Checkout Outage",
 	"Checkout Outage RCA",
 	"Payments Latency",
-	"Vendor Sync Export",
-	"Planning Export",
-	"Retro Export",
-	"Offsite Export",
-	"Fresh Standup Export",
+	...INBOX,
 	"Ada Park",
 	"Ben Ortiz",
+	"Runbook Archive",
 ];
+
+/** The archived work, which the listing always collapses, and the 13 notes of the type "Reference". */
 const COLLAPSED = [
 	"Legacy Importer",
 	"Search Migration",
-	"Loose Draft",
 	"Missing Fields",
 	"No Links",
+	"Short No Links",
 	"Wrapped Prose",
 	"Ticket Links",
 	"Runbook",
 	"Near Limit Runbook",
-	"Runbook Archive",
-	"Reference Card 1",
-	"Reference Card 2",
-	"Reference Card 3",
-	"Reference Card 4",
-	"Reference Card 5",
+	"Size Limit Note",
+	"Below Size Limit Note",
+	...[2, 3, 4, 5].map((n) => `Runbook Part ${n}`),
 ];
+
+/** The line that SessionStart adds to the environment file of the session. */
+const vaultPathExport = (step: number): ExpectedFinding => ({ row: "SS-02", step, detail: "export VAULT_PATH='{project directory}'" });
+
+/** The sections that each SessionStart gives: the changes, the tasks, and the active work. */
+const volatileSections = (step: number): ExpectedFinding[] => [
+	{ row: "SS-13", step, detail: "no history" },
+	...OPEN_TASKS.map(([note, detail]): ExpectedFinding => ({ row: "SS-14", step, note, detail })),
+	...LOOSE_ACTIVE.map((note): ExpectedFinding => ({ row: "SS-15", step, note })),
+];
+
+/** The full context. `channel` is the row of the payload read: SS-19, or SS-01 when stdin is not a payload. */
+const fullContext = (step: number, channel: "SS-19" | "SS-01"): ExpectedFinding[] => [
+	{ row: channel, step, detail: "additional context, event SessionStart" },
+	{ row: "SS-19", step, detail: "session title" },
+	{ row: "SS-19", step, detail: "size meter" },
+	{ row: "SS-19", step, detail: "sections: date, north star, brain topics, recent changes, open tasks, active work, listing, hygiene" },
+	{ row: "SS-10", step, detail: "date line" },
+	{ row: "SS-11", step, detail: "## Current Focus" },
+	{ row: "SS-11", step, detail: "completed items hidden", count: 1 },
+	{ row: "SS-11", step, detail: "- Ship the billing export before the quarter ends." },
+	{ row: "SS-11", step, detail: "- Keep the login latency under the budget." },
+	{ row: "SS-11", step, detail: "## Longer Term" },
+	{ row: "SS-11", step, detail: "- Grow the platform team." },
+	{ row: "SS-12", step, note: "Patterns", detail: "The patterns that repeat" },
+	{ row: "SS-12", step, note: "Gotchas", detail: "The traps that cost time (empty)" },
+	{ row: "SS-12", step, note: "Key Decisions", detail: "(no description)" },
+	...volatileSections(step),
+	...LISTED.map((note): ExpectedFinding => ({ row: "SS-16", step, note, detail: "listed" })),
+	...COLLAPSED.map((note): ExpectedFinding => ({ row: "SS-16", step, note, detail: "collapsed" })),
+	{ row: "SS-17", step },
+	...hygiene(step),
+	vaultPathExport(step),
+];
+
+/** The context after a resume or a compaction: a pointer in the place of the North Star, the brain topics, and the listing. */
+const pointerContext = (step: number): ExpectedFinding[] => [
+	{ row: "SS-19", step, detail: "additional context, event SessionStart" },
+	{ row: "SS-19", step, detail: "session title" },
+	{ row: "SS-19", step, detail: "size meter" },
+	{ row: "SS-19", step, detail: "sections: date, recent changes, open tasks, active work, context pointer, hygiene" },
+	{ row: "SS-10", step, detail: "date line" },
+	...volatileSections(step),
+	{ row: "SS-05", step, detail: "context pointer" },
+	{ row: "SS-17", step },
+	...hygiene(step),
+	vaultPathExport(step),
+];
+
+/** `AGENTS.md` one byte below the size from which the hygiene scan flags it. */
+const AGENTS_BELOW_FLAG: RepoFile = { path: "AGENTS.md", content: paddedTo(head("AGENTS"), AGENTS_FLAG_BYTES - 1) };
 
 const scenarios: readonly Scenario[] = [
 	{
 		id: "session-start",
-		rows: ["SS-10", "SS-11", "SS-12", "SS-13", "SS-14", "SS-15", "SS-16", "SS-17", "SS-19", ...HYGIENE_ROWS],
+		rows: ["SS-02", "SS-06", "SS-10", "SS-11", "SS-12", "SS-13", "SS-14", "SS-15", "SS-16", "SS-17", "SS-19", ...HYGIENE_ROWS],
 		steps: [payload("session-start", { source: "startup" })],
-		expect: [
-			{ row: "SS-19", detail: "additional context, event SessionStart" },
-			{ row: "SS-19", detail: "session title" },
-			{ row: "SS-19", detail: "size meter" },
-			{ row: "SS-10", detail: "date line" },
-			{ row: "SS-11", detail: "## Current Focus" },
-			{ row: "SS-11", detail: "completed items hidden", count: 1 },
-			{ row: "SS-11", detail: "- Ship the billing export before the quarter ends." },
-			{ row: "SS-11", detail: "- Keep the login latency under the budget." },
-			{ row: "SS-11", detail: "## Longer Term" },
-			{ row: "SS-11", detail: "- Grow the platform team." },
-			{ row: "SS-12", note: "Patterns", detail: "The patterns that repeat" },
-			{ row: "SS-12", note: "Gotchas", detail: "The traps that cost time (empty)" },
-			{ row: "SS-12", note: "Key Decisions", detail: "(no description)" },
-			{ row: "SS-13", detail: "no history" },
-			{ row: "SS-14", note: "Billing Export Pipeline", detail: "Write the export schema" },
-			{ row: "SS-14", note: "Billing Export Pipeline", detail: "Measure the run time" },
-			{ row: "SS-14", note: "Search Ranking Tuning", detail: "Collect the click data" },
-			{ row: "SS-14", note: "Home", detail: "Review the quarter goals" },
-			...["Fixture Work Note", "Billing Export Pipeline", "Billing Retry Design", "Search Ranking Tuning", "Login Latency Budget"].map(
-				(note): ExpectedFinding => ({ row: "SS-15", note }),
-			),
-			...LISTED.map((note): ExpectedFinding => ({ row: "SS-16", note, detail: "listed" })),
-			...COLLAPSED.map((note): ExpectedFinding => ({ row: "SS-16", note, detail: "collapsed" })),
-			{ row: "SS-17" },
-			...hygiene(0),
-		],
+		expect: fullContext(0, "SS-19"),
+		// The manifest read prints no line. "Follow Ups" is a heading that only the manifest of the fixture names.
+		provenBy: { "SS-06": { row: "HY-04", note: "Planning Export", count: 1 } },
+	},
+	{
+		id: "session-start-bad-stdin",
+		rows: ["SS-01"],
+		steps: [{ hook: "session-start", input: { kind: "raw", stdin: "{not json" } }],
+		expect: fullContext(0, "SS-01"),
+	},
+	{
+		id: "session-start-pointer",
+		rows: ["SS-05"],
+		steps: [payload("session-start", { source: "resume" }), payload("session-start", { source: "compact" })],
+		expect: [...pointerContext(0), ...pointerContext(1)],
+	},
+	{
+		id: "session-start-standdown",
+		rows: ["SS-02", "SS-03"],
+		steps: [payload("session-start", { source: "startup", om_mod: "standdown" })],
+		expect: [{ row: "SS-03", detail: "silent" }, vaultPathExport(0)],
 	},
 
 	{
@@ -507,24 +695,29 @@ const scenarios: readonly Scenario[] = [
 		expect: [
 			{ row: "VW-17", detail: WRITE_CONTEXT },
 			{ row: "VW-03", detail: "lesson.md" },
-			{ row: "VW-03", detail: "policy memory-location, misplaced-memory, warn, with a target, at ~/.claude/projects/parity/memory/lesson.md" },
+			{
+				row: "VW-03",
+				detail: "policy memory-location, misplaced-memory, warn, with the target {brain topics}, at ~/.claude/projects/parity/memory/lesson.md",
+			},
 		],
 	},
 	{
 		id: "write-no-frontmatter",
-		rows: ["VW-07"],
+		rows: ["VW-07", "VW-13"],
 		steps: [write("Loose Draft")],
 		expect: [
 			{ row: "VW-17", detail: WRITE_CONTEXT },
+			{ row: "VW-13", note: "Loose Draft", count: 1 },
 			{ row: "VW-07", note: "Loose Draft" },
 		],
 	},
 	{
 		id: "write-missing-global-fields",
-		rows: ["VW-08"],
+		rows: ["VW-08", "VW-13"],
 		steps: [write("Missing Fields")],
 		expect: [
 			{ row: "VW-17", detail: WRITE_CONTEXT },
+			{ row: "VW-13", note: "Missing Fields", count: 2 },
 			{ row: "VW-08", note: "Missing Fields", detail: "Description" },
 			{ row: "VW-08", note: "Missing Fields", detail: "Tags" },
 		],
@@ -535,6 +728,7 @@ const scenarios: readonly Scenario[] = [
 		steps: [write("Ben Ortiz")],
 		expect: [
 			{ row: "VW-17", detail: WRITE_CONTEXT },
+			{ row: "VW-13", note: "Ben Ortiz", count: 1 },
 			{ row: "VW-09", note: "Ben Ortiz", detail: "Role" },
 		],
 	},
@@ -550,8 +744,15 @@ const scenarios: readonly Scenario[] = [
 		steps: [write("No Links")],
 		expect: [
 			{ row: "VW-17", detail: WRITE_CONTEXT },
+			{ row: "VW-13", note: "No Links", count: 1 },
 			{ row: "VW-10", note: "No Links" },
 		],
+	},
+	{
+		id: "write-no-links-at-length-limit",
+		rows: ["VW-10"],
+		steps: [write("Short No Links")],
+		expect: [{ row: "VW-17", detail: "silent" }],
 	},
 	{
 		id: "write-hard-wrap",
@@ -559,6 +760,7 @@ const scenarios: readonly Scenario[] = [
 		steps: [write("Wrapped Prose")],
 		expect: [
 			{ row: "VW-17", detail: WRITE_CONTEXT },
+			{ row: "VW-13", note: "Wrapped Prose", count: 1 },
 			{ row: "VW-11", note: "Wrapped Prose", count: 2 },
 		],
 	},
@@ -568,6 +770,7 @@ const scenarios: readonly Scenario[] = [
 		steps: [write("Ticket Links")],
 		expect: [
 			{ row: "VW-17", detail: WRITE_CONTEXT },
+			{ row: "VW-13", note: "Ticket Links", count: 1 },
 			{ row: "VW-12", note: "Ticket Links", count: 2 },
 			{ row: "VW-12", note: "Ticket Links", detail: "policy phantom-edge, ticket-id-wikilink, warn" },
 		],
@@ -581,6 +784,22 @@ const scenarios: readonly Scenario[] = [
 			{ row: "VW-14", note: "Runbook", sizeKb: 26 },
 			{ row: "VW-14", note: "Runbook", detail: "policy organization-threshold, oversized-note, flag" },
 		],
+	},
+	{
+		id: "write-at-size-limit",
+		rows: ["VW-14"],
+		steps: [write("Size Limit Note")],
+		expect: [
+			{ row: "VW-17", detail: WRITE_CONTEXT },
+			{ row: "VW-14", note: "Size Limit Note", sizeKb: 25 },
+			{ row: "VW-14", note: "Size Limit Note", detail: "policy organization-threshold, oversized-note, flag" },
+		],
+	},
+	{
+		id: "write-below-size-limit",
+		rows: ["VW-14"],
+		steps: [write("Below Size Limit Note")],
+		expect: [{ row: "VW-17", detail: "silent" }],
 	},
 	{
 		id: "write-near-size-limit",
@@ -601,7 +820,20 @@ const scenarios: readonly Scenario[] = [
 		expect: [
 			{ row: "VW-17", detail: WRITE_CONTEXT },
 			{ row: "VW-15", detail: BILLING_CLUSTER, count: 1 },
-			{ row: "VW-15", note: "Billing Retry Design", detail: "policy topic-cluster, ungrouped-cluster, flag, with a target" },
+			{ row: "VW-15", note: "Billing Retry Design", detail: CLUSTER_POLICY },
+		],
+	},
+	{
+		id: "write-two-notes",
+		rows: ["VW-15", "VW-16"],
+		steps: [write("Billing Export Pipeline", "Billing Retry Design")],
+		// Both notes join the same cluster. The envelope states the cluster one time and has one policy result for each note.
+		expect: [
+			{ row: "VW-17", detail: WRITE_CONTEXT },
+			{ row: "VW-16", detail: "blocks", count: 1 },
+			{ row: "VW-15", detail: BILLING_CLUSTER, count: 1 },
+			{ row: "VW-15", note: "Billing Export Pipeline", detail: CLUSTER_POLICY },
+			{ row: "VW-15", note: "Billing Retry Design", detail: CLUSTER_POLICY },
 		],
 	},
 
@@ -620,7 +852,7 @@ const scenarios: readonly Scenario[] = [
 		expect: (["UP-03", "UP-05", "UP-06", "UP-07", "UP-08", "UP-09", "UP-10"] as const).flatMap(
 			(row, step): ExpectedFinding[] => [
 				{ row: "UP-14", step, detail: PROMPT_CONTEXT },
-				{ row: "UP-12", step, count: 1 },
+				{ row: "UP-12", step, detail: row, count: 1 },
 				{ row, step },
 			],
 		),
@@ -631,7 +863,7 @@ const scenarios: readonly Scenario[] = [
 		steps: [prompt("We decided to drop the cache, so the old choice is superseded.")],
 		expect: [
 			{ row: "UP-14", detail: PROMPT_CONTEXT },
-			{ row: "UP-12", count: 2 },
+			{ row: "UP-12", detail: "UP-03, UP-04", count: 2 },
 			{ row: "UP-03" },
 			{ row: "UP-04" },
 		],
@@ -642,7 +874,7 @@ const scenarios: readonly Scenario[] = [
 		steps: [prompt("We decided to keep the nightly export."), prompt("We decided to keep the weekly export.")],
 		expect: [
 			{ row: "UP-14", step: 0, detail: PROMPT_CONTEXT },
-			{ row: "UP-12", step: 0, count: 1 },
+			{ row: "UP-12", step: 0, detail: "UP-03", count: 1 },
 			{ row: "UP-03", step: 0 },
 			{ row: "UP-14", step: 1, detail: "silent" },
 		],
@@ -658,7 +890,7 @@ const scenarios: readonly Scenario[] = [
 		],
 		expect: [0, 1].flatMap((step): ExpectedFinding[] => [
 			{ row: "UP-14", step, detail: PROMPT_CONTEXT },
-			{ row: "UP-12", step, count: 1 },
+			{ row: "UP-12", step, detail: "UP-03", count: 1 },
 			{ row: "UP-03", step },
 		]),
 	},
@@ -684,19 +916,39 @@ const scenarios: readonly Scenario[] = [
 	{
 		id: "stop-then-prompt",
 		rows: ["ST-03", "ST-04", "ST-05", "ST-09", "UP-02", ...HYGIENE_ROWS],
-		steps: [payload("stop-checklist"), prompt("What is the time in Lisbon?")],
+		// The first prompt takes the report, so the second prompt has no report.
+		steps: [payload("stop-checklist"), prompt("What is the time in Lisbon?"), prompt("What is the time in Lisbon?")],
 		expect: [
 			{ row: "ST-09", step: 0, detail: "system message" },
 			...summary(0, "ST-09"),
 			{ row: "UP-14", step: 1, detail: PROMPT_CONTEXT },
 			{ row: "UP-02", step: 1 },
 			{ row: "ST-09", step: 1, detail: "preface" },
-			checklist(1),
+			...checklist(1),
 			{ row: "ST-04", step: 1 },
 			...hygiene(1),
+			{ row: "UP-14", step: 2, detail: "silent" },
 		],
 		// The manifest read prints no line. "Follow Ups" is a heading that only the manifest of the fixture names.
 		provenBy: { "ST-05": { row: "HY-04", step: 1, note: "Planning Export", count: 1 } },
+	},
+	{
+		id: "stop-then-prompt-with-hint",
+		rows: ["UP-02", "UP-12", "UP-14"],
+		steps: [payload("stop-checklist"), prompt("We decided to keep the nightly export.")],
+		expect: [
+			{ row: "ST-09", step: 0, detail: "system message" },
+			...summary(0, "ST-09"),
+			{ row: "UP-14", step: 1, detail: PROMPT_CONTEXT },
+			{ row: "UP-12", step: 1, detail: "UP-03", count: 1 },
+			{ row: "UP-03", step: 1 },
+			{ row: "UP-14", step: 1, detail: "a blank line between the parts" },
+			{ row: "UP-02", step: 1 },
+			{ row: "ST-09", step: 1, detail: "preface" },
+			...checklist(1),
+			{ row: "ST-04", step: 1 },
+			...hygiene(1),
+		],
 	},
 	{
 		id: "stop-twice",
@@ -720,7 +972,7 @@ const scenarios: readonly Scenario[] = [
 			{ row: "ST-09", step: 0, detail: "system message" },
 			...summary(0, "ST-09"),
 			{ row: "ST-09", step: 1, detail: "system message" },
-			...withoutClaudeFile(summary(1, "ST-09")),
+			...without("HY-07", summary(1, "ST-09")),
 			{ row: "ST-07", step: 2, detail: "empty envelope" },
 		],
 	},
@@ -733,8 +985,11 @@ const scenarios: readonly Scenario[] = [
 	{
 		id: "stop-reentry",
 		rows: ["ST-02"],
-		steps: [payload("stop-checklist", { stop_hook_active: true })],
-		expect: [{ row: "ST-02", detail: "empty envelope" }],
+		steps: [payload("stop-checklist", { stop_hook_active: true }), payload("stop-checklist", { stopHookActive: true })],
+		expect: [
+			{ row: "ST-02", step: 0, detail: "empty envelope" },
+			{ row: "ST-02", step: 1, detail: "empty envelope" },
+		],
 	},
 	{
 		id: "stop-report-data",
@@ -750,7 +1005,7 @@ const scenarios: readonly Scenario[] = [
 			payload("stop-checklist", { om_mod: "report" }),
 			{ ...payload("stop-checklist", { om_mod: "report" }), removeRepoFile: "CLAUDE.md" },
 		],
-		expect: [...reportData(0, 0), ...reportData(1, 0), ...withoutClaudeFile(reportData(2, 2))],
+		expect: [...reportData(0, 0), ...reportData(1, 0), ...without("HY-07", reportData(2, 2))],
 	},
 	{
 		id: "stop-handoff-blocked",
@@ -761,7 +1016,7 @@ const scenarios: readonly Scenario[] = [
 			{ row: "ST-10", detail: "system message and feedback, event Stop" },
 			{ row: "ST-10", detail: "preface" },
 			...summary(0, "ST-10"),
-			checklist(0),
+			...checklist(0),
 			{ row: "ST-04" },
 			...hygiene(0),
 		],
@@ -772,10 +1027,16 @@ const scenarios: readonly Scenario[] = [
 		steps: [payload("stop-checklist", { hook_event_name: "SessionEnd" }), payload("stop-checklist", { session_id: "" })],
 		expect: [0, 1].flatMap((step): ExpectedFinding[] => [
 			{ row: "ST-11", step, detail: "system message" },
-			checklist(step),
+			...checklist(step),
 			{ row: "ST-04", step },
 			...hygiene(step),
 		]),
+	},
+	{
+		id: "stop-agents-below-flag",
+		rows: ["HY-09"],
+		steps: [{ ...payload("stop-checklist", { session_id: "" }), replaceRepoFile: AGENTS_BELOW_FLAG }],
+		expect: [{ row: "ST-11", detail: "system message" }, ...checklist(0), { row: "ST-04" }, ...without("HY-09", hygiene(0))],
 	},
 
 	{
@@ -797,6 +1058,8 @@ const scenarios: readonly Scenario[] = [
 			{ row: "PC-01", detail: "silent" },
 			{ row: "PC-03", detail: "manual", count: 1 },
 			{ row: "PC-04", count: 30 },
+			// The new copy and the 29 newest old copies stay.
+			{ row: "PC-04", detail: "old backups removed: 0, 1", count: 2 },
 		],
 	},
 	{

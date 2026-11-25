@@ -62,9 +62,68 @@ describe("fixture spec", () => {
 	test("each written note is a fixture note", () => {
 		const titles = new Set(FIXTURE.notes.map((n) => n.title));
 		const unknown = FIXTURE.scenarios.flatMap((scenario) =>
-			scenario.steps.flatMap((step) => (step.input.kind === "write" && !titles.has(step.input.note) ? [step.input.note] : [])),
+			scenario.steps.flatMap((step) => (step.input.kind === "write" ? step.input.notes.filter((title) => !titles.has(title)) : [])),
 		);
 		assert.deepEqual(unknown, []);
+	});
+
+	const bytesOf = (title: string): number => Buffer.byteLength(renderNote(note(title)));
+	const inFolder = (folder: string): number => FIXTURE.notes.filter((n) => markdownPath(n).startsWith(`${folder}/`)).length;
+	const aged = (type: FixtureNote["type"], days: number): string[] =>
+		FIXTURE.notes.filter((n) => n.type === type && n.changedDaysAgo === days).map((n) => n.title);
+
+	test("a note is exactly at the 25,000-byte limit, and a note is one byte below it", () => {
+		assert.equal(bytesOf("Size Limit Note"), 25_000);
+		assert.equal(bytesOf("Below Size Limit Note"), 24_999);
+	});
+
+	test("a note with no link is one character above the 300-character limit, and a note is exactly at it", () => {
+		for (const [title, length] of [["No Links", 301], ["Short No Links", 300]] as const) {
+			const text = renderNote(note(title));
+			assert.equal(text.length, length);
+			assert.equal(text.includes("[["), false);
+		}
+	});
+
+	test("`AGENTS.md` is exactly at the 23,000-byte flag", () => {
+		assert.equal(Buffer.byteLength(FIXTURE.repoFiles.find((file) => file.path === "AGENTS.md")!.content), 23_000);
+	});
+
+	test("an inbox note is exactly at the 7-day limit, and a note is one day below it", () => {
+		assert.deepEqual(aged("Inbox item", 7), ["Offsite Export"]);
+		assert.deepEqual(aged("Inbox item", 6), ["Fresh Standup Export"]);
+	});
+
+	test("a note with open items is exactly at the 14-day limit, and a note is one day below it", () => {
+		assert.deepEqual(aged("1:1", 14), ["Ada Park 2026-02-07"]);
+		assert.deepEqual(aged("Inbox item", 13), ["Retro Export"]);
+	});
+
+	test("one group has 12 notes and one group has 13 notes, on the two sides of the collapse limit", () => {
+		assert.equal(inFolder("work/meetings"), 12);
+		assert.equal(inFolder("reference"), 13);
+		assert.equal(FIXTURE.notes.filter((n) => n.type === "Inbox item").length, 12);
+		assert.equal(FIXTURE.notes.filter((n) => n.type === "Reference").length, 13);
+	});
+
+	test("11 notes are past the size limit, one more than a hygiene list shows, and only one has the smallest size in KB", () => {
+		const sizes = FIXTURE.notes
+			.filter((n) => !n.title.includes("Archive") && Buffer.byteLength(renderNote(n)) >= 25_000)
+			.map((n) => Math.round(Buffer.byteLength(renderNote(n)) / 1000))
+			.sort((a, b) => a - b);
+		assert.equal(sizes.length, 11);
+		assert.ok(sizes[0]! < sizes[1]!, "the note that the list does not show must not depend on the order of the files");
+	});
+
+	test("10 loose notes are active, the number that the Active Work section keeps", () => {
+		assert.equal(FIXTURE.notes.filter((n) => markdownPath(n).startsWith("work/active/") && markdownPath(n).split("/").length === 3).length, 10);
+	});
+
+	test("11 tasks are open in the loose active notes and in Home, one more than the Open Tasks section keeps, and Home holds the last one", () => {
+		const open = (n: FixtureNote): number => n.body.split("\n").filter((line) => line.startsWith("- [ ]")).length;
+		const loose = FIXTURE.notes.filter((n) => markdownPath(n).startsWith("work/active/") && markdownPath(n).split("/").length === 3);
+		assert.equal(loose.reduce((sum, n) => sum + open(n), 0), 9);
+		assert.equal(open(note("Home")), 2);
 	});
 
 	test("the near-limit note is below the 25,000-byte limit by at most 10 percent", () => {
@@ -102,8 +161,18 @@ describe("Markdown form", () => {
 		);
 	});
 
-	test("a note with no field has no frontmatter", () => {
-		assert.equal(readFileSync(join(dir, "reference/Loose Draft.md"), "utf-8"), note("Loose Draft").body);
+	test("a note with no field has no frontmatter, and a page outside the databases is a file of the root", () => {
+		assert.equal(readFileSync(join(dir, "Loose Draft.md"), "utf-8"), note("Loose Draft").body);
+	});
+
+	test("the notes of one folder are the notes of one type, so a folder is a group of the Notion listing", () => {
+		const folderOf = (n: FixtureNote): string => markdownPath(n).split("/").slice(0, -1).join("/");
+		const mixed = [...new Set(FIXTURE.notes.map(folderOf))].filter((folder) => {
+			const types = new Set(FIXTURE.notes.filter((n) => folderOf(n) === folder).map((n) => n.type));
+			// The root holds the pages outside the databases. `brain/` holds the North Star page beside the brain topics.
+			return types.size > 1 && folder !== "" && folder !== "brain";
+		});
+		assert.deepEqual(mixed, []);
 	});
 
 	test("the file mtime is the Changed date of the note", () => {
@@ -118,9 +187,17 @@ describe("Markdown form", () => {
 	});
 
 	test("a write payload names the file of the note", () => {
-		const payload = environment.writePayload(note("Runbook")) as { tool_name: string; tool_input: { file_path: string } };
+		const payload = environment.writePayload([note("Runbook")]) as { tool_name: string; tool_input: { file_path: string } };
 		assert.equal(payload.tool_name, "Write");
 		assert.equal(payload.tool_input.file_path, join(dir, "reference/Runbook.md"));
+	});
+
+	test("a write payload of two notes names the file of each note in one call", () => {
+		const payload = environment.writePayload([note("Billing Export Pipeline"), note("Billing Retry Design")]) as { tool_input: { command: string } };
+		assert.deepEqual(
+			payload.tool_input.command.split("\n").filter((line) => line.includes(" File: ")),
+			["*** Update File: work/active/Billing Export Pipeline.md", "*** Update File: work/active/Billing Retry Design.md"],
+		);
 	});
 
 	test("a path, a file name, and a title all name the note", () => {

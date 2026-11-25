@@ -7,7 +7,7 @@
 
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { accessSync, constants, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
+import { accessSync, constants, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -26,7 +26,12 @@ export type StepRun = {
 	readonly wallMs: number;
 	/** The transcript copies that exist after the run. */
 	readonly sessionLogs: readonly { readonly name: string; readonly sha256: string }[];
+	/** The text that the run added to the file of `CLAUDE_ENV_FILE`. */
+	readonly envFileAdded: string;
 };
+
+/** The name of an old transcript copy that exists before the first step. Number 0 is the oldest. */
+export const oldSessionLogName = (index: number): string => `session_auto_20200101_0000${String(index).padStart(2, "0")}.jsonl`;
 
 export type ScenarioRun = {
 	readonly scenario: Scenario;
@@ -143,6 +148,8 @@ export function runScenario(scenario: Scenario, spec: FixtureSpec, environment: 
 	const transcript = join(home, "transcript.jsonl");
 	writeFileSync(transcript, TRANSCRIPT);
 
+	const envFile = join(state, "claude-env");
+	const envFileText = (): string => (existsSync(envFile) ? readFileSync(envFile, "utf-8") : "");
 	let handoffDir = join(state, "stop-handoff");
 	if (scenario.blockHandoff) {
 		const file = join(state, "not-a-directory");
@@ -151,7 +158,7 @@ export function runScenario(scenario: Scenario, spec: FixtureSpec, environment: 
 	}
 	if (scenario.oldSessionLogs) mkdirSync(environment.sessionLogDir, { recursive: true });
 	for (let i = 0; i < (scenario.oldSessionLogs ?? 0); i++) {
-		const log = join(environment.sessionLogDir, `session_auto_20200101_0000${String(i).padStart(2, "0")}.jsonl`);
+		const log = join(environment.sessionLogDir, oldSessionLogName(i));
 		writeFileSync(log, `old ${i}\n`);
 		const old = new Date(Date.UTC(2020, 0, 1, 0, 0, i));
 		utimesSync(log, old, old);
@@ -165,6 +172,7 @@ export function runScenario(scenario: Scenario, spec: FixtureSpec, environment: 
 		CLASSIFY_HINT_STATE: join(state, "hint-state.json"),
 		STOP_CHECKLIST_STATE: join(state, "checklist-state.json"),
 		STOP_HANDOFF_DIR: handoffDir,
+		CLAUDE_ENV_FILE: envFile,
 		...environment.env,
 	};
 
@@ -186,10 +194,12 @@ export function runScenario(scenario: Scenario, spec: FixtureSpec, environment: 
 				tool_response: { filePath, success: true },
 			});
 		}
-		const title = step.input.note;
-		const note = spec.notes.find((candidate) => candidate.title === title);
-		if (note === undefined) throw new Error(`scenario ${scenario.id} writes an unknown note: ${title}`);
-		return JSON.stringify({ ...base, ...environment.writePayload(note) });
+		const notes = step.input.notes.map((title) => {
+			const note = spec.notes.find((candidate) => candidate.title === title);
+			if (note === undefined) throw new Error(`scenario ${scenario.id} writes an unknown note: ${title}`);
+			return note;
+		});
+		return JSON.stringify({ ...base, ...environment.writePayload(notes) });
 	};
 
 	const repoFiles = new Set(spec.repoFiles.map((file) => file.path));
@@ -200,6 +210,13 @@ export function runScenario(scenario: Scenario, spec: FixtureSpec, environment: 
 			}
 			rmSync(join(environment.projectDir, step.removeRepoFile));
 		}
+		if (step.replaceRepoFile !== undefined) {
+			if (!repoFiles.has(step.replaceRepoFile.path)) {
+				throw new Error(`scenario ${scenario.id} replaces an unknown repository file: ${step.replaceRepoFile.path}`);
+			}
+			writeFileSync(join(environment.projectDir, step.replaceRepoFile.path), step.replaceRepoFile.content);
+		}
+		const envFileBefore = envFileText();
 		const started = performance.now();
 		const run = spawnSync(
 			process.execPath,
@@ -216,6 +233,7 @@ export function runScenario(scenario: Scenario, spec: FixtureSpec, environment: 
 			exitCode: run.status,
 			wallMs: performance.now() - started,
 			sessionLogs: sessionLogs(environment.sessionLogDir),
+			envFileAdded: envFileText().slice(envFileBefore.length),
 		};
 	});
 	return { scenario, environment, home, runs };

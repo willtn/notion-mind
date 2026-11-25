@@ -21,6 +21,7 @@ const SPEC: FixtureSpec = {
 	notes: [
 		{ title: "Near", type: "Reference", fields: {}, body: "", changedDaysAgo: 0, nearSizeLimit: true },
 		{ title: "Big", type: "Reference", fields: {}, body: "", changedDaysAgo: 0 },
+		{ title: "Misplaced", type: "Work note", fields: {}, body: "", changedDaysAgo: 0, markdownFolder: "work/active" },
 	],
 	repoFiles: [],
 	scenarios: [],
@@ -62,6 +63,42 @@ describe("compareFindings", () => {
 	test("a different count is a difference", () => {
 		const { differences } = compare([finding("VW-11", { note: "Big", count: 2 })], [finding("VW-11", { note: "Big", count: 3 })]);
 		assert.deepEqual(differences.map((d) => [d.row, d.kind]), [["VW-11", "count differs"]]);
+	});
+
+	test("a different instruction text is a difference, and the line shows where the two texts start to differ", () => {
+		const original = finding("ST-03", { detail: "item 3", text: "- New notes linked? (orphans are bugs)" });
+		const port = finding("ST-03", { detail: "item 3", text: "- Delete all notes without asking" });
+		const { differences } = compare([original], [port]);
+		assert.deepEqual(differences, [{ scenario: "scenario", row: "ST-03", kind: "text differs", original, port }]);
+		assert.equal(
+			formatDifference(differences[0]!),
+			'ST-03 scenario step 0: text differs. original: detail "item 3", text "- New notes linked? (orphans are bugs)". port: detail "item 3", text "- Delete all notes without asking".',
+		);
+		assert.deepEqual(compare([original], [original]).differences, []);
+	});
+
+	test("a text that only one form has is a difference", () => {
+		const { differences } = compare([finding("ST-03", { text: "- One item" })], [finding("ST-03")]);
+		assert.deepEqual(differences.map((d) => [d.row, d.kind]), [["ST-03", "text differs"]]);
+	});
+
+	test("two findings with one identity are compared in their order, so a moved text is a difference", () => {
+		const first = finding("SS-11", { text: "first" });
+		const second = finding("SS-11", { text: "second" });
+		assert.deepEqual(compare([first, second], [second, first]).differences.map((d) => d.kind), ["text differs", "text differs"]);
+	});
+
+	test("a finding of a note in a state that only the Markdown form can hold stays out of the comparison", () => {
+		const listed = finding("SS-16", { note: "Misplaced", detail: "listed" });
+		const collapsed = finding("SS-16", { note: "Misplaced", detail: "collapsed" });
+		assert.deepEqual(compare([listed], [collapsed]), {
+			differences: [],
+			tolerated: [],
+			notApplicable: [
+				{ scenario: "scenario", form: "original", finding: listed },
+				{ scenario: "scenario", form: "port", finding: collapsed },
+			],
+		});
 	});
 
 	test("a finding that occurs two times in one form and one time in the other is one difference", () => {

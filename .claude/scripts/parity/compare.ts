@@ -10,7 +10,7 @@ import type { Finding, FixtureSpec } from "./spec.ts";
 export type Difference = {
 	readonly scenario: string;
 	readonly row: Finding["row"];
-	readonly kind: "only in the original" | "only in the port" | "count differs" | "size differs";
+	readonly kind: "only in the original" | "only in the port" | "count differs" | "text differs" | "size differs";
 	readonly original: Finding | null;
 	readonly port: Finding | null;
 };
@@ -20,7 +20,11 @@ export type Comparison = {
 	readonly differences: readonly Difference[];
 	/** Differences inside a tolerance that part (d) states. The summary of a run lists each one. */
 	readonly tolerated: readonly Difference[];
-	/** Findings of a row that part (d) marks "not applicable". The comparison ignores them. */
+	/**
+	 * Findings of a row that part (d) marks "not applicable", and findings
+	 * of a note in a state that only the Markdown form can hold. The
+	 * comparison ignores them.
+	 */
 	readonly notApplicable: readonly NotApplicable[];
 };
 
@@ -53,6 +57,7 @@ const toleranceOf = (finding: Finding, rule: RowRule, nearSizeLimit: ReadonlySet
 
 function pairDifference(original: Finding, port: Finding, tolerance: Tolerance | null): { kind: Difference["kind"]; tolerated: boolean } | null {
 	if (original.count !== port.count) return { kind: "count differs", tolerated: false };
+	if (original.text !== port.text) return { kind: "text differs", tolerated: false };
 	if (original.sizeKb === port.sizeKb) return null;
 	if (tolerance === null || original.sizeKb === undefined || port.sizeKb === undefined) return { kind: "size differs", tolerated: false };
 	const gap = Math.abs(original.sizeKb - port.sizeKb);
@@ -70,7 +75,9 @@ export function compareFindings(
 	spec: FixtureSpec,
 ): Comparison {
 	const nearSizeLimit = new Set(spec.notes.filter((note) => note.nearSizeLimit).map((note) => note.title));
-	const applies = (finding: Finding): boolean => ruleOf(finding).rule !== "not-applicable";
+	const markdownOnly = new Set(spec.notes.filter((note) => note.markdownFolder !== undefined).map((note) => note.title));
+	const applies = (finding: Finding): boolean =>
+		ruleOf(finding).rule !== "not-applicable" && !(finding.note !== null && markdownOnly.has(finding.note));
 	const ignored = (form: NotApplicable["form"], findings: readonly Finding[]): NotApplicable[] =>
 		findings.filter((finding) => !applies(finding)).map((finding) => ({ scenario, form, finding }));
 
@@ -113,17 +120,32 @@ export function comparePasses(original: Pass, port: Pass, spec: FixtureSpec): Co
 	};
 }
 
-const describe = (finding: Finding | null): string => {
+const TEXT_WINDOW = 100;
+
+/** The part of `text` around `from`, the first place where two texts differ. */
+const windowOf = (text: string, from: number): string =>
+	JSON.stringify(`${from > 20 ? "…" : ""}${text.slice(Math.max(0, from - 20), from + TEXT_WINDOW)}`);
+
+const describe = (finding: Finding | null, textFrom: number | null): string => {
 	if (finding === null) return "none";
 	const parts = [
 		finding.note === null ? null : `note "${finding.note}"`,
 		finding.detail === null ? null : `detail "${finding.detail}"`,
 		finding.count === null ? null : `count ${finding.count}`,
 		finding.sizeKb === undefined ? null : `${finding.sizeKb}KB`,
+		textFrom === null ? null : finding.text === undefined ? "no text" : `text ${windowOf(finding.text, textFrom)}`,
 	].filter((part) => part !== null);
 	return parts.length === 0 ? "present" : parts.join(", ");
 };
 
-/** One line for each difference, with the row ID first. */
-export const formatDifference = (d: Difference): string =>
-	`${d.row} ${d.scenario} step ${(d.original ?? d.port)!.step}: ${d.kind}. original: ${describe(d.original)}. port: ${describe(d.port)}.`;
+function firstDifference(a: string, b: string): number {
+	let at = 0;
+	while (at < a.length && at < b.length && a[at] === b[at]) at++;
+	return at;
+}
+
+/** One line for each difference, with the row ID first. A text difference shows the place where the two texts start to differ. */
+export function formatDifference(d: Difference): string {
+	const textFrom = d.kind === "text differs" ? firstDifference(d.original?.text ?? "", d.port?.text ?? "") : null;
+	return `${d.row} ${d.scenario} step ${(d.original ?? d.port)!.step}: ${d.kind}. original: ${describe(d.original, textFrom)}. port: ${describe(d.port, textFrom)}.`;
+}

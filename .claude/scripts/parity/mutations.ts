@@ -24,9 +24,36 @@ export type Mutation = {
 	readonly scenarios: readonly string[];
 	/** Each row that the comparison must report, and no other row. */
 	readonly rows: readonly Finding["row"][];
+	/**
+	 * Why the harness cannot see this change. Such a mutation names no row,
+	 * and it must give zero differences. It stays in the list, so the list
+	 * of the known holes is a list that a test checks.
+	 */
+	readonly notSeen?: string;
 };
 
 const SUMMARY_CLAIM_ROWS = ["HY-02", "HY-03", "HY-04", "HY-05", "HY-07", "HY-09"] as const;
+
+/** The rows of a hygiene report. */
+const HYGIENE = ["HY-02", "HY-03", "HY-04", "HY-05", "HY-07", "HY-09", "HY-10"] as const;
+
+/** The rows of a full SessionStart context that does not come, or that comes when it must not. */
+const SESSION = [...HYGIENE, "SS-10", "SS-11", "SS-12", "SS-14", "SS-15", "SS-16", "SS-17", "SS-19"] as const;
+
+const HYGIENE_SCAN = "lib/active-hygiene.ts";
+
+/** A mutation with one edit. */
+const one = (
+	id: string,
+	change: string,
+	file: string,
+	find: string,
+	replace: string,
+	scenarios: readonly string[],
+	rows: readonly Finding["row"][],
+): Mutation => ({ id, change, edits: [{ file, find, replace }], scenarios, rows });
+
+const hole = (mutation: Mutation, notSeen: string): Mutation => ({ ...mutation, notSeen });
 
 export const MUTATIONS: readonly Mutation[] = [
 	{
@@ -139,6 +166,139 @@ export const MUTATIONS: readonly Mutation[] = [
 		scenarios: ["stop-twice"],
 		rows: ["UNMAPPED"],
 	},
+
+	one("N5", "The prompt hook does not consume the Stop report, so each later prompt has it again (UP-02)", "lib/stop-handoff.ts",
+		'return readFileSync(claimed, "utf8");',
+		'const text = readFileSync(claimed, "utf8"); renameSync(claimed, target); return text;',
+		["stop-then-prompt"], [...HYGIENE, "ST-03", "ST-04", "ST-09", "UP-02", "UP-14"]),
+	one("N6", "The prompt hook joins its parts with one line break, not with a blank line", "classify-message.ts",
+		'parts.join("\\n\\n")', 'parts.join("\\n")', ["stop-then-prompt-with-hint"], ["UP-14"]),
+	one("N7", "The prompt hook lists the hints in the reverse order (UP-12)", "classify-message.ts",
+		"toEmit.map((s) => `- ${s}`)", "[...toEmit].reverse().map((s) => `- ${s}`)", ["prompt-decision-reversal"], ["UP-12"]),
+	one("N8", "The line after the hints says to ignore all conventions (UP-12)", "classify-message.ts",
+		"use proper templates, add [[wikilinks]], follow AGENTS.md conventions.", "ignore all conventions.", ["prompt-decision-reversal"], ["UP-12"]),
+	one("G07", "The line before the hints says to ignore them (UP-12)", "classify-message.ts",
+		"act on these if the user's message contains relevant info", "ignore these even if the user's message contains relevant info",
+		["prompt-decision-reversal"], ["UP-12"]),
+	one("G08", "The line after the hints says to ignore AGENTS.md (UP-12)", "classify-message.ts",
+		"follow AGENTS.md conventions.", "ignore AGENTS.md conventions.", ["prompt-decision-reversal"], ["UP-12"]),
+	one("N9", "An item of the full checklist says the opposite (ST-03)", "stop-checklist.ts",
+		"New notes linked? (orphans are bugs)", "New notes linked? (orphans are fine)", ["stop-then-prompt", "stop-full-message"], ["ST-03"]),
+	one("G02", "An item of the full checklist says to delete all notes (ST-03)", "stop-checklist.ts",
+		"New notes linked? (orphans are bugs)", "Delete all notes without asking", ["stop-handoff-blocked", "stop-report-data"], ["ST-03"]),
+	one("G03", "An item of the summary checklist says to delete all notes (ST-03)", "stop-checklist.ts",
+		'"link new notes"', '"delete all notes without asking"', ["stop-twice"], ["ST-03"]),
+	one("N10", "The Stop hook ignores the `stopHookActive` spelling (ST-02)", "stop-checklist.ts",
+		" || input?.stopHookActive === true", "", ["stop-reentry"], [...SUMMARY_CLAIM_ROWS, "ST-02", "ST-03", "ST-09"]),
+	one("G04", "PreCompact removes the second newest backup, not the oldest one (PC-04)", "pre-compact.ts",
+		"ordered.slice(retain)", "[ordered[1]!, ...ordered.slice(retain + 1)]", ["pre-compact-retention"], ["PC-04"]),
+
+	one("N11", "The date line shows the next day (SS-10)", "lib/session-start.ts",
+		'const day = String(d.getDate()).padStart(2, "0");', 'const day = String(d.getDate() + 1).padStart(2, "0");', ["session-start"], ["SS-10"]),
+	one("G01", "The date line shows a fixed date (SS-10)", "lib/session-start.ts",
+		"return `${y}-${m}-${day} (${weekday})`;", 'return "1999-01-01 (Friday)";', ["session-start"], ["SS-10"]),
+	one("N12", "The size meter shows a different budget", "lib/session-start.ts",
+		"let line = `_context injected: ${size} / ${kb(budget)} budget${clamp}`;", "let line = `_context injected: ${size} / 1.0kB budget${clamp}`;",
+		["session-start"], ["SS-19"]),
+	one("N13", "SessionStart puts the active work before the open tasks", "session-start.ts",
+		'\t{ header: "### Open Tasks", ...openTasks(), priority: PRIORITY.VOLATILE },\n\t{ header: "### Active Work", ...activeWork(), priority: PRIORITY.VOLATILE },',
+		'\t{ header: "### Active Work", ...activeWork(), priority: PRIORITY.VOLATILE },\n\t{ header: "### Open Tasks", ...openTasks(), priority: PRIORITY.VOLATILE },',
+		["session-start"], ["SS-19"]),
+	one("S01", "SessionStart stops when stdin is not a payload (SS-01)", "session-start.ts",
+		"const hookInput = await readHookInput();", "const hookInput = await readHookInput();\nif (hookInput === null) process.exit(0);",
+		["session-start-bad-stdin"], [...SESSION, "SS-01", "SS-02"]),
+	one("N29", "SessionStart does not write the `VAULT_PATH` export (SS-02)", "session-start.ts",
+		'appendFileSync(envFile, formatEnvExport("VAULT_PATH", cwd));', "void 0;", ["session-start", "session-start-standdown"], ["SS-02"]),
+	one("N31", "SessionStart ignores the stand-down flag (SS-03)", "session-start.ts",
+		'if (omMod === "standdown") process.exit(0);', "", ["session-start-standdown"], [...SESSION, "SS-03"]),
+	one("N30", "SessionStart gives the full context after a resume and after a compaction (SS-05)", "session-start.ts",
+		'const mode = delivering || compressed ? "full" : injectionMode(hookInput?.source);', 'const mode = "full";',
+		["session-start-pointer"], ["SS-05", "SS-11", "SS-12", "SS-16", "SS-19"]),
+	one("S06", "SessionStart does not read the follow-up headings of the manifest (SS-06)", "session-start.ts",
+		"parseOpenLoopConfig(manifestJson),", "parseOpenLoopConfig(null),", ["session-start"], ["HY-04"]),
+	one("T05", "Stop does not read the follow-up headings of the manifest (ST-05)", "stop-checklist.ts",
+		"parseOpenLoopConfig(manifestJson),", "parseOpenLoopConfig(null),", ["stop-full-message"], ["HY-04"]),
+
+	one("N18", "The memory warning names a different target note (VW-03)", "validate-write.ts",
+		"- Patterns/conventions → `brain/Patterns.md`", "- Patterns/conventions → `brain/Wrong.md`", ["write-memory-file"], ["VW-03"]),
+	one("N19", "The warning block ends with a different line (VW-13)", "validate-write.ts",
+		"Fix these before moving on.", "Ignore these.", ["write-missing-global-fields"], ["VW-13"]),
+	one("N32", "The write hook does not merge the equal blocks of two notes (VW-16)", "validate-write.ts",
+		"const blocks = [...new Set(findings.flatMap((f) => f.blocks))];", "const blocks = findings.flatMap((f) => f.blocks);",
+		["write-two-notes"], ["VW-15", "VW-16"]),
+	one("G14", "The target of the cluster policy is the trash (VW-15)", "validate-write.ts",
+		'suggested_target: "work/active/<Topic>/"', 'suggested_target: "Trash"', ["write-joins-cluster"], ["VW-15"]),
+	one("G15", "Each age of an open loop is 0 days (HY-04)", HYGIENE_SCAN,
+		"(${ageDays}d, ${openItems} open item(s))", "(0d, ${openItems} open item(s))", ["session-start"], ["HY-04"]),
+	one("H10", "The hygiene report has no line for the items after the cap (HY-10)", HYGIENE_SCAN,
+		"more: rest > 0 ?", "more: rest > 99 ?", ["session-start"], ["HY-10"]),
+
+	one("E1", "Edge: the inbox age limit is 8 days, not 7 (HY-05)", HYGIENE_SCAN,
+		"if (ageDays < INBOX_PRESSURE_DAYS) continue;", "if (ageDays < INBOX_PRESSURE_DAYS + 1) continue;", ["session-start"], ["HY-05"]),
+	one("E2", "Edge: the inbox age limit is 6 days, not 7 (HY-05)", HYGIENE_SCAN,
+		"if (ageDays < INBOX_PRESSURE_DAYS) continue;", "if (ageDays < INBOX_PRESSURE_DAYS - 1) continue;", ["session-start"], ["HY-05"]),
+	one("N24", "The inbox age limit is 10 days, not 7 (HY-05)", HYGIENE_SCAN,
+		"if (ageDays < INBOX_PRESSURE_DAYS) continue;", "if (ageDays < 10) continue;", ["session-start"], ["HY-05"]),
+	one("E3", "Edge: the open loop age limit is 15 days, not 14 (HY-04)", HYGIENE_SCAN,
+		"if (ageDays < OPEN_LOOP_DAYS) continue;", "if (ageDays < OPEN_LOOP_DAYS + 1) continue;", ["session-start"], ["HY-04"]),
+	one("N22", "Edge: the open loop age limit is 13 days, not 14 (HY-04)", HYGIENE_SCAN,
+		"if (ageDays < OPEN_LOOP_DAYS) continue;", "if (ageDays < 13) continue;", ["session-start"], ["HY-04"]),
+	one("N23", "The open loop age limit is 11 days, not 14 (HY-04)", HYGIENE_SCAN,
+		"if (ageDays < OPEN_LOOP_DAYS) continue;", "if (ageDays < 11) continue;", ["session-start"], ["HY-04"]),
+	one("E4", "The open loop list stops at 3, not 5 (HY-04)", HYGIENE_SCAN, ".slice(0, OPEN_LOOP_CAP);", ".slice(0, 3);", ["session-start"], ["HY-04"]),
+	one("E5", "Edge: a note of 25,000 bytes is not past the size limit of the scan (HY-03)", HYGIENE_SCAN,
+		"if (size >= MONOLITH_BYTES) {", "if (size > MONOLITH_BYTES) {", ["session-start"], ["HY-03", "HY-10"]),
+	one("E6", "Edge: a note of 24,999 bytes is past the size limit of the scan (HY-03)", HYGIENE_SCAN,
+		"if (size >= MONOLITH_BYTES) {", "if (size >= MONOLITH_BYTES - 1) {", ["session-start"], ["HY-03", "HY-10"]),
+	one("E7", "Edge: a written note of 25,000 bytes is not past the size limit (VW-14)", "validate-write.ts",
+		"size >= MONOLITH_BYTES &&", "size > MONOLITH_BYTES &&", ["write-at-size-limit", "write-below-size-limit"], ["VW-14", "VW-17"]),
+	one("E8", "Edge: a written note of 24,999 bytes is past the size limit (VW-14)", "validate-write.ts",
+		"size >= MONOLITH_BYTES &&", "size >= MONOLITH_BYTES - 1 &&", ["write-at-size-limit", "write-below-size-limit"], ["VW-14", "VW-17"]),
+	one("E9", "Edge: `AGENTS.md` of 23,000 bytes gets no flag (HY-09)", HYGIENE_SCAN,
+		"return size >= AGENTS_MD_FLAG_BYTES ?", "return size > AGENTS_MD_FLAG_BYTES ?", ["session-start", "stop-agents-below-flag"], ["HY-09", "HY-10"]),
+	one("E10", "Edge: `AGENTS.md` of 22,999 bytes gets the flag (HY-09)", HYGIENE_SCAN,
+		"return size >= AGENTS_MD_FLAG_BYTES ?", "return size >= AGENTS_MD_FLAG_BYTES - 1 ?", ["session-start", "stop-agents-below-flag"], ["HY-09", "HY-10"]),
+	one("N26", "`AGENTS.md` gets the flag from 20,000 bytes (HY-09)", "lib/instruction-files.ts",
+		"export const AGENTS_MD_FLAG_BYTES = 23_000;", "export const AGENTS_MD_FLAG_BYTES = 20_000;", ["stop-agents-below-flag"], ["HY-09", "HY-10"]),
+	one("E11", "Edge: a hygiene list shows 9 items, not 10 (HY-10)", HYGIENE_SCAN,
+		"export const HYGIENE_LIST_CAP = 10;", "export const HYGIENE_LIST_CAP = 9;", ["session-start"], ["HY-03", "HY-10"]),
+	one("E12", "Edge: a hygiene list shows 11 items, not 10 (HY-10)", HYGIENE_SCAN,
+		"export const HYGIENE_LIST_CAP = 10;", "export const HYGIENE_LIST_CAP = 11;", ["session-start"], ["HY-03", "HY-10"]),
+	one("N17", "A hygiene list shows 4 items, not 10 (HY-10)", HYGIENE_SCAN,
+		"export const HYGIENE_LIST_CAP = 10;", "export const HYGIENE_LIST_CAP = 4;", ["session-start"], ["HY-03", "HY-10"]),
+	one("E13", "Edge: the open tasks stop at 9, not 10 (SS-14)", "session-start.ts",
+		"const OPEN_TASKS_LIMIT = 10;", "const OPEN_TASKS_LIMIT = 9;", ["session-start"], ["SS-14", "SS-19"]),
+	one("E14", "Edge: the open tasks stop at 11, not 10 (SS-14)", "session-start.ts",
+		"const OPEN_TASKS_LIMIT = 10;", "const OPEN_TASKS_LIMIT = 11;", ["session-start"], ["SS-14", "SS-19"]),
+	one("E15", "Edge: the active work stops at 9 names, not 10 (SS-15)", "session-start.ts",
+		"const ACTIVE_WORK_LIMIT = 10;", "const ACTIVE_WORK_LIMIT = 9;", ["session-start"], ["SS-15", "SS-19"]),
+	one("E16", "Edge: the listing collapses a group of 12 notes (SS-16)", "lib/session-start.ts",
+		"return noteCount > threshold;", "return noteCount >= threshold;", ["session-start"], ["SS-16"]),
+	one("E17", "Edge: the listing does not collapse a group of 13 notes (SS-16)", "lib/session-start.ts",
+		"return noteCount > threshold;", "return noteCount > threshold + 1;", ["session-start"], ["SS-16"]),
+	one("E18", "Edge: a note of 301 characters with no link gets no warning (VW-10)", "lib/frontmatter.ts",
+		"content.length > 300 &&", "content.length > 301 &&", ["write-no-links", "write-no-links-at-length-limit"], ["VW-10", "VW-13", "VW-17"]),
+	one("E19", "Edge: a note of 300 characters with no link gets the warning (VW-10)", "lib/frontmatter.ts",
+		"content.length > 300 &&", "content.length > 299 &&", ["write-no-links", "write-no-links-at-length-limit"], ["VW-10", "VW-13", "VW-17"]),
+
+	hole(
+		one("E20", "Edge: the open loop list stops at 4, not 5 (HY-04)", HYGIENE_SCAN, ".slice(0, OPEN_LOOP_CAP);", ".slice(0, 4);", ["session-start"], []),
+		"The cap keeps the oldest notes, so it hides the notes at the age limit. The fixture shows the age limit, with 4 notes in the list.",
+	),
+	hole(
+		one("E21", "Edge: the open loop list stops at 6, not 5 (HY-04)", HYGIENE_SCAN, ".slice(0, OPEN_LOOP_CAP);", ".slice(0, 6);", ["session-start"], []),
+		"The same cause as E20: a list of 6 notes hides the two notes at the age limit.",
+	),
+	hole(
+		one("E22", "Edge: the active work stops at 11 names, not 10 (SS-15)", "session-start.ts",
+			"const ACTIVE_WORK_LIMIT = 10;", "const ACTIVE_WORK_LIMIT = 11;", ["session-start"], []),
+		"The reference hook keeps the first 10 names in the order of the file system. With 11 notes, no form can state which 10 it keeps.",
+	),
+	hole(
+		one("N14", "The listing is in the reverse order (SS-16)", "session-start.ts",
+			'body: listMd().join("\\n"),', 'body: listMd().reverse().join("\\n"),', ["session-start"], []),
+		"Part d.2 lists files by folder in one form and titles by database and `Type` in the other form, so the two orders are not equal.",
+	),
 ];
 
 export type MutationResult = {
@@ -155,10 +315,14 @@ function mutatedCopy(scriptsDir: string, dir: string, mutation: Mutation): strin
 		const path = join(dir, file);
 		const source = readFileSync(path, "utf-8");
 		if (source.split(find).length !== 2) throw new Error(`mutation ${mutation.id}: the text to change must occur one time in ${file}`);
+		if (!FIXTURE.scenarios.some(({ id }) => mutation.scenarios.includes(id))) throw new Error(`mutation ${mutation.id} names no scenario of the fixture`);
 		writeFileSync(path, source.replace(find, () => replace));
 	}
 	return dir;
 }
+
+/** The scenarios of the fixture that one of `ids` names. */
+const only = (ids: readonly string[]): FixtureSpec => ({ ...FIXTURE, scenarios: FIXTURE.scenarios.filter(({ id }) => ids.includes(id)) });
 
 /** Compare the reference hooks with a mutated copy, for each mutation, on the scenarios that the mutation names. */
 export function runMutations(mutations: readonly Mutation[] = MUTATIONS): MutationResult[] {
@@ -166,10 +330,11 @@ export function runMutations(mutations: readonly Mutation[] = MUTATIONS): Mutati
 	return withReferenceWorktree(({ scriptsDir, workDir }) => {
 		const pass = (spec: FixtureSpec, hooks: string): Pass =>
 			passOf(runScenarios(spec, workDir, markdownForm(spec, { scriptsDir: hooks, now })), spec);
+		const original = pass(only(mutations.flatMap(({ scenarios }) => scenarios)), scriptsDir);
 		return mutations.map((mutation, index): MutationResult => {
-			const spec = { ...FIXTURE, scenarios: FIXTURE.scenarios.filter(({ id }) => mutation.scenarios.includes(id)) };
+			const spec = only(mutation.scenarios);
 			const mutated = mutatedCopy(scriptsDir, join(workDir, `mutated-${index}`), mutation);
-			const { differences } = comparePasses(pass(spec, scriptsDir), pass(spec, mutated), spec);
+			const { differences } = comparePasses(original, pass(spec, mutated), spec);
 			return {
 				mutation,
 				rows: [...new Set(differences.map(({ row }) => row))].sort(),

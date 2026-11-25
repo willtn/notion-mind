@@ -1,7 +1,8 @@
 /**
  * Runs each mutation of `mutations.ts` and prints the rows that the harness
  * reports for it. The exit code is 1 when a mutation gives different rows
- * from the rows that it names.
+ * from the rows that it names. A mutation with a `notSeen` reason is a
+ * known hole, and it must give no row.
  *
  * Usage: node --experimental-strip-types parity/run-mutations.ts [--lines]
  */
@@ -15,9 +16,10 @@ let holes = 0;
 console.log("| ID | Mutation | Differences | Rows | Result |");
 console.log("|---|---|---|---|---|");
 for (const { mutation, rows, lines } of results) {
-	const seen = rows.join(" ") === [...mutation.rows].sort().join(" ");
-	if (!seen) holes++;
-	console.log(`| ${mutation.id} | ${mutation.change} | ${lines.length} | ${rows.join(", ") || "none"} | ${seen ? "seen" : `expected ${mutation.rows.join(", ")}`} |`);
+	const asNamed = rows.join(" ") === [...mutation.rows].sort().join(" ");
+	if (!asNamed) holes++;
+	const result = !asNamed ? `expected ${mutation.rows.join(", ") || "none"}` : mutation.notSeen === undefined ? "seen" : `not seen. ${mutation.notSeen}`;
+	console.log(`| ${mutation.id} | ${mutation.change} | ${lines.length} | ${rows.join(", ") || "none"} | ${result} |`);
 }
 if (withLines) {
 	for (const { mutation, lines } of results) {

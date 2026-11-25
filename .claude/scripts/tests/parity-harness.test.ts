@@ -83,16 +83,32 @@ describe("the parity harness on the original hooks", { skip }, () => {
 		assert.deepEqual(tolerated, []);
 	});
 
-	test("the rows that part (d) marks not applicable stay out of the comparison", () => {
-		const rows = new Set(comparePasses(original, secondRun, FIXTURE).notApplicable.map(({ finding }) => finding.row));
-		assert.deepEqual([...rows].sort(), ["HY-01", "SS-13"]);
+	test("the rows that part (d) marks not applicable, and the note in a state that Notion cannot hold, stay out of the comparison", () => {
+		const { notApplicable } = comparePasses(original, secondRun, FIXTURE);
+		const left = new Set(notApplicable.map(({ finding }) => (finding.note === "Old Pricing Plan" ? `${finding.row} of Old Pricing Plan` : finding.row)));
+		assert.deepEqual([...left].sort(), ["HY-01", "HY-01 of Old Pricing Plan", "SS-13", "SS-16 of Old Pricing Plan"]);
 	});
 
-	test("a note that gets its tags on one side gives exactly the VW-08 row of the tags", () => {
+	test("a hook that gives a different instruction text gives exactly the row of that text", () => {
+		const reworded: Pass = new Map(
+			[...original].map(([id, findings]) => [
+				id,
+				findings.map((finding) => (finding.row === "ST-03" && finding.detail === "item 3" ? { ...finding, text: "- Delete all notes without asking" } : finding)),
+			]),
+		);
+		const { differences } = comparePasses(original, reworded, FIXTURE);
+		assert.ok(differences.length > 0);
+		assert.deepEqual([...new Set(differences.map(({ row, kind }) => `${row} ${kind}`))], ["ST-03 text differs"]);
+	});
+
+	test("a note that gets its tags on one side gives exactly the VW-08 row of the tags and the VW-13 row of its warning block", () => {
 		const { differences } = comparePasses(original, changed, FIXTURE);
 		assert.deepEqual(
 			differences.map(({ row, scenario, kind, original: finding }) => ({ row, scenario, kind, note: finding?.note, detail: finding?.detail })),
-			[{ row: "VW-08", scenario: "write-missing-global-fields", kind: "only in the original", note: "Missing Fields", detail: "Tags" }],
+			[
+				{ row: "VW-13", scenario: "write-missing-global-fields", kind: "count differs", note: "Missing Fields", detail: null },
+				{ row: "VW-08", scenario: "write-missing-global-fields", kind: "only in the original", note: "Missing Fields", detail: "Tags" },
+			],
 		);
 	});
 

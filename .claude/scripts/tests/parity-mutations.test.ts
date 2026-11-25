@@ -23,4 +23,14 @@ describe("the parity harness on mutated copies of the original hooks", { skip },
 			assert.deepEqual(rows, [...mutation.rows].sort(), lines.join("\n"));
 		});
 	}
+
+	test("a mutation names a row, or it gives the reason why the harness cannot see it", () => {
+		const unexplained = MUTATIONS.filter(({ rows, notSeen }) => (rows.length === 0) !== (notSeen !== undefined)).map(({ id }) => id);
+		assert.deepEqual(unexplained, []);
+	});
+
+	test("no two mutations share an ID", () => {
+		const ids = MUTATIONS.map(({ id }) => id);
+		assert.deepEqual(ids.filter((id, index) => ids.indexOf(id) !== index), []);
+	});
 });

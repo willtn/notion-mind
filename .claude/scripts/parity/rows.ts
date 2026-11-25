@@ -30,10 +30,19 @@ export const ROWS = {
 	"VW-12": equal,
 	"VW-14": { rule: "size-tolerance", percent: 10, limitKb: 25 },
 	"VW-15": equal,
-	// Part (d) has no row for the envelope. The harness reads the exit code
-	// and the output channel of each run under the inventory row for it.
+	// Part (d) has no row for the rows below that are not in its tables. The
+	// ledger of part (b) marks each one "ported", so the two forms must agree.
+	"VW-13": equal,
+	"VW-16": equal,
+	// The harness reads the exit code and the output channel of each run
+	// under the inventory row for the envelope.
 	"VW-17": equal,
 
+	"SS-01": equal,
+	"SS-02": equal,
+	"SS-03": equal,
+	"SS-05": equal,
+	"SS-06": equal,
 	"SS-10": equal,
 	"SS-11": equal,
 	"SS-12": equal,
@@ -57,6 +66,7 @@ export const ROWS = {
 	"HY-05": equal,
 	"HY-07": equal,
 	"HY-09": equal,
+	"HY-10": equal,
 
 	"UP-01": equal,
 	"UP-02": equal,

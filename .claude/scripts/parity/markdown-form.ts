@@ -23,10 +23,10 @@ const FOLDER_OF_TYPE: Readonly<Record<NoteType, (note: FixtureNote) => string>> 
 	Person: () => "org/people",
 	"Brain topic": () => "brain",
 	Reference: () => "reference",
-	"Archive note": () => "reference",
+	"Archive note": () => "archive",
 	"North Star": () => "brain",
 	Home: () => "",
-	"Loose page": () => "reference",
+	"Loose page": () => "",
 };
 
 /** The path of a note in the vault, with forward slashes. */
@@ -76,12 +76,21 @@ export function markdownForm(spec: FixtureSpec, options: { readonly scriptsDir: 
 			projectDir: dir,
 			env: {},
 			sessionLogDir: join(dir, "thinking", "session-logs"),
-			writePayload: (note) => {
-				const filePath = join(dir, paths.get(note.title)!);
+			writePayload: (notes) => {
+				const [note] = notes;
+				if (notes.length === 1 && note !== undefined) {
+					const filePath = join(dir, paths.get(note.title)!);
+					return {
+						tool_name: "Write",
+						tool_input: { file_path: filePath, content: renderNote(note) },
+						tool_response: { filePath, success: true },
+					};
+				}
+				// The hooks at the reference commit read more than one target only from a patch.
+				const headers = notes.map(({ title }) => `*** Update File: ${paths.get(title)!}`);
 				return {
-					tool_name: "Write",
-					tool_input: { file_path: filePath, content: renderNote(note) },
-					tool_response: { filePath, success: true },
+					tool_name: "apply_patch",
+					tool_input: { command: ["*** Begin Patch", ...headers, "*** End Patch"].join("\n") },
 				};
 			},
 			wording: MARKDOWN_WORDING,

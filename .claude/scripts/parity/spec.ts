@@ -59,7 +59,8 @@ export type FixtureNote = {
 	/**
 	 * A folder that the properties do not give. Only HY-01 needs it: a
 	 * completed note that stays under `work/active/` is a state that the
-	 * Notion form cannot hold.
+	 * Notion form cannot hold. So the comparison leaves out each finding
+	 * that names such a note.
 	 */
 	readonly markdownFolder?: string;
 	/** The one note that sits outside the zero-difference gate for VW-14. */
@@ -88,8 +89,8 @@ export type HookName = keyof typeof HOOKS;
 export type StepInput =
 	/** Fields that go on top of the base payload (session, transcript, directory, event). */
 	| { readonly kind: "payload"; readonly fields: Readonly<Record<string, unknown>> }
-	/** A write of one fixture note. The form builds the tool fields. */
-	| { readonly kind: "write"; readonly note: string }
+	/** One write call that writes each of these fixture notes. The form builds the tool fields. */
+	| { readonly kind: "write"; readonly notes: readonly string[] }
 	/** A `Write` under the automatic memory directory of the home directory. */
 	| { readonly kind: "memory-write"; readonly file: string }
 	/** Bytes that go to stdin as they are. */
@@ -100,13 +101,18 @@ export type Step = {
 	readonly input: StepInput;
 	/** A repository file that goes away before the run. Both forms keep these files in the project directory. */
 	readonly removeRepoFile?: string;
+	/** A repository file that gets this content before the run. */
+	readonly replaceRepoFile?: RepoFile;
 };
 
 /**
  * One finding of one hook run, in a form that does not depend on the wording
  * or on the store. Two findings are the same finding when `row`, `step`,
  * `note`, and `detail` are equal. `count` is the number that the finding
- * states. `sizeKb` is a measure and not a part of the identity.
+ * states. `sizeKb` is a measure and not a part of the identity. `text` is the
+ * instruction of the output line or block. Each part that a different field
+ * holds is a `{name}` in it, and each object name of the form is its neutral
+ * name, so two forms that give the same instruction give the same text.
  */
 export type Finding = {
 	readonly row: RowId | "UNMAPPED";
@@ -117,6 +123,7 @@ export type Finding = {
 	readonly detail: string | null;
 	readonly count: number | null;
 	readonly sizeKb?: number;
+	readonly text?: string;
 };
 
 /** A finding as a scenario states it, with defaults for the fields that do not apply. */
@@ -163,12 +170,12 @@ export type HookEnvironment = {
 	readonly env: Readonly<Record<string, string>>;
 	/** The directory where the PreCompact hook keeps the transcript copies. */
 	readonly sessionLogDir: string;
-	/** The PostToolUse payload fields for a write of `note`. */
-	readonly writePayload: (note: FixtureNote) => Readonly<Record<string, unknown>>;
+	/** The PostToolUse payload fields for one write call that writes each note of `notes`. */
+	readonly writePayload: (notes: readonly FixtureNote[]) => Readonly<Record<string, unknown>>;
 	/**
 	 * The wording of the hook output in this form. The harness reads the
-	 * output only through these patterns, so each form names its own objects
-	 * and gives the same findings.
+	 * output only through these patterns and these object names, so each
+	 * form names its own objects and gives the same findings.
 	 */
 	readonly wording: Wording;
 	/**
