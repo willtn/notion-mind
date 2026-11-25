@@ -19,7 +19,7 @@ A read of the links of one page costs one call. The limit is 180 calls in 60 sec
 ## Input
 
 Either:
-- "Scan recent" — check all rows changed in the last 48 hours (`Work > Recently changed`, keep the rows with a recent `Work.Changed`)
+- "Scan recent" — check all rows changed in the last 48 hours. Read the `Recently changed` view of each database that holds notes: `Work > Recently changed`, `People > Recently changed`, `Teams > Recently changed`, `Competencies > Recently changed`, `Perf docs > Recently changed`, and `Knowledge > Recently changed`. In each, keep the rows with a recent `Changed` date (for example `Work.Changed`)
 - "Scan all" — check every row in the workspace
 - Specific page URLs or titles — check only the listed rows
 

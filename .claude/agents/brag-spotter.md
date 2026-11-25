@@ -45,8 +45,9 @@ Check these sources for achievements not yet in the brag quarters:
 - Look for: positive feedback quotes, recognition, kudos mentioned
 - Check: are these in the "Feedback" section of the brag quarter?
 
-**Recent changes:**
-- Query `Work > Recently changed`, and keep the rows whose `Work.Changed` is since the quarter start
+**Recent changes (the whole workspace):**
+- Read the `Recently changed` view of each database that holds notes: `Work > Recently changed`, `People > Recently changed`, `Teams > Recently changed`, `Competencies > Recently changed`, `Perf docs > Recently changed`, and `Knowledge > Recently changed`. Keep the rows whose `Changed` date (for example `Work.Changed`) is since the quarter start
+- For the quarter history, also use the databases that have a quarter property: keep the rows of `Work` and `Perf docs` whose `Quarter` is the current quarter (`Work.Quarter`, `Perf docs.Quarter`)
 - High-volume periods suggest significant work
 
 **Brain pages:**
