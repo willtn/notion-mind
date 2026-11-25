@@ -398,6 +398,7 @@ describe("a plain call to another server", () => {
 		["a command before the call", `cd /tmp && mcporter call slack.x --args '{"q":"notion"}'`],
 		["an environment prefix", `FOO=1 mcporter call slack.x --args '{"q":"notion"}'`],
 		["a path to mcporter", `./node_modules/.bin/mcporter call slack.x --args '{"q":"notion"}'`],
+		["an unknown output format", `mcporter call slack.x --args '{"q":"notion"}' --output yaml`],
 		["a substitution after the quotes", `mcporter call slack.x --args '{"q":"notion"}'$(id)`],
 		["arguments in double quotes", `mcporter call slack.x --args "{\"q\":\"notion\"}"`],
 		["a flag that sets the tool", `mcporter call slack.x --tool notion-create-pages --args '{}'`],
