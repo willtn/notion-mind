@@ -86,6 +86,22 @@ describe("validate-write — skip rules (silent exit, no stdout)", () => {
 		assert.equal(code, 0);
 		assert.equal(stdout.trim(), "");
 	});
+	test("a note outside the vault warns nothing, and the same note inside the vault warns", () => {
+		const body = "No frontmatter here\n" + "x".repeat(300);
+		const inside = runOn(makeMd(body, "inside-control.md"));
+		assert.match(inside.stdout, /Missing YAML frontmatter/, "the control: the vault copy is flagged");
+
+		const outsideDir = mkdtempSync(join(tmpdir(), "validate-write-outside-"));
+		try {
+			const note = join(outsideDir, "elsewhere.md");
+			writeFileSync(note, body);
+			const outside = runOn(note);
+			assert.equal(outside.code, 0);
+			assert.equal(outside.stdout.trim(), "");
+		} finally {
+			rmTemp(outsideDir);
+		}
+	});
 });
 
 // --- Frontmatter validation ---

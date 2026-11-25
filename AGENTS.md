@@ -48,7 +48,7 @@ Commands live in `.claude/commands/` — agent-agnostic markdown with YAML front
   2. **`qmd --index <name> query|search|vsearch|get|multi-get`** — CLI fallback for one-off shell checks or when the MCP server is unavailable. Always pass `--index <name>`, where `<name>` is the `qmd_index` field from `vault-manifest.json` when set and otherwise the vault folder name slugified, so the SQLite store stays isolated from other vaults on the machine.
   3. **Grep / Glob / Read** — last resort, only when QMD is not installed at all.
 
-  The MCP server (`.mcp.json` → `.claude/scripts/qmd-mcp.mjs`), the CLI, and the SessionStart hook all read the same manifest field, so every surface scopes to the same store. On a fresh clone, run `node --experimental-strip-types .scripts/qmd-bootstrap.ts` once to build the index. Note: the MCP connect-time banner can read "0 documents" when the server registers before the SessionStart reindex finishes — a stale snapshot, not the dead-search state the self-heal guards; don't diagnose it.
+  The MCP server, the CLI, and the SessionStart hook all read the same manifest field, so every surface scopes to the same store. On a fresh clone, run `node --experimental-strip-types .scripts/qmd-bootstrap.ts` once to build the index. Note: the MCP connect-time banner can read "0 documents" when the server registers before the SessionStart reindex finishes — a stale snapshot, not the dead-search state the self-heal guards; don't diagnose it.
 
 ## Session Workflow
 
@@ -251,6 +251,10 @@ When capturing data from Slack, DMs, or meetings:
 - **Review prep** (peer selection, manager strategy, brag framing) -- goes to review-related notes in `perf/` or `work/`
 - **People dynamics** (feedback, relationships, career) -- goes to `org/people/` notes
 - **Personal conversations** -- only capture if review-relevant; otherwise skip
+
+## Hooks
+
+Which hook runs on which event, for each agent: `.claude/rules/hooks-per-agent.md`.
 
 ## Write-Correctness Laws
 
