@@ -177,7 +177,7 @@ describe("session-start entry — env export cannot be hand-rolled", () => {
 	});
 
 	test("GUARD IS NOT VACUOUS — the pattern rejects a hand-listed set", () => {
-		// The exact pre-#156 definition, which is what let .shardmind through.
+		// The exact pre-#156 definition.
 		const regression =
 			'const SKIP_PREFIXES: readonly string[] = [\n\t".git",\n\t".obsidian",\n\t"thinking",\n\t".claude",\n];';
 		assert.doesNotMatch(regression, SKIP_DEF, "guard must reject the old literal");
@@ -395,25 +395,6 @@ describe("isSkippedPath", () => {
 });
 
 describe("MACHINERY_DIRS", () => {
-	// The listing walk is filesystem-level and does not read .gitignore, so
-	// the engine's own tree has to be skipped by name.
-	test("skips the ShardMind engine tree an installed vault carries (#156)", () => {
-		// The cached template copy and every pre-update backup snapshot —
-		// engine artifacts that outnumbered real notes 3:1 on a v7.0.1 install.
-		assert.equal(
-			isSkippedPath(".shardmind/templates/AGENTS.md", MACHINERY_DIRS),
-			true,
-		);
-		assert.equal(
-			isSkippedPath(
-				".shardmind/backups/update-2026-07-01T00:00:00Z/work/Index.md",
-				MACHINERY_DIRS,
-			),
-			true,
-		);
-		assert.equal(isSkippedPath(".shardmind", MACHINERY_DIRS), true);
-	});
-
 	test("skips .github, which the segment boundary excludes from .git", () => {
 		assert.equal(
 			isSkippedPath(".github/pull_request_template.md", MACHINERY_DIRS),

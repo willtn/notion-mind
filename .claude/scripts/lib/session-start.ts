@@ -441,15 +441,12 @@ export function isSkippedPath(
 
 /**
  * Root-level directories that hold machinery, never vault notes: VCS
- * internals, editor and agent config, the ShardMind engine's own tree,
- * installed dependencies.
+ * internals, editor and agent config, installed dependencies.
  *
  * Shared because two consumers of the same idea drifted apart. The oversize
  * scan already knew the full set while the SessionStart listing skipped only
- * a four-entry subset, so an *installed* vault walked `.shardmind/` and
- * injected the engine's cached template copy plus every pre-update backup
- * snapshot as if they were the user's notes (#156). One list, so the next
- * machinery directory is hidden from both the moment it is added here.
+ * a four-entry subset (#156). One list, so the next machinery directory is
+ * hidden from both the moment it is added here.
  *
  * Callers append their own list-specific entries rather than editing this
  * one: `thinking/` is hidden from the listing but still size-scanned, and
@@ -463,8 +460,6 @@ export const MACHINERY_DIRS: readonly string[] = [
 	".github",
 	".obsidian",
 	".claude",
-	".claude-plugin",
-	".shardmind",
 	"node_modules",
 ];
 

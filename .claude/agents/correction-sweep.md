@@ -6,7 +6,6 @@ model: sonnet
 maxTurns: 25
 skills:
   - qmd
-  - obsidian-markdown
 ---
 
 You locate every note in an obsidian-mind vault that carries a fact which has just been corrected, and classify what may be done to each.
