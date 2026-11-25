@@ -26,3 +26,8 @@ node_modules/
 .claude/scripts/.hint-state.json
 .claude/scripts/.checklist-state.json
 .claude/scripts/.stop-handoff/
+
+# The Notion IDs of the content model, written by notion-setup.ts. The
+# repository is public, so only notion-map.example.json is committed.
+notion-map.json
+notion-map.fixtures.json
