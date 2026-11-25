@@ -9,8 +9,6 @@ on:
       - '.claude/agents/**'
       - '.claude/scripts/**'
       - '.claude-plugin/**'
-      - '.codex/**'
-      - '.gemini/**'
       - 'templates/**'
       - 'bases/**'
       # Root-level template files (allowlisted in manifest-check.ts). A PR

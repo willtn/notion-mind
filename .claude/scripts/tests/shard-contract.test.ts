@@ -5,7 +5,7 @@
  * invariant it introduced: a shard that declares the split `bootstrap` /
  * `personalize` slots MUST also declare `requires.shardmind` at the floor that
  * understands them (>=0.1.3). Without that floor an older engine silently
- * skips the unknown slots — no git init, no QMD index, no personalization —
+ * skips the unknown slots — no git init, no personalization —
  * instead of refusing the install. This test fails loudly if a future edit
  * drops the floor, re-introduces the deprecated single `post-install` slot
  * (which would dual-fire against the native slots on a >=0.1.3 engine), or

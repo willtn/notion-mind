@@ -170,7 +170,6 @@ describe("personalize (default export) — empty-name guard", () => {
 				user_name: overrides.userName ?? "",
 				org_name: "Independent",
 				vault_purpose: "engineering",
-				qmd_enabled: false,
 			},
 			modules: {},
 			shard: { name: "obsidian-mind", version: "6.2.0" },

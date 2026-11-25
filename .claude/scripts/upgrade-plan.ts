@@ -12,9 +12,9 @@
  *   `shardmind adopt <source> --from-version <v> --dry-run --yes --json`,
  *   fetches that release to hash each file's base, and classifies with
  *   `classifyAdopt`.
- * In both modes, a CLAUDE.md or GEMINI.md still in the vault is reported as a
- * move (#321): Claude Code reads a CLAUDE.md in place of AGENTS.md, and
- * Gemini no longer reads GEMINI.md. In an unmanaged clone, one whose
+ * In both modes, a CLAUDE.md still in the vault is reported as a
+ * move (#321): Claude Code reads a CLAUDE.md in place of AGENTS.md. In an
+ * unmanaged clone, one whose
  * bytes are the release it was cloned from is behind instead, and
  * --apply-behind deletes it.
  * Prints the report (or, with --json, `{ mode, from, to, report,
@@ -63,8 +63,8 @@ function fail(message: string): never {
 
 /**
  * ShardMind's real entry point, run with this Node, so no shell or `.cmd`
- * shim is involved (the same reason qmd is launched this way, #54). Falls
- * back to `shardmind` on PATH through the shell.
+ * shim is involved. Falls back to
+ * `shardmind` on PATH through the shell.
  */
 function shardmindCommand(args: readonly string[]): { cmd: string; args: string[]; shell: boolean } {
 	const root = spawnSync("npm root -g", { shell: true, encoding: "utf8", timeout: 10_000, windowsHide: true }).stdout?.trim() ?? "";

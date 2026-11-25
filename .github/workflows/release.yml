@@ -91,12 +91,7 @@ jobs:
           git tag -f "$VERSION"
 
       # Tests run exactly as test.yml runs them, so a release can never test
-      # something CI did not: the same qmd install, and `npm test` (the
-      # wrapper that keeps qmd out of the runner's folders, #307). A bare
-      # `node --test` with no qmd once failed a release that CI had passed.
-      - name: Install qmd globally (as CI does)
-        run: npm install -g @tobilu/qmd@2.8.3
-
+      # something CI did not.
       - name: Run tests
         working-directory: .claude/scripts
         run: npm test
@@ -110,7 +105,7 @@ jobs:
           cat > /tmp/release_body.md <<'HEADER'
           ## Quick Start
 
-          **Requirements:** [Obsidian](https://obsidian.md), [Node 22+ LTS](https://nodejs.org), and one of: [Claude Code](https://claude.ai/code) · [Codex CLI](https://github.com/openai/codex) · [Gemini CLI](https://github.com/google-gemini/gemini-cli)
+          **Requirements:** [Obsidian](https://obsidian.md), [Node 22+ LTS](https://nodejs.org), and [Claude Code](https://claude.ai/code)
 
           **Install via [ShardMind](https://github.com/breferrari/shardmind) (recommended — wizard, optional modules, managed upgrades):**
 
@@ -125,10 +120,9 @@ jobs:
           ```bash
           git clone https://github.com/breferrari/obsidian-mind.git
           cd obsidian-mind
-          npm install -g @tobilu/qmd && qmd index && qmd embed   # optional: semantic search
           ```
 
-          Open the folder as an Obsidian vault, then run `claude`, `codex`, or `gemini` in the directory and type `/om-standup` (or `om-standup` in Codex).
+          Open the folder as an Obsidian vault, then run `claude` in the directory and type `/om-standup`.
 
           Or download the vault zip below and extract it into your Obsidian vaults folder.
 

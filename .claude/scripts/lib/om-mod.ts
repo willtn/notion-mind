@@ -12,8 +12,8 @@
  * The flag is the switch because it fails safe: it exists only on an event
  * whose mod hook actually ran. A mod that throws before `next`, crashed, was
  * blocked by policy or never loaded passes the original event down, and the
- * script runs exactly as it does without a mod. Codex and Gemini never load
- * mods, so they never send it. An environment variable would not have that
+ * script runs exactly as it does without a mod. Only Claude Code loads
+ * mods, so only it sends it. An environment variable would not have that
  * property: it outlives a mod that died, and the scripts would stand down
  * with nothing delivering.
  *

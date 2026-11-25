@@ -14,13 +14,10 @@ const ROOT_FILES: ReadonlySet<string> = new Set([
 	"ARCHITECTURE.md",
 	"CLAUDE.md",
 	"AGENTS.md",
-	"GEMINI.md",
 ]);
 
 const SKIP_PATH_SEGMENTS: readonly string[] = [
 	".claude/",
-	".codex/",
-	".gemini/",
 	".github/",
 	".obsidian/",
 	"templates/",

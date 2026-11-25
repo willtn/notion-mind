@@ -1,27 +1,24 @@
 /**
- * Integration tests for the shared Stop/SessionEnd hook entry point.
+ * Integration tests for the Stop/SessionEnd hook entry point.
  * Locks the once-per-session Stop report, the always-on SessionEnd report,
  * re-entry flag semantics (`stop_hook_active` or `stopHookActive`), and the
  * JSON output envelope.
  *
  * Why Stop dedupes instead of moving to SessionEnd (#252): Stop fires after
- * every response on Claude Code and Codex, so an unconditional report repeats
+ * every response on Claude Code, so an unconditional report repeats
  * unchanged drift on every turn. SessionEnd cannot carry it there instead —
- * Claude Code discards a SessionEnd hook's `systemMessage`, and Codex does
- * not list SessionEnd among the events whose `systemMessage` it surfaces.
+ * Claude Code discards a SessionEnd hook's `systemMessage`.
  * So Stop reports once per session and again only when the report changes;
- * SessionEnd (Gemini's wiring) reports every time.
+ * any other event reports every time.
  *
  * The envelope matters more than it looks. Session-boundary stdout is
- * JSON-or-nothing on all three agents, and each one fails differently when
- * it isn't: Codex reports a hook failure, Gemini ignores the output, and
- * Claude Code files it in the debug log — silently, which is why plain text
- * survived here so long. These tests parse stdout rather than regex-matching
+ * JSON-or-nothing: Claude Code files plain text in the debug log —
+ * silently, which is why plain text survived here so long. These tests parse stdout rather than regex-matching
  * it, so a regression back to plain text fails instead of passing on a
  * substring that appears inside the JSON either way.
  */
 
-import { test, describe, before, after, beforeEach } from "node:test";
+import { test, describe, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { HOOK_OUTPUT_MAX_CHARS } from "../lib/hook-io.ts";
 import { takeHandoff } from "../lib/stop-handoff.ts";
@@ -38,28 +35,12 @@ const SCRIPT = resolve(
 );
 const CLASSIFY = resolve(dirname(fileURLToPath(import.meta.url)), "../classify-message.ts");
 
-// Route the debounce sentinel through a per-file tmp path. Every run of this
-// hook calls triggerDebouncedRefresh, and without an override that lands on
-// the repo's own .claude/scripts/.qmd-refresh-sentinel — shared with
-// qmd-refresh.integration.test.ts, which already isolates itself and names
-// this file as the reason it has to.
-//
-// The sentinel is created *pre-dated to now* rather than left absent,
-// because "null sentinel → not debounced" is the documented rule: an empty
-// tmp dir would make every one of these spawns fire a real detached QMD
-// refresh at the working tree, which is both a side effect these tests
-// don't want and enough load to time out unrelated suites. A fresh mtime
-// puts each run inside the debounce window, so the trigger is exercised and
-// then correctly declines to spawn.
 let TMP_DIR = "";
-let SENTINEL = "";
 let stateCounter = 0;
 let handoffCounter = 0;
 
 before(() => {
 	TMP_DIR = mkdtempSync(join(tmpdir(), "stop-checklist-"));
-	SENTINEL = join(TMP_DIR, ".qmd-refresh-sentinel");
-	writeFileSync(SENTINEL, "");
 });
 
 after(() => {
@@ -73,7 +54,7 @@ function freshState(): string {
 }
 
 /**
- * Run the hook with an isolated sentinel and dedupe state. Pass the same
+ * Run the hook with isolated dedupe state. Pass the same
  * `state` path to several calls to simulate one machine across turns.
  */
 function run(
@@ -89,7 +70,6 @@ function run(
 	handoffCounter += 1;
 	const handoffDir = opts.handoffDir ?? join(TMP_DIR, `handoff-${handoffCounter}`);
 	const result = spawnHook(SCRIPT, stdin, {
-		QMD_REFRESH_SENTINEL: SENTINEL,
 		STOP_CHECKLIST_STATE: opts.state ?? freshState(),
 		STOP_HANDOFF_DIR: handoffDir,
 		...(opts.vault ? { CLAUDE_PROJECT_DIR: opts.vault } : {}),
@@ -444,10 +424,9 @@ describe("stop-checklist", () => {
 		assert.equal(message, message.trimEnd());
 	});
 
-	// One script serves three agents whose payloads differ in shape: Claude
-	// Code and Codex call it on Stop, Gemini on SessionEnd. Payloads mirror
-	// each vendor's documented schema. Each runs against fresh state, so the
-	// first report of each is the one compared.
+	// The script reads a Stop and a SessionEnd payload. Payloads mirror the
+	// documented schema. Each runs against fresh state, so the first report of
+	// each is the one compared.
 	const AGENT_PAYLOADS: ReadonlyArray<{
 		readonly label: string;
 		readonly payload: Record<string, unknown>;
@@ -465,19 +444,7 @@ describe("stop-checklist", () => {
 			},
 		},
 		{
-			label: "Codex Stop",
-			payload: {
-				session_id: "s1",
-				transcript_path: "/tmp/t.json",
-				cwd: ".",
-				hook_event_name: "Stop",
-				model: "gpt-5.6-sol",
-				permission_mode: "default",
-				stop_hook_active: false,
-			},
-		},
-		{
-			label: "Gemini SessionEnd",
+			label: "SessionEnd",
 			payload: {
 				session_id: "s1",
 				transcript_path: "/tmp/t.json",
@@ -490,8 +457,8 @@ describe("stop-checklist", () => {
 	];
 
 	// A Stop shows the user a summary and hands the full report over with the
-	// next prompt; SessionEnd (Gemini) shows the full report. The full report
-	// itself must not vary by agent.
+	// next prompt; SessionEnd shows the full report. The full report
+	// itself must not vary by event.
 	const rendered = new Set<string>();
 	for (const { label, payload } of AGENT_PAYLOADS) {
 		test(`${label} receives the same full report`, () => {
@@ -503,11 +470,11 @@ describe("stop-checklist", () => {
 		});
 	}
 
-	test("the full report does not vary by calling agent", () => {
+	test("the full report does not vary by event", () => {
 		assert.equal(
 			rendered.size,
 			1,
-			`every agent must get the same full report — got ${rendered.size} variants`,
+			`every event must get the same full report — got ${rendered.size} variants`,
 		);
 	});
 });
@@ -520,45 +487,30 @@ describe("stop-checklist", () => {
  */
 describe("stop-checklist — om_mod (a Claude Code mod)", () => {
 	const flagged = (session_id: string, om_mod: string) => ({ ...stop(session_id), om_mod });
-	// The shared sentinel is fresh, so no refresh this file triggers spawns
-	// an immediate worker, and with HOOK_DEBUG=1 the trigger logs
-	// "refresh requested" before it branches. That makes "was the refresh
-	// triggered?" observable on any machine. Reading it off "debounced"
-	// instead held only where qmd is installed: without qmd the trigger
-	// stops at its resolvability check, and the release job (no qmd) failed.
-	const DEBUG = { HOOK_DEBUG: "1" };
-	const refreshed = (stderr: string) => stderr.includes("stop-checklist: refresh requested");
-	// Re-touch the shared sentinel before each test: it was written once in
-	// before(), and on a slow runner the tests above can outlast the 30s
-	// debounce window, which would turn "debounced" into a real spawn.
-	beforeEach(() => writeFileSync(SENTINEL, ""));
-
-	test("standdown writes the empty envelope and touches no state, no handoff, no refresh", () => {
+	test("standdown writes the empty envelope and touches no state and no handoff", () => {
 		const root = vault("ommod-standdown", "Done.md");
 		const state = freshState();
 		const dir = join(TMP_DIR, "handoff-ommod-standdown");
-		const result = run(flagged("s-standdown", "standdown"), { vault: root, state, handoffDir: dir, keep: true, env: DEBUG });
+		const result = run(flagged("s-standdown", "standdown"), { vault: root, state, handoffDir: dir, keep: true });
 		assert.equal(result.code, 0);
 		assert.equal(result.stdout, "{}");
 		assert.equal(existsSync(state), false, "no dedupe state claimed");
 		assert.equal(existsSync(dir), false, "no report saved for the next prompt");
-		assert.equal(refreshed(result.stderr), false, "the mod's report run does the refresh");
 	});
 
-	test("the same Stop without the flag does claim state, hand the report over and refresh (the checks above can fail)", () => {
+	test("the same Stop without the flag does claim state and hand the report over (the checks above can fail)", () => {
 		const root = vault("ommod-plain", "Done.md");
 		const state = freshState();
-		const result = run(stop("s-plain"), { vault: root, state, env: DEBUG });
+		const result = run(stop("s-plain"), { vault: root, state });
 		assert.equal(existsSync(state), true);
 		assert.ok(result.handed?.includes("work/active/Done.md"));
-		assert.equal(refreshed(result.stderr), true);
 	});
 
-	test("report returns the report as data, refreshes, and claims no state and hands nothing over", () => {
+	test("report returns the report as data, and claims no state and hands nothing over", () => {
 		const root = vault("ommod-report", "Done.md");
 		const state = freshState();
 		const dir = join(TMP_DIR, "handoff-ommod-report");
-		const result = run(flagged("s-report", "report"), { vault: root, state, handoffDir: dir, keep: true, env: DEBUG });
+		const result = run(flagged("s-report", "report"), { vault: root, state, handoffDir: dir, keep: true });
 		assert.equal(result.code, 0);
 		const { report } = envelopeOf(result.stdout) as { report: { key: string; claims: string[]; agentText: string } };
 		assert.deepEqual(Object.keys(report).sort(), ["agentText", "claims", "key"], "data only: the mod draws its own line");
@@ -568,7 +520,6 @@ describe("stop-checklist — om_mod (a Claude Code mod)", () => {
 		assert.match(report.agentText, /work\/active\/Done\.md/);
 		assert.equal(existsSync(state), false, "the mod decides when the report changed");
 		assert.equal(existsSync(dir), false, "the mod hands the report over");
-		assert.equal(refreshed(result.stderr), true, "the mod's run replaces the hook's, refresh included");
 	});
 
 	for (const flag of [{ stop_hook_active: true }, { stopHookActive: true }]) {

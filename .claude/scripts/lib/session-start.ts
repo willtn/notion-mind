@@ -244,7 +244,7 @@ export function shouldCollapseDir(
 
 /** The one-line stand-in for a collapsed directory. Shape predates the threshold. */
 export function formatCollapsedDir(posixPath: string, noteCount: number): string {
-	return `./${posixPath}/ — ${noteCount} notes (listing collapsed — Glob or QMD on demand)`;
+	return `./${posixPath}/ — ${noteCount} notes (listing collapsed — Glob on demand)`;
 }
 
 function parsePositiveIntField(
@@ -464,10 +464,7 @@ export const MACHINERY_DIRS: readonly string[] = [
 	".obsidian",
 	".claude",
 	".claude-plugin",
-	".codex",
-	".gemini",
 	".shardmind",
-	".qmd",
 	"node_modules",
 ];
 
@@ -542,212 +539,6 @@ export function stripFrontmatter(content: string): string {
  */
 export function hasBrainContent(body: string): boolean {
 	return /^[ \t]*[-*+][ \t]+\S.*$/m.test(body);
-}
-
-/**
- * Restricted character set for `qmd_index`. The value ends up in both CLI
- * argv and a filesystem path (`~/.cache/qmd/<name>.sqlite`), so path
- * separators, parent-dir refs, whitespace, and shell metacharacters must
- * not be accepted. Mirrors the shape of npm package names / git branch
- * segments: alnum + dot + dash + underscore, must start with an alnum.
- */
-const QMD_INDEX_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
-
-/**
- * True when `value` is a string that's safe to use as a qmd named index.
- * Exported so callers that read the manifest from other surfaces (the MCP
- * wrapper, the bootstrap script) can apply the same rule.
- */
-export function isValidQmdIndex(value: unknown): value is string {
-	return typeof value === "string" && QMD_INDEX_PATTERN.test(value);
-}
-
-/**
- * Extract the `qmd_index` string from a `vault-manifest.json` source. Returns
- * the configured named index (so QMD's storage is scoped to this vault) or
- * null when the manifest is absent, malformed, missing the field, or the
- * value fails validation (path separators, whitespace, empty, etc.).
- *
- * Kept as a pure helper so the caller can own the fs read and tests can pass
- * fixture strings. A null return means "use QMD's default global index" —
- * backwards-compatible with forks that haven't adopted the field yet.
- */
-export function parseQmdIndex(manifestJson: string | null): string | null {
-	if (manifestJson === null) return null;
-	try {
-		const parsed = JSON.parse(manifestJson) as unknown;
-		if (
-			parsed !== null &&
-			typeof parsed === "object" &&
-			"qmd_index" in parsed
-		) {
-			const value = (parsed as Record<string, unknown>)["qmd_index"];
-			if (isValidQmdIndex(value)) return value;
-		}
-	} catch {
-		/* malformed manifest → treat as missing */
-	}
-	return null;
-}
-
-/**
- * Derive a qmd index name from the vault's own directory name.
- *
- * The shipped manifest leaves `qmd_index` empty because the template is one
- * package installed many times — any literal it ships is identical in every
- * vault, so two vaults on one machine share a single SQLite store, search
- * bleeds across them, and re-indexing one clobbers the other (#137). The
- * install location is the only per-vault identity available without asking
- * the user a question, and it exists on both install paths.
- *
- * The slug rules mirror ShardMind's `slugifyVaultName` (shardmind#143)
- * deliberately: if a future engine-side substitution ever bakes the name in,
- * it resolves to the same string this derives, so the two mechanisms cannot
- * disagree about which store a vault owns.
- *
- * Returns null when the folder name has no usable characters (e.g. a purely
- * non-Latin name), so the caller falls back rather than emitting a broken
- * index name.
- */
-export function deriveQmdIndex(vaultRoot: string): string | null {
-	const slug = basename(resolve(vaultRoot))
-		.normalize("NFKD")
-		.toLowerCase()
-		.replace(/[^a-z0-9._-]+/g, "-")
-		.replace(/-{2,}/g, "-")
-		.replace(/^[^a-z0-9]+|[-._]+$/g, "");
-	return isValidQmdIndex(slug) ? slug : null;
-}
-
-/**
- * Extract a validated `template` name from a manifest source — the shared
- * package identity, and the last-resort index name when a vault has neither
- * a pin nor a derivable folder slug.
- */
-function parseTemplateName(manifestJson: string | null): string | null {
-	if (manifestJson === null) return null;
-	try {
-		const parsed = JSON.parse(manifestJson) as unknown;
-		if (parsed !== null && typeof parsed === "object") {
-			const value = (parsed as Record<string, unknown>)["template"];
-			if (isValidQmdIndex(value)) return value;
-		}
-	} catch {
-		/* malformed manifest → treat as missing */
-	}
-	return null;
-}
-
-/**
- * The index name this vault owns, in precedence order:
- *
- *   1. an explicit `qmd_index` pin,
- *   2. the vault folder name, slugified,
- *   3. the manifest `template` name — shared across installs, so it
- *      reintroduces the collision #137 fixes, but a working shared store
- *      beats silently indexing somewhere nobody reads.
- *
- * Every caller MUST route through here. There are four (SessionStart, the
- * mid-session refresh worker, the MCP wrapper, the bootstrap script) and they
- * do not fail loudly when they disagree — one writes to a store another never
- * reads, which surfaces as "0 documents". Step 3 exists because an earlier
- * revision had bootstrap fall back to `template` while the read surfaces fell
- * back to qmd's global index, producing exactly that split.
- *
- * Keeping the pin as an override is what makes derivation safe to adopt: a
- * vault that wants a name surviving a folder rename — or wants to keep a store
- * it already built — pins the field and nothing derives.
- *
- * Null means "use qmd's default global index" and is reachable only when the
- * manifest is absent or carries neither field.
- */
-export function resolveQmdIndex(
-	manifestJson: string | null,
-	vaultRoot: string,
-): string | null {
-	return (
-		parseQmdIndex(manifestJson) ??
-		deriveQmdIndex(vaultRoot) ??
-		parseTemplateName(manifestJson)
-	);
-}
-
-/**
- * Build the argv tail for a `qmd` CLI invocation, prepending `--index <name>`
- * when the vault has configured a named index. Callers pass the subcommand
- * and its args (e.g. `["update"]`, `["query", text, "--json"]`); the return
- * value is the full argv after the `qmd` command itself.
- */
-export function qmdArgsWithIndex(
-	index: string | null,
-	subcommandArgs: readonly string[],
-): string[] {
-	return index === null
-		? [...subcommandArgs]
-		: ["--index", index, ...subcommandArgs];
-}
-
-/**
- * True when a captured stderr blob is @tobilu/qmd's native `better-sqlite3`
- * binding failing to load because it was compiled against a different Node
- * ABI than the one currently running (`ERR_DLOPEN_FAILED` / a
- * `NODE_MODULE_VERSION` mismatch message). This is a DISTINCT failure mode
- * from "store missing/empty" (see `qmdStoreLooksEmpty` in the hook script):
- * the sqlite file can be tens of MB and perfectly healthy, but every qmd
- * invocation still crashes before it ever opens it, because the native
- * addon itself won't load under the current Node binary — typically after
- * a Node upgrade on the host machine. Query results and the whole MCP
- * server go silently dark in this state (the fire-and-forget re-index spawn
- * swallows the crash), so this check exists to catch it instead of letting
- * a session quietly fall back to Grep/Read for the rest of its life.
- */
-export function isQmdNativeAbiMismatch(stderr: string): boolean {
-	return (
-		stderr.includes("NODE_MODULE_VERSION") ||
-		stderr.includes("ERR_DLOPEN_FAILED")
-	);
-}
-
-/**
- * Derive the @tobilu/qmd package root (the directory containing its
- * package.json) from `resolveQmdEntry()`'s resolved entry path
- * (`.../@tobilu/qmd/dist/cli/qmd.js`), so a native-module rebuild can run
- * `npm rebuild` with that directory as its cwd — portable across a global
- * npm install, a local one, Homebrew's node_modules layout, or Windows,
- * without hardcoding any machine-specific prefix path. Returns null when
- * the entry itself is null (no resolvable install to rebuild) or doesn't
- * match the expected `dist/cli/qmd.js` shape.
- */
-export function qmdPackageRootFromEntry(entry: string | null): string | null {
-	if (entry === null) return null;
-	const marker = join("dist", "cli", "qmd.js");
-	if (!entry.endsWith(marker)) return null;
-	const prefixLen = entry.length - marker.length - 1; // -1 drops the separator before "dist"
-	return prefixLen > 0 ? entry.slice(0, prefixLen) : null;
-}
-
-/**
- * Extract the `qmd_min_version` string from a `vault-manifest.json` source.
- * Returns null when the manifest is absent, malformed, or the field is not
- * a string — the min-version check simply doesn't run then (the field is
- * opt-in, and qmd itself is optional).
- */
-export function parseQmdMinVersion(manifestJson: string | null): string | null {
-	if (manifestJson === null) return null;
-	try {
-		const parsed = JSON.parse(manifestJson) as unknown;
-		if (
-			parsed !== null &&
-			typeof parsed === "object" &&
-			"qmd_min_version" in parsed
-		) {
-			const value = (parsed as Record<string, unknown>)["qmd_min_version"];
-			if (typeof value === "string" && value.length > 0) return value;
-		}
-	} catch {
-		/* malformed manifest → treat as missing */
-	}
-	return null;
 }
 
 /**
@@ -884,34 +675,11 @@ export function formatBrainIndex(
 }
 
 /**
- * The sqlite store qmd will open for a named index, resolved exactly as
- * @tobilu/qmd's own `getDefaultDbPath()` (store.js) does:
- * 1. `INDEX_PATH`, when set, for every index name;
- * 2. else `$XDG_CACHE_HOME/qmd/<name>.sqlite`, when non-empty;
- * 3. else `<home>/.cache/qmd/<name>.sqlite`, with home taken as qmd's
- *    `qmdHomedir()` takes it: `HOME`, then `USERPROFILE`, then `home`.
- * Empty values count as unset, as qmd's `||` reads them. Without step 1 the
- * store-size check behind bootstrap-vs-update looked at a file qmd never
- * opens whenever INDEX_PATH was set. The MCP wrapper's
- * resolveIndexSqlitePath (qmd-mcp.mjs) mirrors steps 2–3. Pure: env and home
- * are injected for testability.
- */
-export function resolveIndexStorePath(
-	indexName: string,
-	env: Record<string, string | undefined>,
-	home: string,
-): string {
-	if (env["INDEX_PATH"]) return env["INDEX_PATH"];
-	const base = env["XDG_CACHE_HOME"] || join(env["HOME"] || env["USERPROFILE"] || home, ".cache");
-	return join(base, "qmd", `${indexName}.sqlite`);
-}
-
-/**
  * Eager-layer injection mode (#107): on `resume`/`compact` the static bulk
  * (North Star, brain index, file listing) is ALREADY in-conversation from
  * the session's first injection — re-injecting doubles cost for zero new
  * information. Full mode on `startup`/`clear` and on any missing/unknown
- * source (fail open — Codex/Gemini hosts don't send one).
+ * source (fail open).
  */
 export function injectionMode(source: unknown): "full" | "pointer" {
 	return source === "resume" || source === "compact" ? "pointer" : "full";

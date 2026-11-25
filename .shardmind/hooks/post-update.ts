@@ -10,9 +10,6 @@
  *     file needs personalization on update — the personalize hook handled
  *     that once at install time, and the user's edits since then are owned
  *     by the user (and protected by the merge engine).
- *   * QMD's index is kept fresh by the PostToolUse `qmd-refresh.ts` hook
- *     during editing sessions, not at install/update time. A re-bootstrap
- *     here would clobber the user's existing index for no benefit.
  *
  * Invariant 3 (post-update hooks are additive-only by default — see
  * ShardMind docs/SHARD-LAYOUT.md §Invariant 3): a hook that needs to write
@@ -21,8 +18,7 @@
  * migration ships a new managed file that the hook needs to seed, the
  * write must be guarded on `ctx.newFiles.includes(path)`.
  *
- * If a future migration requires a re-bootstrap (e.g. a QMD index schema
- * change), prefer bumping `hooks.bootstrap.fingerprint` in shard.yaml over
+ * If a future migration requires a re-bootstrap, prefer bumping `hooks.bootstrap.fingerprint` in shard.yaml over
  * branching on `ctx.previousVersion` here — the engine re-runs `bootstrap`
  * on update whenever the fingerprint changes, keeping the re-bootstrap logic
  * in one place. See ShardMind docs/AUTHORING.md §Bootstrap fingerprint.
@@ -49,10 +45,6 @@ export default async function postUpdate(ctx: PostUpdateContext): Promise<void> 
   const prev = ctx.previousVersion ?? 'unknown';
   console.log(`obsidian-mind: updated from ${prev} to ${ctx.shard.version}.`);
 
-  if (ctx.values['qmd_enabled'] === true) {
-    console.log('qmd: index stays fresh via the PostToolUse refresh hook during sessions — no action needed here.');
-  }
-
   // One-time v7 migration note. MEMORY.md lives OUTSIDE the vault tree
   // (~/.claude/projects/<slug>/memory/), so the merge engine can neither
   // migrate it nor surface a conflict — this console note in the update
@@ -71,7 +63,7 @@ export default async function postUpdate(ctx: PostUpdateContext): Promise<void> 
   // Invariant 3: no managed-file writes from this hook today. If you add
   // one, gate it on `ctx.newFiles.includes(<path>)` so the engine's
   // additive-only contract is preserved. `ctx.removedFiles` is available
-  // for cleaning up external state (QMD collection refs, MCP registrations)
+  // for cleaning up external state (MCP registrations)
   // that referenced now-removed paths — but obsidian-mind doesn't track
   // any such external pointers from the engine side.
 }

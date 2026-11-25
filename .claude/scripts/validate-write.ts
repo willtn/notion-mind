@@ -2,16 +2,14 @@
 /**
  * PostToolUse hook — validate vault notes after Write/Edit operations.
  *
- * Reads the hook JSON payload from stdin and inspects each file it wrote: the
- * tool_input.file_path (Claude Code, Gemini), or every file a Codex
- * apply_patch adds, updates or moves (lib/write-targets.ts, #354). It
+ * Reads the hook JSON payload from stdin and inspects the file it wrote: the
+ * tool_input.file_path (lib/write-targets.ts). It
  * skips files outside the vault-note scope (dotfiles, templates, root docs,
  * translated READMEs, thinking drafts), and emits a hookSpecificOutput with
  * vault hygiene warnings when frontmatter or wikilinks are missing.
  */
 
-import { basename, dirname, join, resolve as resolvePath } from "node:path";
-import { fileURLToPath } from "node:url";
+import { basename, join } from "node:path";
 import { readFileSync, realpathSync, statSync } from "node:fs";
 import {
 	debug,
@@ -33,13 +31,8 @@ import {
 	isMonolithExempt,
 	newNoteClusterCandidate,
 } from "./lib/active-hygiene.ts";
-import {
-	refreshesVaultIndex,
-	sentinelPathFrom,
-	triggerDebouncedRefresh,
-} from "./lib/qmd-refresh.ts";
 import { isInsideVault, resolveProjectDir } from "./lib/project-dir.ts";
-import { refreshTargets, writeTargets } from "./lib/write-targets.ts";
+import { writeTargets } from "./lib/write-targets.ts";
 
 type HookInput = {
 	readonly hook_event_name?: unknown;
@@ -57,39 +50,16 @@ const vaultRoot = resolveProjectDir(process.cwd())
 	.replaceAll("\\", "/")
 	.replace(/\/+$/, "");
 
-// One file for Claude Code and Gemini (file_path); every file a Codex
-// apply_patch adds, updates or moves, whose payload names none (#354). The
-// index also sees what a patch deleted or moved away.
-const targets = writeTargets(input, vaultRoot);
-const refreshed = refreshTargets(input, vaultRoot);
-if (refreshed.length === 0) {
-	debug("validate: no file_path and no patch targets");
+const targets = writeTargets(input);
+if (targets.length === 0) {
+	debug("validate: no file_path");
 	process.exit(0);
-}
-
-// Debounced QMD refresh (#107) — fire-and-forget, never blocks validation.
-// Folded here from the retired qmd-refresh.ts entry so every .md write
-// costs ONE process spawn, not two (~150-300ms each on Windows). Runs
-// before the skip ladder so in-vault template/root/memory paths still
-// refresh; a note outside the vault can't change the index and refreshes
-// nothing (#366).
-const DEBOUNCE_MS = 30_000;
-const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
-const SENTINEL_PATH = sentinelPathFrom(process.env, SCRIPT_DIR);
-const WORKER_PATH = resolvePath(SCRIPT_DIR, "qmd-refresh-run.ts");
-if (refreshed.some((path) => refreshesVaultIndex(path, vaultRoot))) {
-	triggerDebouncedRefresh({
-		sentinelPath: SENTINEL_PATH,
-		workerPath: WORKER_PATH,
-		debounceMs: DEBOUNCE_MS,
-		logPrefix: "validate-write",
-	});
 }
 
 // The required fields come from the manifest's frontmatter_required, the
 // same declaration the docs point at; an unreadable manifest falls back to
 // the three global fields. Read lazily, once per call: a write the skip
-// ladder discards never pays for it, and a patch's files share it.
+// ladder discards never pays for it.
 let manifest: unknown;
 const loadManifest = (): unknown => {
 	if (manifest !== undefined) return manifest;
@@ -242,10 +212,7 @@ function checkFile(filePath: string): FileFindings {
 	return { blocks, policyResults };
 }
 
-// One envelope for the call, however many files it wrote: each file's
-// findings in patch order, a file that throws costing only its own. A finding
-// several files share (the cluster they all join) is said once. A single
-// write reads exactly as before.
+// One envelope for the call. A file that throws costs only its own findings.
 const findings = targets.map((t): FileFindings => {
 	try {
 		return checkFile(t);

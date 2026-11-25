@@ -86,6 +86,44 @@ describe("validate-write — skip rules (silent exit, no stdout)", () => {
 		assert.equal(code, 0);
 		assert.equal(stdout.trim(), "");
 	});
+	test("skips real unframed files inside the vault, and flags a plain note beside them", () => {
+		const body = "No frontmatter here\n" + "x".repeat(300);
+		const skipped = [
+			"code.ts",
+			"README.md",
+			"README.ja.md",
+			"CHANGELOG.md",
+			".claude/commands/foo.md",
+			"templates/Work Note.md",
+			"thinking/draft.md",
+		];
+		for (const rel of skipped) {
+			const full = join(TMP_DIR, rel);
+			mkdirSync(dirname(full), { recursive: true });
+			writeFileSync(full, body);
+			const { stdout, code } = runOn(full);
+			assert.equal(code, 0, rel);
+			assert.equal(stdout.trim(), "", `${rel} is skipped`);
+		}
+		const control = runOn(makeMd(body, "skip-control.md"));
+		assert.match(control.stdout, /Missing YAML frontmatter/, "the control: a plain note is flagged");
+	});
+	test("a note outside the vault warns nothing, and the same note inside the vault warns", () => {
+		const body = "No frontmatter here\n" + "x".repeat(300);
+		const inside = runOn(makeMd(body, "inside-control.md"));
+		assert.match(inside.stdout, /Missing YAML frontmatter/, "the control: the vault copy is flagged");
+
+		const outsideDir = mkdtempSync(join(tmpdir(), "validate-write-outside-"));
+		try {
+			const note = join(outsideDir, "elsewhere.md");
+			writeFileSync(note, body);
+			const outside = runOn(note);
+			assert.equal(outside.code, 0);
+			assert.equal(outside.stdout.trim(), "");
+		} finally {
+			rmTemp(outsideDir);
+		}
+	});
 });
 
 // --- Frontmatter validation ---
@@ -262,6 +300,57 @@ describe("phantom-edge policy result (#117)", () => {
 	});
 });
 
+describe("validate-write — event name and write-time cluster hint", () => {
+	test("hookEventName echoes the input event name", () => {
+		const path = makeMd("No frontmatter here\n" + "x".repeat(300), "event.md");
+		for (const name of ["PostToolUse", "CustomWriteEvent"]) {
+			const { stdout, code } = runScript({
+				hook_event_name: name,
+				tool_input: { file_path: path },
+			});
+			assert.equal(code, 0);
+			const parsed = JSON.parse(stdout) as {
+				hookSpecificOutput: { hookEventName: string };
+			};
+			assert.equal(parsed.hookSpecificOutput.hookEventName, name);
+		}
+	});
+
+	test("a loose note that joins a topic cluster in work/active gets the cluster hint", () => {
+		const vault = mkdtempSync(join(tmpdir(), "validate-write-cluster-"));
+		try {
+			const active = join(vault, "work", "active");
+			mkdirSync(active, { recursive: true });
+			const note = (title: string) => {
+				const path = join(active, `${title}.md`);
+				writeFileSync(path, "---\ndate: 2026-01-01\ndescription: d\ntags: [work-note]\n---\nShort.");
+				return path;
+			};
+			const target = note("Payments Migration");
+			note("Payments Rollout");
+			note("Alpha Roadmap");
+			note("Beta Retrospective");
+			const { stdout, code } = spawnHook(SCRIPT, { tool_input: { file_path: target } }, { CLAUDE_PROJECT_DIR: vault });
+			assert.equal(code, 0);
+			const parsed = JSON.parse(stdout) as {
+				hookSpecificOutput: {
+					additionalContext: string;
+					policyResults?: Array<{ policy_id: string; classification: string }>;
+				};
+			};
+			assert.match(parsed.hookSpecificOutput.additionalContext, /sharing "payments"/);
+			assert.match(parsed.hookSpecificOutput.additionalContext, /Payments Rollout\.md/);
+			assert.ok(
+				parsed.hookSpecificOutput.policyResults?.some(
+					(r) => r.policy_id === "topic-cluster" && r.classification === "ungrouped-cluster",
+				),
+			);
+		} finally {
+			rmTemp(vault);
+		}
+	});
+});
+
 describe("validate-write — required fields come from the manifest", () => {
 	test("a work note missing `quarter` is flagged when the manifest requires it", () => {
 		const vault = mkdtempSync(join(tmpdir(), "validate-write-manifest-"));
@@ -280,171 +369,5 @@ describe("validate-write — required fields come from the manifest", () => {
 		} finally {
 			rmTemp(vault);
 		}
-	});
-});
-
-describe("validate-write — under Gemini's AfterTool (#353)", () => {
-	// Gemini's file tools are write_file and replace, and both take file_path
-	// (gemini-cli tools/definitions/base-declarations.ts, as of 2026-10-13);
-	// AfterTool reads hookSpecificOutput.additionalContext (hooks/types.ts).
-	test("a write_file payload gets its warning back in an AfterTool envelope", () => {
-		const path = makeMd("No frontmatter here\n" + "x".repeat(300), "gemini.md");
-		const { stdout, code } = runScript({
-			hook_event_name: "AfterTool",
-			tool_name: "write_file",
-			tool_input: { file_path: path, content: "" },
-		});
-		assert.equal(code, 0);
-		const data = JSON.parse(stdout) as { hookSpecificOutput: { hookEventName: string; additionalContext: string } };
-		assert.equal(data.hookSpecificOutput.hookEventName, "AfterTool");
-		assert.match(data.hookSpecificOutput.additionalContext, /frontmatter/i);
-	});
-});
-
-// With HOOK_DEBUG=1 the refresh trigger logs "refresh requested" before it
-// branches, so whether a write asked for a refresh shows with or without qmd
-// installed; a sentinel appears only where qmd resolves, and the leg without
-// qmd failed on it. Each sentinel is touched first, so the request is
-// debounced and no worker spawns.
-const refreshEnv = (name: string): Record<string, string> => {
-	const sentinel = join(TMP_DIR, `${name}.sentinel`);
-	writeFileSync(sentinel, "");
-	return { HOOK_DEBUG: "1", QMD_REFRESH_SENTINEL: sentinel };
-};
-const refreshed = (stderr: string) => stderr.includes("validate-write: refresh requested");
-
-describe("validate-write — Codex apply_patch, whose payload names no file_path (#354)", () => {
-	// openai/codex core/src/tools/handlers/apply_patch.rs: tool_input is
-	// { command: <raw patch> }, and the request carries an absolute cwd
-	// (hooks/src/events/post_tool_use.rs), as of 2026-10-13.
-	const applyPatch = (patch: string, env: Record<string, string> = {}) =>
-		spawnHook(
-			SCRIPT,
-			{ hook_event_name: "PostToolUse", tool_name: "apply_patch", cwd: TMP_DIR, tool_input: { command: patch } },
-			{ CLAUDE_PROJECT_DIR: TMP_DIR, ...env },
-		);
-	const context = (stdout: string) =>
-		(JSON.parse(stdout) as { hookSpecificOutput: { hookEventName: string; additionalContext: string } }).hookSpecificOutput;
-
-	test("an added note without frontmatter gets its warning, relative to the payload's cwd", () => {
-		makeMd("No frontmatter here\n" + "x".repeat(300), "codex-added.md");
-		const { stdout, code } = applyPatch("*** Begin Patch\n*** Add File: codex-added.md\n+No frontmatter here\n*** End Patch\n");
-		assert.equal(code, 0);
-		const out = context(stdout);
-		assert.equal(out.hookEventName, "PostToolUse");
-		assert.match(out.additionalContext, /codex-added\.md/);
-	});
-
-	test("every note a patch writes is validated, in one envelope", () => {
-		makeMd("No frontmatter one\n" + "x".repeat(300), "codex-one.md");
-		makeMd("No frontmatter two\n" + "x".repeat(300), "codex-two.md");
-		const { stdout } = applyPatch(
-			"*** Begin Patch\n*** Add File: codex-one.md\n+a\n*** Update File: codex-two.md\n@@\n+b\n*** End Patch\n",
-		);
-		const out = context(stdout);
-		assert.match(out.additionalContext, /Vault hygiene warnings for `codex-one\.md`/);
-		assert.match(out.additionalContext, /Vault hygiene warnings for `codex-two\.md`/);
-	});
-
-	test("a misplaced memory file in a patch is flagged, with its policy result", () => {
-		const { stdout } = applyPatch(
-			"*** Begin Patch\n*** Add File: /Users/foo/.claude/projects/-Users-foo-dev-bar/memory/feedback_x.md\n+x\n*** End Patch\n",
-		);
-		const out = JSON.parse(stdout) as {
-			hookSpecificOutput: { additionalContext: string; policyResults?: Array<{ policy_id: string }> };
-		};
-		assert.match(out.hookSpecificOutput.additionalContext, /Memory location violation/);
-		assert.deepEqual(out.hookSpecificOutput.policyResults?.map((p) => p.policy_id), ["memory-location"]);
-	});
-
-	test("a patch that writes a vault note triggers the refresh (the control for the case below)", () => {
-		makeMd("---\ndate: 2026-10-13\n---\n" + "x".repeat(300), "codex-refresh.md");
-		const { stderr } = applyPatch("*** Begin Patch\n*** Add File: codex-refresh.md\n+x\n*** End Patch\n", refreshEnv("md"));
-		assert.ok(refreshed(stderr), "the refresh was requested");
-	});
-
-	test("a patch touching only non-.md files warns nothing and triggers no refresh", () => {
-		writeFileSync(join(TMP_DIR, "code.ts"), "export {};\n");
-		const { stdout, stderr, code } = applyPatch("*** Begin Patch\n*** Add File: code.ts\n+export {};\n*** End Patch\n", refreshEnv("nomd"));
-		assert.equal(code, 0);
-		assert.equal(stdout, "");
-		assert.equal(refreshed(stderr), false, "no refresh was requested");
-	});
-
-	test("a patch touching only a note outside the vault warns nothing, as a single-file write does", () => {
-		const outside = mkdtempSync(join(tmpdir(), "validate-write-outside-"));
-		try {
-			const note = join(outside, "elsewhere.md");
-			writeFileSync(note, "No frontmatter here\n" + "x".repeat(300));
-			const { stdout, code } = applyPatch(`*** Begin Patch\n*** Add File: ${note}\n+x\n*** End Patch\n`);
-			assert.equal(code, 0);
-			assert.equal(stdout, "");
-		} finally {
-			rmTemp(outside);
-		}
-	});
-});
-
-describe("validate-write — apply_patch review follow-ups (#354)", () => {
-	const applyPatch = (patch: string, env: Record<string, string> = {}) =>
-		spawnHook(
-			SCRIPT,
-			{ hook_event_name: "PostToolUse", tool_name: "apply_patch", cwd: TMP_DIR, tool_input: { command: patch } },
-			{ CLAUDE_PROJECT_DIR: TMP_DIR, ...env },
-		);
-
-	test("a patch that only deletes a note still refreshes the index, which would otherwise serve it", () => {
-		const { stdout, stderr } = applyPatch("*** Begin Patch\n*** Delete File: gone.md\n*** End Patch\n", refreshEnv("delete"));
-		assert.equal(stdout, "", "nothing to validate");
-		assert.ok(refreshed(stderr), "the refresh was requested");
-	});
-
-	test("three new notes joining one cluster give its hint once, not once per note", () => {
-		const active = join(TMP_DIR, "work", "active");
-		mkdirSync(active, { recursive: true });
-		const fm = "---\ndate: 2026-10-13\ndescription: d\ntags: [work-note]\nquarter: Q4-2026\n---\n\nSee [[Home]].\n" + "x".repeat(300);
-		// A cluster needs a root of at least 4 notes, its token in no more than
-		// half of them (lib/active-hygiene.ts): 3 Pelican notes beside 3 others.
-		for (const n of ["Pelican Plan.md", "Pelican Notes.md", "Pelican Risks.md", "Zebra Budget.md", "Otter Hiring.md", "Falcon Launch.md"]) {
-			writeFileSync(join(active, n), fm);
-		}
-		const { stdout } = applyPatch(
-			"*** Begin Patch\n*** Add File: work/active/Pelican Plan.md\n+x\n*** Add File: work/active/Pelican Notes.md\n+x\n*** Add File: work/active/Pelican Risks.md\n+x\n*** End Patch\n",
-		);
-		const out = JSON.parse(stdout) as { hookSpecificOutput: { additionalContext: string; policyResults?: Array<{ policy_id: string }> } };
-		assert.equal(out.hookSpecificOutput.additionalContext.split("loose sibling(s)").length - 1, 1, out.hookSpecificOutput.additionalContext);
-		// The machine-readable results stay one per file: each names its own path.
-		const clusterPaths = (out.hookSpecificOutput.policyResults as Array<{ policy_id: string; path: string }> | undefined)
-			?.filter((p) => p.policy_id === "topic-cluster")
-			.map((p) => p.path)
-			.sort();
-		assert.deepEqual(clusterPaths, ["work/active/Pelican Notes.md", "work/active/Pelican Plan.md", "work/active/Pelican Risks.md"]);
-	});
-});
-
-describe("validate-write — the refresh covers only notes inside the vault (#366)", () => {
-	const write = (filePath: string, env: Record<string, string>) =>
-		spawnHook(SCRIPT, { tool_input: { file_path: filePath } }, { CLAUDE_PROJECT_DIR: TMP_DIR, ...env });
-
-	test("a note written outside the vault requests no refresh", () => {
-		const outside = mkdtempSync(join(tmpdir(), "validate-write-refresh-outside-"));
-		try {
-			const note = join(outside, "README.md");
-			writeFileSync(note, "# Elsewhere\n");
-			const { code, stderr } = write(note, refreshEnv("outside"));
-			assert.equal(code, 0);
-			assert.equal(refreshed(stderr), false, "a write the index can't see starts no worker");
-		} finally {
-			rmTemp(outside);
-		}
-	});
-
-	test("an in-vault template, skipped by validation, still requests one (the control)", () => {
-		mkdirSync(join(TMP_DIR, "templates"), { recursive: true });
-		const note = join(TMP_DIR, "templates", "Refresh Control.md");
-		writeFileSync(note, "# Template\n");
-		const { code, stderr } = write(note, refreshEnv("template"));
-		assert.equal(code, 0);
-		assert.equal(refreshed(stderr), true);
 	});
 });

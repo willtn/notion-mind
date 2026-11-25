@@ -26,7 +26,6 @@ import {
 	type Dirent,
 } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import {
 	take,
@@ -42,12 +41,6 @@ import {
 	formatBrainIndex,
 	stripFrontmatter,
 	hasBrainContent,
-	resolveQmdIndex,
-	parseQmdMinVersion,
-	qmdArgsWithIndex,
-	isQmdNativeAbiMismatch,
-	qmdPackageRootFromEntry,
-	resolveIndexStorePath,
 	parseInfraRootFilenames,
 	isInfraFilename,
 	isMarkdownFilename,
@@ -74,26 +67,15 @@ import {
 	NORTH_STAR_POINTER,
 } from "./lib/session-start.ts";
 import {
-	buildQmdCommand,
-	qmdVersionAtLeast,
-	resolveQmdEntry,
-	spawnDetachedQmd,
-} from "./lib/qmd.ts";
-import { qmdCwdFor, qmdPathsAgainst } from "./lib/qmd-cwd.ts";
-import {
 	formatActiveHygiene,
-	parseMemoryRoot,
 	parseOpenLoopConfig,
 	scanActiveHygiene,
 } from "./lib/active-hygiene.ts";
-
-import { takeReinject } from "./lib/reinject.ts";
-import { HANDOFF_DIR } from "./lib/stop-handoff.ts";
 import { debug, envelopedLimit, fitWithMeter, type OutputLimit, readStdinJson, writeHookOutput } from "./lib/hook-io.ts";
 import { readOmMod } from "./lib/om-mod.ts";
 import { resolveProjectDir } from "./lib/project-dir.ts";
 
-type HookInput = { readonly source?: unknown; readonly session_id?: unknown; readonly om_reinject?: unknown };
+type HookInput = { readonly source?: unknown };
 
 // The SessionStart payload carries `source` (startup/clear/resume/compact).
 // Missing or unparseable stdin fails open to full mode. stdin is OPTIONAL
@@ -156,146 +138,16 @@ if (envFile) {
 const omMod = readOmMod(hookInput);
 if (omMod === "standdown") process.exit(0);
 const delivering = omMod === "deliver";
-// A Gemini session compressed since its context was injected (#357) gets it
-// here instead of on its next prompt, and in full whatever the source: the
-// compression summarised away the sections the compact form points at. Taking
-// the stored context consumes it, so after the stand-down, which injects nothing.
-const compressed =
-	typeof hookInput?.session_id === "string" && hookInput.session_id !== "" && takeReinject(HANDOFF_DIR, hookInput.session_id) !== null;
-const mode = delivering || compressed ? "full" : injectionMode(hookInput?.source);
+const mode = delivering ? "full" : injectionMode(hookInput?.source);
 
 process.chdir(cwd);
 
-// Manifest is read once and reused: QMD's named index, the infrastructure
-// allowlist for openTasks(), and any future manifest-driven sections all
-// derive from the same source. Both helpers tolerate a null source so a
+// Manifest is read once and reused: the infrastructure allowlist for
+// openTasks(), and any future manifest-driven sections all derive from the
+// same source. Both helpers tolerate a null source so a
 // missing/malformed manifest degrades quietly.
 const manifestJson = readManifestRaw();
 const infraRootFilenames = parseInfraRootFilenames(manifestJson);
-
-// Incremental QMD re-index. Truly fire-and-forget: detached, unref'd,
-// ignore-all-streams. The hook's own work (file walks, git log, context
-// emission) is independent of this index update, so blocking on qmd's
-// startup (notably slow on Windows × Node 24 cold start, where it can
-// approach 10s before the actual update work begins) is wasted user
-// latency. Scope to this vault's named index: an explicit `qmd_index` when
-// the manifest pins one, otherwise a slug derived from the vault folder so
-// two vaults on one machine don't share a store (#137). Falls back silently
-// to qmd's global index for forks that have neither.
-// Route through `buildQmdCommand` so the shim-bypass logic that fixes
-// the MCP wrapper applies here too.
-const qmdIndex = resolveQmdIndex(manifestJson, cwd);
-// Gemini's PreCompress builds the context to re-inject (lib/session-start-run.ts,
-// #357): no qmd work in that run. The probes, self-heal and version check ran
-// at startup, a 20 s rebuild here would spend the run's whole budget, and
-// PreCompress started its own refresh.
-const reinjectBuild = hookInput?.om_reinject === true;
-const qmdEntry = reinjectBuild ? null : resolveQmdEntry();
-
-// qmd is OPTIONAL in this template: every self-heal path below is gated on
-// a resolvable install (`qmdEntry !== null`). A machine without qmd gets no
-// probes, no bootstrap spawn, no notes — the silent degradation it has today.
-
-// Self-heal a BROKEN qmd install, distinct from a missing one: if a Node
-// upgrade leaves @tobilu/qmd's native `better-sqlite3` binding compiled
-// against the wrong ABI, every invocation crashes before it opens the store
-// — the sqlite file can be tens of MB and perfectly healthy, and the
-// fire-and-forget re-index spawn swallows the crash, so semantic search
-// goes silently dark. Bounded to a status call (cheap, touches the store)
-// + a rebuild (the actual fix) — both timeboxed so a hung native build
-// can't blow the hook's timeout.
-let qmdSelfHealNote: string | null = null;
-if (qmdIndex !== null && qmdEntry !== null) {
-	const preflightCmd = buildQmdCommand(qmdEntry, [
-		"--index",
-		qmdIndex,
-		"status",
-	]);
-	const preflight = spawnSync(preflightCmd.cmd, preflightCmd.args as string[], {
-		encoding: "utf-8",
-		timeout: 5_000,
-		shell: preflightCmd.shell,
-		windowsHide: true,
-	});
-	if (isQmdNativeAbiMismatch(preflight.stderr ?? "")) {
-		const pkgRoot = qmdPackageRootFromEntry(qmdEntry);
-		if (pkgRoot !== null) {
-			const rebuild = spawnSync("npm rebuild better-sqlite3", {
-				cwd: pkgRoot,
-				encoding: "utf-8",
-				timeout: 20_000,
-				shell: true,
-				windowsHide: true,
-			});
-			qmdSelfHealNote =
-				rebuild.status === 0
-					? "⚠️ QMD's native module (better-sqlite3) was ABI-mismatched against this machine's Node version — auto-rebuilt this session. Semantic search may need one more `qmd update` to fully catch up; if the qmd MCP tools are still absent, a session restart picks them up."
-					: "⚠️ QMD's native module (better-sqlite3) is ABI-mismatched against this machine's Node version, and the automatic `npm rebuild better-sqlite3` did not complete cleanly — semantic search is likely dead. Manual fix: `npm rebuild better-sqlite3` inside the @tobilu/qmd package directory, then `qmd update`.";
-		}
-	}
-}
-
-// Min-version check (#100): warn-only here — a session must never be broken
-// by an old qmd, but a silently-old install shouldn't stay silent either.
-// Runs only when the manifest opts in via `qmd_min_version` AND qmd is
-// installed. The bootstrap enforces the same floor loudly.
-let qmdVersionNote: string | null = null;
-const qmdMinVersion = parseQmdMinVersion(manifestJson);
-if (qmdMinVersion !== null && qmdEntry !== null) {
-	const versionCmd = buildQmdCommand(qmdEntry, ["--version"]);
-	const v = spawnSync(versionCmd.cmd, versionCmd.args as string[], {
-		encoding: "utf-8",
-		timeout: 5_000,
-		shell: versionCmd.shell,
-		windowsHide: true,
-	});
-	if (v.status === 0 && !qmdVersionAtLeast(v.stdout ?? "", qmdMinVersion)) {
-		qmdVersionNote = `⚠️ Installed qmd (${(v.stdout ?? "").trim()}) is below this vault's declared minimum (${qmdMinVersion}) — semantic search may misbehave. Update: \`npm i -g @tobilu/qmd\`, then re-run the bootstrap.`;
-	}
-}
-
-// Self-heal a machine that hasn't bootstrapped QMD yet: the store is
-// machine-local derived data (~/.cache/qmd/<index>.sqlite, never committed),
-// so a clean clone has no registered collection — and `qmd update` silently
-// no-ops forever in that state, leaving semantic search dead with no error
-// (an empty shell store can still exist at ~100KB; a populated one is tens
-// of MB). If the store is missing or implausibly small, run the idempotent
-// bootstrap (registers collection + context + index + embed) instead of
-// `update`. Threshold errs toward bootstrapping: it's safe to re-run by
-// design. Gated on an installed qmd — never bootstraps onto a machine that
-// hasn't opted into qmd at all.
-function qmdStoreLooksEmpty(index: string | null): boolean {
-	if (!index) return false; // no named index → keep legacy update behavior
-	try {
-		// XDG-aware, matching qmd's own store path — a hardcoded ~/.cache
-		// would force a full bootstrap every session for XDG_CACHE_HOME users.
-		const store = resolveIndexStorePath(index, process.env, homedir());
-		return statSync(store).size < 500_000;
-	} catch {
-		return true; // store missing / path differs → bootstrap (idempotent)
-	}
-}
-
-const bootstrapNeeded = qmdEntry !== null && qmdStoreLooksEmpty(qmdIndex);
-const qmdUpdate = bootstrapNeeded
-	? {
-			cmd: process.execPath,
-			args: ["--experimental-strip-types", ".scripts/qmd-bootstrap.ts"],
-			shell: false,
-		}
-	: buildQmdCommand(qmdEntry, qmdArgsWithIndex(qmdIndex, ["update"]));
-// Bootstrap resolves the script + vault-manifest.json relative to the vault
-// cwd. The update runs where the refresh worker's qmd steps run, by the same
-// rule (lib/qmd-cwd.ts, #404): the OS temp folder, so the detached child
-// never holds the vault open on Windows, unless qmd would find a different
-// local config there, with its cwd-relative paths read against the vault.
-const qmdCwd = bootstrapNeeded ? cwd : qmdCwdFor(cwd, qmdIndex);
-const qmdEnv = bootstrapNeeded ? undefined : qmdPathsAgainst(cwd, process.env);
-// VAULT_QMD_REFRESH=off (every test process carries it) stops this detached
-// update too, the same as the write-time refresh worker (#337): a test's
-// session-start would otherwise leave a qmd update or bootstrap running
-// against its temp vault after the run.
-if (!reinjectBuild) spawnDetachedQmd(qmdUpdate, "session-start", qmdCwd, qmdEnv);
 
 type CmdResult =
 	| { readonly kind: "ok"; readonly stdout: string }
@@ -478,8 +330,8 @@ function activeWork(): Built {
 const SKIP_PREFIXES: readonly string[] = [...MACHINERY_DIRS, "thinking"];
 
 // Dirs that collapse to one count line regardless of size (#107): the
-// archive is orientation noise whether it holds 3 notes or 300 — Glob or
-// QMD reach it on demand. Everything else collapses by SIZE instead, via
+// archive is orientation noise whether it holds 3 notes or 300 — Glob
+// reaches it on demand. Everything else collapses by SIZE instead, via
 // the threshold below, so a vault cannot grow past the ceiling through
 // whichever folder nobody remembered to list here.
 const ALWAYS_COLLAPSED_DIRS: readonly string[] = ["work/archive"];
@@ -581,7 +433,7 @@ function listMd(): string[] {
 // Source-aware assembly (#107): on resume/compact the static bulk (North
 // Star, brain index, file listing) is already in-conversation — a pointer
 // replaces it, and only the volatile sections (recent changes, tasks,
-// active work, hygiene, QMD notes) re-inject.
+// active work, hygiene) re-inject.
 // `priority` orders SURRENDER under budget, highest first. Sections with no
 // fallback are load-bearing and never degrade. The listing goes first: it is
 // the section that grows with every note and is fully reconstructible with
@@ -630,27 +482,12 @@ if (mode === "full") {
 		header: "### Vault File Listing",
 		body: listMd().join("\n"),
 		priority: PRIORITY.FILE_LISTING,
-		fallback: "(Over budget — Glob or QMD the vault on demand.)",
+		fallback: "(Over budget — Glob the vault on demand.)",
 	});
 } else {
 	sections.push({
 		header: "### Context Pointer",
 		body: "(Re-entry via resume/compact — North Star, brain index, and the file listing were injected at session start and are unchanged; re-read on demand.)",
-		priority: PRIORITY.LOAD_BEARING,
-	});
-}
-
-if (qmdSelfHealNote !== null) {
-	sections.push({
-		header: "### QMD Self-Heal",
-		body: qmdSelfHealNote,
-		priority: PRIORITY.LOAD_BEARING,
-	});
-}
-if (qmdVersionNote !== null) {
-	sections.push({
-		header: "### QMD Version",
-		body: qmdVersionNote,
 		priority: PRIORITY.LOAD_BEARING,
 	});
 }
@@ -663,7 +500,6 @@ const hygieneLines = formatActiveHygiene(
 		Date.now(),
 		parseOpenLoopConfig(manifestJson),
 		infraRootFilenames,
-		parseMemoryRoot(manifestJson),
 	),
 );
 if (hygieneLines.length > 0) {
@@ -685,10 +521,7 @@ if (hygieneLines.length > 0) {
 const budget: InjectionBudget = delivering
 	? { bytes: parseInstructionBudget(manifestJson) ?? DEFAULT_INSTRUCTION_BUDGET_BYTES }
 	: effectiveInjectionBudget(parseInjectionBudget(manifestJson));
-// On the hook path the context goes out inside a JSON envelope (#340): Gemini
-// parses a hook's stdout as JSON and reads context only from
-// hookSpecificOutput.additionalContext (per its hooks reference as of
-// 2026-10-13, not observed), and Claude Code accepts the same shape. So the
+// On the hook path the context goes out inside a JSON envelope (#340), so the
 // budget, the backstop cut and the meter's figure all use the encoded size.
 // A mod's deliver run stays plain text: it becomes an instruction file.
 const measure = delivering ? utf8Bytes : enveloped;

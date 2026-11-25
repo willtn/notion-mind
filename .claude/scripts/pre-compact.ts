@@ -16,15 +16,10 @@ import {
 	statSync,
 	unlinkSync,
 } from "node:fs";
-import { dirname, join, resolve as resolvePath } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { debug, readStdinJson } from "./lib/hook-io.ts";
 import { isMainModule } from "./lib/main-guard.ts";
-import { sentinelPathFrom, triggerDebouncedRefresh } from "./lib/qmd-refresh.ts";
 import { resolveProjectDir } from "./lib/project-dir.ts";
-import { reinjectSession, storeReinject } from "./lib/reinject.ts";
-import { sessionStartContext } from "./lib/session-start-run.ts";
-import { HANDOFF_DIR } from "./lib/stop-handoff.ts";
 
 type HookInput = {
 	readonly transcript_path?: unknown;
@@ -70,40 +65,10 @@ if (isMainModule(import.meta.url)) {
 	const input = await readStdinJson<HookInput>();
 	if (!input) process.exit(0);
 
-	// Fire a debounced QMD refresh before (or alongside) the backup.
-	// Writes tend to cluster right before compaction, and catching them
-	// now means the session-resume SessionStart runs `qmd update` against
-	// an index that's already current. Uses the same sentinel as the
-	// PostToolUse and Stop hooks so we never spawn a redundant worker.
-	{
-		const scriptDir = dirname(fileURLToPath(import.meta.url));
-		triggerDebouncedRefresh({
-			sentinelPath: sentinelPathFrom(process.env, scriptDir),
-			workerPath: resolvePath(scriptDir, "qmd-refresh-run.ts"),
-			debounceMs: 30_000,
-			logPrefix: "pre-compact",
-		});
-	}
-
-	// The backup first: it is this hook's own job, and the re-injection below
-	// can take most of Gemini's PreCompress budget. Best effort, so a backup
-	// that throws never costs the re-injection.
 	try {
 		backupTranscript(input);
 	} catch (err) {
 		debug(`pre-compact: backup failed: ${(err as Error).message}`);
-	}
-
-	// Gemini fires no SessionStart after compressing, so store the context for
-	// the next BeforeAgent to re-inject (lib/reinject.ts, #357).
-	const reinjectFor = reinjectSession(input);
-	if (reinjectFor !== null) {
-		const context = sessionStartContext();
-		try {
-			storeReinject(HANDOFF_DIR, reinjectFor, context);
-		} catch (err) {
-			debug(`pre-compact: could not store the re-injection: ${(err as Error).message}`);
-		}
 	}
 	process.exit(0);
 }

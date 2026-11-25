@@ -1,20 +1,16 @@
 /**
  * Layout pin (#321): `AGENTS.md` is the vault's one instruction file.
  *
- * Every agent reads it: Codex and Antigravity natively, Grok once the folder
- * is trusted, Gemini through `.gemini/settings.json`'s `context.fileName`, and
- * Claude Code natively when no `CLAUDE.md` is present. Claude-only guidance
+ * Claude Code reads it natively when no `CLAUDE.md` is present. Claude-only guidance
  * lives in `.claude/rules/*.md`, which Claude Code loads beside it.
  *
  * What would quietly undo that:
  * - a `CLAUDE.md` back at the root: Claude Code reads it and skips
  *   `AGENTS.md` without saying so;
- * - a `GEMINI.md` back at the root, or the Gemini setting dropped: Gemini
- *   falls back to looking for `GEMINI.md`;
- * - `AGENTS.md` turned back into a pointer at another file, which Codex
+ * - `AGENTS.md` turned back into a pointer at another file, which an agent
  *   never follows unless told to;
  * - `AGENTS.md` growing past what the agents read: Antigravity cuts it off
- *   silently past ~24,000 bytes (measured), Codex past ~32 KiB.
+ *   silently past ~24,000 bytes (measured).
  */
 
 import { test, describe } from "node:test";
@@ -46,7 +42,7 @@ describe("AGENTS.md is the one instruction file (#321)", () => {
 		const size = statSync(agentsPath).size;
 		assert.ok(
 			size < AGENTS_MD_MAX_BYTES,
-			`AGENTS.md is ${size} bytes, at or over the ${AGENTS_MD_MAX_BYTES}-byte threshold. Antigravity silently stops reading it at ~24,000 bytes (and Codex at ~32 KiB). Move a section an agent can safely skip to a file it reads on demand, verbatim, and leave a one-line pointer (#321).`,
+			`AGENTS.md is ${size} bytes, at or over the ${AGENTS_MD_MAX_BYTES}-byte threshold. Antigravity silently stops reading it at ~24,000 bytes (measured). Move a section an agent can safely skip to a file it reads on demand, verbatim, and leave a one-line pointer (#321).`,
 		);
 	});
 
@@ -56,18 +52,9 @@ describe("AGENTS.md is the one instruction file (#321)", () => {
 		assert.ok(!readFileSync(agentsPath, "utf-8").includes("\r"), "AGENTS.md has CRLF line endings");
 	});
 
-	test("no CLAUDE.md or GEMINI.md at the vault root", () => {
+	test("no CLAUDE.md at the vault root", () => {
 		// Claude Code reads a CLAUDE.md in place of AGENTS.md, silently.
 		assert.ok(!existsSync(resolve(repoRoot, "CLAUDE.md")), "CLAUDE.md is back at the root: Claude Code reads it and skips AGENTS.md");
-		assert.ok(!existsSync(resolve(repoRoot, "GEMINI.md")), "GEMINI.md is back at the root: Gemini reads AGENTS.md through .gemini/settings.json instead");
-	});
-
-	test(".gemini/settings.json points Gemini at AGENTS.md", () => {
-		const settings = JSON.parse(readFileSync(resolve(repoRoot, ".gemini/settings.json"), "utf-8")) as {
-			context?: { fileName?: unknown };
-		};
-		const names = settings.context?.fileName;
-		assert.ok(Array.isArray(names) && names.includes("AGENTS.md"), ".gemini/settings.json context.fileName must list AGENTS.md");
 	});
 
 	/** The `.claude/rules/*.md` files AGENTS.md's pointers name. */
@@ -100,7 +87,7 @@ describe("AGENTS.md is the one instruction file (#321)", () => {
 
 	test("every file AGENTS.md points at is claimed by no removable module, so every module selection installs it", () => {
 		// A file claimed by a removable module disappears when that module is
-		// deselected, and a Codex-only vault would then follow a pointer to
+		// deselected, and a vault without that module would then follow a pointer to
 		// nothing. Shared files must be core: claimed by no removable module.
 		const schema = readFileSync(resolve(repoRoot, ".shardmind/shard-schema.yaml"), "utf-8");
 		const modulesBlock = schema.slice(schema.indexOf("\nmodules:\n"), schema.indexOf("\nsignals:\n"));

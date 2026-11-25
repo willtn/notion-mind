@@ -3,18 +3,13 @@
  *
  * Runs on first install + adopt, and on update whenever `hooks.bootstrap.fingerprint`
  * in shard.yaml changes (see ShardMind docs/AUTHORING.md §Hook lifecycle). Writes
- * *unmanaged* paths only (`.git/`, `.qmd/`) — the engine warns
+ * *unmanaged* path only (`.git/`) — the engine warns
  * (`HOOK_BOOTSTRAP_MANAGED_WRITE`) if a bootstrap hook touches a managed file, so
  * this hook never edits vault content. Non-fatal: throwing surfaces as a warning in
  * the install summary, never rolls back the install.
  *
- * Responsibilities (all idempotent, all skippable):
- *   1. Initialize a git repo at the vault root if one doesn't already exist.
- *      Creates an *unmanaged* `.git/` directory.
- *   2. Bootstrap the QMD semantic index when `qmd_enabled === true`. Creates
- *      `.qmd/` (unmanaged). Skips silently if the `qmd` binary isn't on PATH —
- *      the user gets a note in stdout telling them how to install it later. We
- *      never hard-fail on optional tooling.
+ * Responsibility (idempotent, skippable): initialize a git repo at the vault
+ * root if one doesn't already exist. Creates an *unmanaged* `.git/` directory.
  *
  * Unlike the legacy `post-install` hook, bootstrap carries no North Star
  * personalization — that moved to `personalize.ts`, which the engine gates on
@@ -27,14 +22,6 @@
 import { spawn } from 'node:child_process';
 import { access } from 'node:fs/promises';
 import { join } from 'node:path';
-
-// Vault-relative path to the QMD bootstrap script. Centralized so a future
-// rename is a one-line change. Lives at vault root under `.scripts/`, not
-// `.claude/scripts/` — the README's QMD setup section invokes the same path
-// (`node --experimental-strip-types .scripts/qmd-bootstrap.ts`), and changing
-// it would silently desync the manual setup path from the hook's automated
-// one.
-const QMD_BOOTSTRAP_RELATIVE = '.scripts/qmd-bootstrap.ts';
 
 // Local mirror of ShardMind's BootstrapContext shape. Inlined (rather than
 // imported from `shardmind/runtime`) so obsidian-mind has no shardmind
@@ -54,10 +41,6 @@ interface BootstrapContext {
 
 export default async function bootstrap(ctx: BootstrapContext): Promise<void> {
   await ensureGitRepo(ctx.vaultRoot);
-
-  if (ctx.values['qmd_enabled'] === true) {
-    await bootstrapQmd(ctx.vaultRoot);
-  }
 }
 
 export async function ensureGitRepo(vaultRoot: string): Promise<void> {
@@ -87,46 +70,10 @@ export async function ensureGitRepo(vaultRoot: string): Promise<void> {
   }
 }
 
-async function bootstrapQmd(vaultRoot: string): Promise<void> {
-  const bootstrap = join(vaultRoot, QMD_BOOTSTRAP_RELATIVE);
-  try {
-    await access(bootstrap);
-  } catch {
-    console.error(`qmd: bootstrap script not found at ${bootstrap} — skipping`);
-    return;
-  }
-
-  const qmdAvailable = await which('qmd');
-  if (!qmdAvailable) {
-    console.log('qmd: `qmd` binary not found on PATH — skipping bootstrap.');
-    console.log(`qmd: install with \`npm install -g @tobilu/qmd\`, then run \`node --experimental-strip-types ${QMD_BOOTSTRAP_RELATIVE}\` from the vault root.`);
-    return;
-  }
-
-  console.log('qmd: bootstrapping semantic index (this may take a moment on first run)…');
-  const ok = await run('node', ['--experimental-strip-types', bootstrap], vaultRoot);
-  if (ok) {
-    console.log('qmd: index bootstrap complete.');
-  } else {
-    console.error(`qmd: bootstrap exited non-zero. The vault is installed; re-run manually with \`node --experimental-strip-types ${QMD_BOOTSTRAP_RELATIVE}\`.`);
-  }
-}
-
-function run(command: string, args: string[], cwd: string, opts: { quiet?: boolean } = {}): Promise<boolean> {
-  // `quiet` discards stdout + stderr — used by `which()` so a successful
-  // tool-availability probe doesn't print the resolved path into the hook
-  // log alongside the prefixed `qmd:` / `git:` messages. The user-visible
-  // subprocess paths (`git init`, `node qmd-bootstrap.ts`) keep `inherit`
-  // so their progress streams through to the install summary.
-  const out: 'ignore' | 'inherit' = opts.quiet ? 'ignore' : 'inherit';
+function run(command: string, args: string[], cwd: string): Promise<boolean> {
   return new Promise(resolve => {
-    const child = spawn(command, args, { cwd, stdio: ['ignore', out, out], shell: false });
+    const child = spawn(command, args, { cwd, stdio: ['ignore', 'inherit', 'inherit'], shell: false });
     child.on('error', () => resolve(false));
     child.on('exit', code => resolve(code === 0));
   });
-}
-
-async function which(binary: string): Promise<boolean> {
-  const cmd = process.platform === 'win32' ? 'where' : 'which';
-  return run(cmd, [binary], process.cwd(), { quiet: true });
 }

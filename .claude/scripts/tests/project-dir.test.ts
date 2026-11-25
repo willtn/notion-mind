@@ -8,23 +8,31 @@ import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { nearestVaultRoot, resolveProjectDir, VAULT_MARKER } from "../lib/project-dir.ts";
+import { isInsideVault, nearestVaultRoot, resolveProjectDir, VAULT_MARKER } from "../lib/project-dir.ts";
 
-describe("resolveProjectDir", () => {
-	test("each agent's variable is honoured", () => {
-		assert.equal(resolveProjectDir("/fb", { CLAUDE_PROJECT_DIR: "/c" }), "/c");
-		assert.equal(resolveProjectDir("/fb", { CODEX_PROJECT_DIR: "/x" }), "/x");
-		assert.equal(resolveProjectDir("/fb", { GEMINI_PROJECT_DIR: "/g" }), "/g");
+describe("isInsideVault", () => {
+	test("ignores case on Windows, where the drive and folders may be spelled differently", () => {
+		assert.equal(isInsideVault("C:/Dev/Vault/note.md", "c:/dev/vault", "win32"), true);
+		assert.equal(isInsideVault(String.raw`C:\Dev\Vault\note.md`, "c:/dev/vault", "win32"), true, "either slash");
+		assert.equal(isInsideVault("C:/Dev/Vaulting/note.md", "c:/dev/vault", "win32"), false, "still boundary-safe");
 	});
 
-	test("Claude, then Codex, then Gemini", () => {
-		const all = { CLAUDE_PROJECT_DIR: "/c", CODEX_PROJECT_DIR: "/x", GEMINI_PROJECT_DIR: "/g" };
-		assert.equal(resolveProjectDir("/fb", all), "/c");
-		assert.equal(resolveProjectDir("/fb", { CODEX_PROJECT_DIR: "/x", GEMINI_PROJECT_DIR: "/g" }), "/x");
+	test("keeps case where the filesystem does", () => {
+		assert.equal(isInsideVault("/Vault/note.md", "/vault", "linux"), false);
+	});
+
+	test("accepts the root itself and a trailing slash on either side", () => {
+		assert.equal(isInsideVault("/vault/", "/vault", "linux"), true);
+		assert.equal(isInsideVault("/vault/note.md", "/vault/", "linux"), true);
+	});
+});
+
+describe("resolveProjectDir", () => {
+	test("Claude's variable is honoured", () => {
+		assert.equal(resolveProjectDir("/fb", { CLAUDE_PROJECT_DIR: "/c" }), "/c");
 	});
 
 	test("an empty value counts as unset", () => {
-		assert.equal(resolveProjectDir("/fb", { CLAUDE_PROJECT_DIR: "", CODEX_PROJECT_DIR: "/x" }), "/x");
 		assert.equal(resolveProjectDir("/fb", { CLAUDE_PROJECT_DIR: "" }), "/fb");
 	});
 

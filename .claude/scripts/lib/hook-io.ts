@@ -114,11 +114,9 @@ const envelopeOverhead = (hookEventName: string, policies: readonly PolicyResult
  * prints it in full for the user too, so it is used only as a fallback
  * (`writeStopFeedback`).
  *
- * Session-end stdout is JSON-or-nothing on every agent we ship configs for:
- * Codex rejects plain text outright, Gemini's SessionEnd contract is
- * "must not print any plain text to stdout other than the final JSON",
- * and Claude Code routes non-exempt plain stdout to the debug log where
- * nobody reads it. So there is no text path worth keeping.
+ * Session-end stdout is JSON-or-nothing: Claude Code routes non-exempt plain
+ * stdout to the debug log where nobody reads it. So there is no text path
+ * worth keeping.
  *
  * A Stop hook's full report reaches the model with the next prompt instead
  * (lib/stop-handoff.ts); `writeStopFeedback` is its fallback.
@@ -149,8 +147,8 @@ export const HOOK_OUTPUT_LIMIT: OutputLimit = { max: HOOK_OUTPUT_MAX_CHARS, unit
  * The cap for a context that goes out inside a `hookSpecificOutput` envelope
  * (writeHookOutput), measured on its JSON-encoded form: what is left of the
  * hook output cap once the envelope itself is counted. Claude Code caps the
- * `additionalContext` string alone, but an agent whose cap is undocumented
- * (Gemini, as of 2026-10-13) gets the whole stdout held under it (#340).
+ * `additionalContext` string alone, but the whole stdout is held under the
+ * cap here to stay safe (#340).
  */
 export function envelopedLimit(hookEventName: string): OutputLimit {
 	// `"json"` sizes count the encoded string's own two quotes, which the
@@ -257,9 +255,7 @@ export function fitWithMeter(
  * error.
  *
  * Both fields share one output cap: the summary gets at most a third, the
- * report whatever is left. Gemini runs the checklist on SessionEnd and never
- * gets this. Codex documents Stop's `decision`, but whether it honours Stop
- * `additionalContext` is unverified.
+ * report whatever is left.
  */
 export function writeStopFeedback(report: string, summary: string): void {
 	const shown = fitEncoded(summary, Math.floor(HOOK_OUTPUT_MAX_CHARS / 3));
@@ -276,12 +272,9 @@ export function writeStopFeedback(report: string, summary: string): void {
  * nothing to say on a protocol that wants JSON.
  *
  * Zero bytes would probably be fine: there is nothing for a parser to
- * reject. But Codex documents Stop stdout as "JSON on stdout when it exits
- * 0, plain text is invalid" without saying which side of that line empty
- * falls on, and a hook that is *sometimes* silent and *sometimes* JSON is a
+ * reject. But a hook that is *sometimes* silent and *sometimes* JSON is a
  * harder contract to state than one that always emits exactly one object.
- * `{}` is unambiguous everywhere and renders nothing on all three agents,
- * since every common output field defaults to the no-op value.
+ * `{}` is unambiguous and renders nothing, since every common output field defaults to the no-op value.
  *
  * writeSync rather than process.stdout.write: callers use this immediately
  * before exiting, and stdout here is a pipe — pipe writes are asynchronous

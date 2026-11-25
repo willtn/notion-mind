@@ -59,7 +59,6 @@ import {
 	parseInfraRootFilenames,
 } from "./lib/session-start.ts";
 import {
-	parseMemoryRoot,
 	parseOpenLoopConfig,
 	scanActiveHygiene,
 	walkMarkdown,
@@ -335,7 +334,6 @@ function main(): void {
 		Date.now(),
 		parseOpenLoopConfig(manifestJson),
 		parseInfraRootFilenames(manifestJson),
-		parseMemoryRoot(manifestJson),
 	);
 
 	const report: Report = { fixed: [], failed: [], refused: [], notes: [] };

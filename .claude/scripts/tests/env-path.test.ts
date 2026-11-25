@@ -1,20 +1,18 @@
 /**
  * Paths the environment may override for the hooks' state files (#360). An
- * empty or blank value counts as unset: passed through as the path "", the
- * QMD refresh sentinel could be neither read nor written, so every write,
- * Stop and PreCompact spawned a refresh worker with no debounce, and nothing
- * showed it. The Stop checklist's dedupe store, the classifier's hint store
- * and the Stop handoff folder were read the same way.
+ * empty or blank value counts as unset: passed through as the path "", a state
+ * file could be neither read nor written, and a dedupe or debounce built on it
+ * stopped working with no sign. The Stop checklist's dedupe store, the
+ * classifier's hint store and the Stop handoff folder are all read this way.
  */
 
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync, statSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { envPath } from "../lib/env-path.ts";
-import { sentinelPathFrom } from "../lib/qmd-refresh.ts";
 
 const SCRIPTS = dirname(dirname(fileURLToPath(import.meta.url)));
 
@@ -36,20 +34,9 @@ describe("envPath", () => {
 	});
 });
 
-describe("sentinelPathFrom", () => {
-	test("an empty QMD_REFRESH_SENTINEL is the default path beside the scripts", () => {
-		const dir = join("scripts", "dir");
-		assert.equal(sentinelPathFrom({ QMD_REFRESH_SENTINEL: "" }, dir), resolve(dir, ".qmd-refresh-sentinel"));
-	});
-
-	test("a relative QMD_REFRESH_SENTINEL is made absolute: the worker reads it from another cwd (#404)", () => {
-		assert.equal(sentinelPathFrom({ QMD_REFRESH_SENTINEL: "rel/sentinel" }, "scripts"), resolve("rel/sentinel"));
-	});
-});
-
 // Every one of these is read through envPath, never with a bare `??` again.
 test("no script reads a state-path variable directly", () => {
-	const names = ["QMD_REFRESH_SENTINEL", "STOP_CHECKLIST_STATE", "CLASSIFY_HINT_STATE", "STOP_HANDOFF_DIR"];
+	const names = ["STOP_CHECKLIST_STATE", "CLASSIFY_HINT_STATE", "STOP_HANDOFF_DIR"];
 	const direct = new RegExp(`process\\.env(?:\\[["'](?:${names.join("|")})["']\\]|\\.(?:${names.join("|")})\\b)`);
 	const walk = (dir: string): string[] =>
 		readdirSync(dir).flatMap((name) => {

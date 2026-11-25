@@ -4,16 +4,70 @@
 
 import { test, describe, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync, readdirSync, utimesSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync, readdirSync, utimesSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
+import { fileURLToPath } from "node:url";
 import {
 	formatTimestamp,
 	listBackups,
 	pruneBackups,
 } from "../pre-compact.ts";
 
-import { rmTemp } from "./_helpers.ts";
+import { rmTemp, runScript } from "./_helpers.ts";
+
+const PRE_COMPACT = resolve(dirname(fileURLToPath(import.meta.url)), "../pre-compact.ts");
+
+describe("pre-compact hook run with a Claude PreCompact payload", () => {
+	const withVault = (run: (vault: string, transcript: string) => void): void => {
+		const root = mkdtempSync(join(tmpdir(), "pre-compact-hook-"));
+		try {
+			const vault = join(root, "vault");
+			mkdirSync(vault);
+			const transcript = join(root, "transcript.jsonl");
+			writeFileSync(transcript, '{"role":"user"}\n');
+			run(vault, transcript);
+		} finally {
+			rmTemp(root);
+		}
+	};
+	const payload = (transcript: string) => ({
+		hook_event_name: "PreCompact",
+		session_id: "cc-backup",
+		trigger: "auto",
+		transcript_path: transcript,
+	});
+
+	test("copies the transcript into thinking/session-logs and exits 0", () => {
+		withVault((vault, transcript) => {
+			const r = runScript(PRE_COMPACT, payload(transcript), { CLAUDE_PROJECT_DIR: vault });
+			assert.equal(r.code, 0);
+			const logs = join(vault, "thinking", "session-logs");
+			const files = existsSync(logs) ? readdirSync(logs) : [];
+			assert.equal(files.length, 1, "one backup lands");
+			assert.match(files[0]!, /^session_auto_\d{8}_\d{6}\.jsonl$/);
+			assert.equal(readFileSync(join(logs, files[0]!), "utf8"), '{"role":"user"}\n', "the backup holds the transcript");
+		});
+	});
+
+	test("a backup that throws still exits 0", () => {
+		withVault((vault, transcript) => {
+			// A file where the backup folder goes, so its mkdir throws.
+			writeFileSync(join(vault, "thinking"), "");
+			const r = runScript(PRE_COMPACT, payload(transcript), { CLAUDE_PROJECT_DIR: vault });
+			assert.equal(r.code, 0);
+		});
+	});
+
+	test("a missing transcript exits 0 and leaves no backup", () => {
+		withVault((vault, transcript) => {
+			const r = runScript(PRE_COMPACT, payload(join(transcript, "gone")), { CLAUDE_PROJECT_DIR: vault });
+			assert.equal(r.code, 0);
+			const logs = join(vault, "thinking", "session-logs");
+			assert.equal(existsSync(logs) ? readdirSync(logs).length : 0, 0);
+		});
+	});
+});
 
 describe("formatTimestamp", () => {
 	test("pads single digits (YYYYMMDD_HHMMSS)", () => {

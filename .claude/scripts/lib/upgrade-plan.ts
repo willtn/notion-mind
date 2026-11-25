@@ -16,7 +16,7 @@
  * supplies the hash of each file at the release the vault was cloned from.
  */
 
-import { GEMINI_MD, GEMINI_SETTINGS, INSTRUCTION_FILE, RETIRED_INSTRUCTION_FILES } from "./instruction-files.ts";
+import { INSTRUCTION_FILE, RETIRED_INSTRUCTION_FILES } from "./instruction-files.ts";
 
 /** ShardMind's `--json` envelope. */
 export type ShardmindEnvelope<T> =
@@ -114,23 +114,12 @@ export function untouchedRetiredFiles(
  * untouched one may be deleted. A file counts when it already matches the
  * release, or is behind and `--apply-behind` writes it; ahead or a conflict,
  * it may stay the user's own old copy.
- * - CLAUDE.md needs the new AGENTS.md (the old one only points at CLAUDE.md),
- *   and, where the vault has Gemini settings of its own, the new settings too
- *   (old ones send Gemini to GEMINI.md, which also points at CLAUDE.md).
- * - GEMINI.md needs both, and needs the settings even when the vault has none
- *   (shard-only): they arrive only with the later adopt, and until then
- *   Gemini reads GEMINI.md by default.
+ * CLAUDE.md needs the new AGENTS.md: the old one only points at CLAUDE.md.
  */
 export function retiredFileReady(plan: AdoptPlan, report: UpgradeReport): (retired: string) => boolean {
 	const inPlace = (path: string) =>
 		report.behind.includes(path) || plan.files.some((f) => f.path === path && f.classification === "matches");
-	const settings = plan.files.find((f) => f.path === GEMINI_SETTINGS);
-	const vaultHasSettings = settings !== undefined && settings.classification !== "shard-only";
-	return (retired) => {
-		if (!inPlace(INSTRUCTION_FILE)) return false;
-		if (retired === GEMINI_MD) return settings === undefined || inPlace(GEMINI_SETTINGS);
-		return !vaultHasSettings || inPlace(GEMINI_SETTINGS);
-	};
+	return () => inPlace(INSTRUCTION_FILE);
 }
 
 /**
@@ -232,12 +221,8 @@ export function classifyAdopt(plan: AdoptPlan, baseHash: (path: string) => strin
  * files go, in that order. Each is a conflict (both sides changed it) while a
  * retired file leaves (behind or a move); changed by the user on top of the
  * old release, it may still be the old wiring:
- * - AGENTS.md, whose old version only points at CLAUDE.md, when either
- *   retired file is leaving: the new Gemini settings send Gemini to AGENTS.md
- *   too, so an old one leaves both agents with a dangling pointer;
- * - .gemini/settings.json, whose old version names no context file, so
- *   Gemini reads GEMINI.md (which only points at CLAUDE.md), when either is
- *   leaving.
+ * - AGENTS.md, whose old version only points at CLAUDE.md, when a retired
+ *   file is leaving.
  * Ahead never qualifies: ahead means the template did not change the file
  * between the two releases, and the release that retires CLAUDE.md changes
  * both, so an ahead copy is the user's edit of the current one.
@@ -246,21 +231,18 @@ export function settleFirst(r: UpgradeReport): string[] {
 	const leaving = (p: string) => r.behind.includes(p) || r.move.includes(p);
 	const out: string[] = [];
 	if (r.conflicts.includes(INSTRUCTION_FILE) && RETIRED_INSTRUCTION_FILES.some(leaving)) out.push(INSTRUCTION_FILE);
-	if (r.conflicts.includes(GEMINI_SETTINGS) && RETIRED_INSTRUCTION_FILES.some(leaving)) out.push(GEMINI_SETTINGS);
 	return out;
 }
 
 const SETTLE_WHY: Readonly<Record<string, string>> = {
 	[INSTRUCTION_FILE]:
-		"your copy may be the old one, which only points at CLAUDE.md. This update retires CLAUDE.md and GEMINI.md, and the new Gemini settings send Gemini to AGENTS.md too, so an old copy leaves every agent without the vault's conventions. Take the release's AGENTS.md, then re-add your own changes to it (or to `.claude/rules/local.md`).",
-	[GEMINI_SETTINGS]:
-		"your copy may name no context file, so Gemini keeps reading GEMINI.md, which only points at CLAUDE.md. Take the release's version, which sets `context.fileName` to AGENTS.md, then re-add your own settings.",
+		"your copy may be the old one, which only points at CLAUDE.md. This update retires CLAUDE.md, so an old copy leaves every agent without the vault's conventions. Take the release's AGENTS.md, then re-add your own changes to it (or to `.claude/rules/local.md`).",
 };
 
 function settleSection(files: readonly string[]): string {
 	if (files.length === 0) return "";
 	const lines = files.map((p) => `- \`${p}\` conflicts with the release's: ${SETTLE_WHY[p]}`);
-	return `\n### Settle these first\nResolve each to the release's version in the same update, before the retired instruction files go. A managed update deletes an untouched CLAUDE.md or GEMINI.md in that run; an unmanaged clone keeps them until these are settled.\n${lines.join("\n")}\n`;
+	return `\n### Settle these first\nResolve each to the release's version in the same update, before the retired instruction files go. A managed update deletes an untouched CLAUDE.md in that run; an unmanaged clone keeps them until these are settled.\n${lines.join("\n")}\n`;
 }
 
 /** The report as markdown, for the user. Every list in full: a cut list would hide a decision. */
@@ -276,7 +258,7 @@ export function formatUpgradeReport(r: UpgradeReport, from: string, to: string):
 		section("Merged — review", "Changed on both sides; merged without conflict.", r.merged),
 		section(
 			"Move out — retired instruction file",
-			"Claude Code reads CLAUDE.md and skips AGENTS.md while it is here, and Gemini no longer reads GEMINI.md, so anything you added there is lost. Settle the files this report lists first, if any. Then move what you added: from GEMINI.md into `AGENTS.md`; from CLAUDE.md into `.claude/rules/local.md`, or into `AGENTS.md` if every agent needs it. Keep `AGENTS.md` under 23 KB. Then delete the file. If you never edited it, just delete it. Nothing is merged automatically.",
+			"Claude Code reads CLAUDE.md and skips AGENTS.md while it is here, so anything you added there is lost. Settle the files this report lists first, if any. Then move what you added from CLAUDE.md into `.claude/rules/local.md`, or into `AGENTS.md` if every agent needs it. Keep `AGENTS.md` under 23 KB. Then delete the file. If you never edited it, just delete it. Nothing is merged automatically.",
 			r.move,
 		),
 		section("Conflicts — your decision", "Changed on both sides (or a new template file where you already have one).", r.conflicts),

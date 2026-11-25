@@ -5,8 +5,8 @@ import { carriesReport, fromPerson, parseStopReport, ranIn, summaryLine, withLin
 /**
  * obsidian-mind's Claude Code mod (#262).
  *
- * The vault's settings hooks stay the engine: Codex and Gemini run them, and
- * so does Claude Code wherever this mod does not load (an older CLI, an
+ * The vault's settings hooks stay the engine: Claude Code runs them wherever
+ * this mod does not load (an older CLI, an
  * untrusted folder, a session launched in a vault subfolder, a policy that
  * allows only managed mods). This mod changes how their output reaches the
  * session, never what it says: it runs the vault's own scripts and delivers

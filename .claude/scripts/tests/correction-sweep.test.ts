@@ -66,7 +66,7 @@ describe("isHistoricalNote", () => {
 
 	test("a brain note is NOT historical — it is where corrections land", () => {
 		assert.equal(isHistoricalNote("brain/Gotchas.md"), false);
-		assert.equal(isHistoricalNote("reference/QMD.md"), false);
+		assert.equal(isHistoricalNote("reference/Search Index.md"), false);
 	});
 
 	// `date:` is on every note in the vault. Reading it as evidence would
@@ -97,7 +97,7 @@ describe("isHistoricalNote", () => {
 });
 
 describe("classifyCandidate", () => {
-	const AUTH = "reference/QMD.md";
+	const AUTH = "reference/Search Index.md";
 
 	test("the designated single source is AUTHORITATIVE", () => {
 		assert.equal(classifyCandidate(note(AUTH), AUTH), "AUTHORITATIVE");
@@ -121,7 +121,7 @@ describe("classifyCandidate", () => {
 });
 
 describe("planSweep", () => {
-	const AUTH = "reference/QMD.md";
+	const AUTH = "reference/Search Index.md";
 	const candidates = [
 		note(AUTH),
 		note("brain/Gotchas.md"),
