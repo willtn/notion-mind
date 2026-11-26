@@ -95,12 +95,13 @@ interface FolderRule {
 
 const workType = (note: Note): string => (hasTag(note, "decision") ? "Decision" : "Work note");
 const projectOf = (below: readonly string[]): Readonly<Record<string, string>> => (below[0] === undefined ? {} : { project: below[0] });
+const belowArchiveYear = (below: readonly string[]): readonly string[] => (/^\d{4}$/.test(below[0] ?? "") ? below.slice(1) : below);
+const reviewCycleOf = (below: readonly string[]): Readonly<Record<string, string>> => (below[0] === undefined ? {} : { cycle: below[0] });
 
 /** The first rule whose folder holds the note applies, so a longer folder is above a shorter one. */
 const FOLDER_RULES: readonly FolderRule[] = [
 	{ folder: "work/active", database: "work", type: workType, defaults: (below) => ({ status: "active", ...projectOf(below) }) },
-	// The first folder below the archive is the year.
-	{ folder: "work/archive", database: "work", type: workType, defaults: (below) => ({ status: "completed", ...projectOf(/^\d{4}$/.test(below[0] ?? "") ? below.slice(1) : below) }) },
+	{ folder: "work/archive", database: "work", type: workType, defaults: (below) => ({ status: "completed", ...projectOf(belowArchiveYear(below)) }) },
 	{ folder: "work/incidents", database: "work", type: () => "Incident" },
 	{ folder: "work/1-1", database: "work", type: () => "1:1" },
 	{ folder: "work/meetings", database: "work", type: () => "Inbox item" },
@@ -111,8 +112,7 @@ const FOLDER_RULES: readonly FolderRule[] = [
 	{ folder: "perf/competencies", database: "competencies", type: () => null },
 	{ folder: "perf/evidence", database: "perf_docs", type: () => "PR evidence" },
 	{ folder: "perf/brag", database: "perf_docs", type: () => "Brag quarter" },
-	// A folder below `perf/` is a review cycle.
-	{ folder: "perf", database: "perf_docs", type: (note) => (/review brief/i.test(note.title) ? "Review brief" : "Review artifact"), defaults: (below) => (below[0] === undefined ? {} : { cycle: below[0] }) },
+	{ folder: "perf", database: "perf_docs", type: (note) => (/review brief/i.test(note.title) ? "Review brief" : "Review artifact"), defaults: reviewCycleOf },
 	{ folder: "brain", database: "knowledge", type: () => "Brain topic" },
 	{ folder: "reference", database: "knowledge", type: () => "Reference" },
 ];

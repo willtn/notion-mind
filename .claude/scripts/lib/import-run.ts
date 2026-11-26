@@ -17,7 +17,7 @@
 import { createLedger, type CreatedKind } from "../notion-setup.ts";
 import { canonicalContent, composeContent, hookStampArguments, propertyArguments, sameContent } from "../parity/notion-pages.ts";
 import type { PageCheck } from "./import-report.ts";
-import { DIGEST_PROPERTY, IMPORT_PROPERTIES, placeholderRefs, placeVault, planImport, setupPageOf, SOURCE_PATH_PROPERTY, type ImportPlan, type PageRef, type PlannedPage, type Value } from "./import-plan.ts";
+import { DIGEST_PROPERTY, IMPORT_PROPERTIES, placeholderRefs, placeVault, planImport, setupPageOf, SOURCE_PATH_PROPERTY, type ImportPlan, type PageRef, type PlannedPage, type Value, type Values } from "./import-plan.ts";
 import type { Vault } from "./import-source.ts";
 import { NotionError, type NotionClient } from "./notion-client.ts";
 import type { NotionMap } from "./notion-map.ts";
@@ -60,6 +60,9 @@ const CREATE_BATCH = 100;
 const KEY_TRIES = 4;
 
 const text = (value: unknown): string => (typeof value === "string" ? value : "");
+const setValues = (values: Values): Values => Object.fromEntries(Object.entries(values).filter(([, value]) => value !== null && value !== false));
+/** Notion did not accept this one page. Each other failure stops the run, and a rejected page does not stop the pages after it. */
+const isRejectedPage = (error: unknown): error is NotionError => error instanceof NotionError && error.code === "tool_error";
 
 export async function runImport(client: NotionClient, vault: Vault, map: NotionMap, options: ImportOptions): Promise<ImportResult> {
 	const { log } = options;
@@ -160,7 +163,6 @@ export async function runImport(client: NotionClient, vault: Vault, map: NotionM
 				record("row", ref.id, page.note.path);
 			}
 		}
-		// The next run finds a row only by its key in the view. A view that does not return the key would make each run create the rows again.
 		const wanted = pages.map((page) => page.note.path);
 		let absent = wanted;
 		for (let attempt = 0; attempt < KEY_TRIES && absent.length > 0; attempt++) {
@@ -213,8 +215,7 @@ export async function runImport(client: NotionClient, vault: Vault, map: NotionM
 			return;
 		}
 		await writeBody(page, ref.id, isFresh);
-		// A new row has no value to remove, so it gets only the values that the note has.
-		const values = Object.fromEntries(Object.entries(page.values).filter(([, value]) => !isFresh || (value !== null && value !== false)));
+		const values = isFresh ? setValues(page.values) : page.values;
 		const properties = { ...propertyArguments(values, destination.database), [DIGEST_PROPERTY]: page.digest, ...hookStampArguments(new Date()) };
 		await client.call("notion-update-page", { page_id: ref.id, command: "update_properties", properties });
 		if (isFresh) return;
@@ -224,8 +225,7 @@ export async function runImport(client: NotionClient, vault: Vault, map: NotionM
 	await Promise.all(
 		plan.pages.map((page) =>
 			apply(page).catch((error: unknown) => {
-				// A page that Notion rejects must not stop the pages after it. Each other failure stops the run.
-				if (!(error instanceof NotionError) || error.code !== "tool_error") throw error;
+				if (!isRejectedPage(error)) throw error;
 				failed.push({ path: page.note.path, message: error.message });
 				log(`failed ${page.note.path}: ${error.message}`);
 			}),

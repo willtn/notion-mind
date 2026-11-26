@@ -220,7 +220,6 @@ function rowValues(note: SourceNote, destination: RowDestination, links: readonl
 			values[VERBATIM_PROPERTY] = raw === "true";
 			continue;
 		}
-		// A `type` field that names an option of `Type` wins over the type that the folder gives.
 		if (field === "type" && typeProperty?.type === "select" && destination.adopts === undefined) {
 			const option = typeof raw === "string" ? optionNamed(typeProperty.options, raw) : undefined;
 			if (option === undefined) losses.push({ kind: "frontmatter value", line: 1, example: shown });

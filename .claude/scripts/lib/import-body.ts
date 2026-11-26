@@ -155,14 +155,13 @@ export function convertBody(note: Pick<SourceNote, "title" | "body" | "bodyLine"
 	const first = lines.findIndex((line) => line.text.trim() !== "");
 	if (first !== -1 && !lines[first]?.code && lines[first]?.text.trim() === `# ${note.title}`) lines.splice(0, first + 1);
 
-	// The lines that the hard-wrap check of the write hook flags go up to the line above them.
-	const wrapped = new Set(hardWrappedParagraphs(note.text));
+	const continuationLines = new Set(hardWrappedParagraphs(note.text));
 	const joined: Line[] = [];
 	let lastNo = -1;
 	let inJoin = false;
 	for (const line of lines) {
 		const above = joined.at(-1);
-		if (wrapped.has(line.no) && !line.code && above !== undefined && !above.code && lastNo === line.no - 1) {
+		if (continuationLines.has(line.no) && !line.code && above !== undefined && !above.code && lastNo === line.no - 1) {
 			if (!inJoin) lose("hard wrap", above.no, `${above.text} / ${dequoted(line.text)}`);
 			above.text = `${above.text} ${dequoted(line.text).trimStart()}`;
 			inJoin = true;
