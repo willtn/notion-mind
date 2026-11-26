@@ -224,7 +224,11 @@ function scan(rawLines: readonly string[]): ScannedLine[] {
 			const [, fence, language = ""] = FENCE.exec(text) ?? [];
 			if (fence !== undefined) block = { closes: (line) => line.startsWith(fence) && line.replace(/[`~]/g, "") === "", quote };
 			else if (text.trim() === "$$") block = { closes: (line) => line === "$$", quote };
-			if (block !== null) return { text: raw, literal: true, quote, language: fence === undefined ? null : language.trim(), comments: [], onlyComment: false };
+			if (block !== null) {
+				if (fence === undefined) return { text: raw, literal: true, quote, language: null, comments: [], onlyComment: false };
+				const plain = language.trim() === "";
+				return { text: plain ? `${raw.trimEnd()}txt` : raw, literal: true, quote, language: plain ? "txt" : language.trim(), comments: [], onlyComment: false };
+			}
 		}
 		const stripped = withoutComments(raw, inComment);
 		inComment = stripped.open;

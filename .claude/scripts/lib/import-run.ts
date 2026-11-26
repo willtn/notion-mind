@@ -272,6 +272,7 @@ const UNDERSCORE_ITALIC = /(^|[^\w*\\])_([^_\s][^_\n]*?)_(?![\w])/g;
  * as a `<ul>` block, and drops it at the end of a synced block. A link that
  * `plainText` removes is text on both sides. A line in a code block stays
  * as it is, and the language of the block gets the name that Notion returns.
+ * A fence with no language is `txt`, which is what the import sends.
  */
 function storedForm(content: string): string {
 	let openFence: string | null = null;
@@ -286,7 +287,7 @@ function storedForm(content: string): string {
 			}
 			if (fence !== undefined) {
 				openFence = fence;
-				return `${indent}${fence}${storedLanguage(rest.trim())?.name ?? rest}`;
+				return `${indent}${fence}${rest.trim() === "" ? "txt" : (storedLanguage(rest.trim())?.name ?? rest)}`;
 			}
 			if (/^\s*-\s*$/.test(line)) return "";
 			if (!TABLE_ROW.test(line)) return line.replace(UNDERSCORE_ITALIC, "$1<i>$2</i>");

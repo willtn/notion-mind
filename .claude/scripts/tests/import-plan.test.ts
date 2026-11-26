@@ -115,7 +115,7 @@ describe("convertBody: edge cases", () => {
 	const convert = (body: string, fields = "tags: [reference]", resolve: (name: string) => Resolution = resolveAll) => convertBody(parseNote("reference/Note.md", note(fields, body), CHANGED), resolve);
 
 	test("a link in a code span or a code block stays as it is", () => {
-		const { body, losses } = convert("Use `[[Note]]` here.\n\n```txt\n[[Other]] ==x==\n```\n");
+		const { body, losses } = convert("Use `[[Note]]` here.\n\n```\n[[Other]] ==x==\n```\n");
 		assert.equal(body, "Use `[[Note]]` here.\n\n```txt\n[[Other]] ==x==\n```\n");
 		assert.deepEqual(losses, []);
 	});
@@ -141,15 +141,15 @@ describe("convertBody: edge cases", () => {
 	});
 
 	test("a code block in a callout or in a quote stays as it is", () => {
-		const { body, losses } = convert("> [!note] Title\n> ```js\n> const a = `[[Note]]\n>\n>\n>\n> ==b==`; %%c%%\n> ```\n\n> Quote\n>\n> ```txt\n> [[Note]] ^id\n> ```\n");
+		const { body, losses } = convert("> [!note] Title\n> ```js\n> const a = `[[Note]]\n>\n>\n>\n> ==b==`; %%c%%\n> ```\n\n> Quote\n>\n> ```\n> [[Note]] ^id\n> ```\n");
 		assert.equal(body, '<callout icon="📝" color="blue_bg">\nTitle\n\n```js\nconst a = `[[Note]]\n\n\n\n==b==`; %%c%%\n```\n</callout>\n\n> Quote\n>\n> ```txt\n> [[Note]] ^id\n> ```\n');
 		assert.deepEqual(losses, []);
 	});
 
-	test("a code block with no language, or with a language that Notion does not know, is a loss (measured: Notion stores it as javascript)", () => {
-		const { body, losses } = convert("```\na\n```\n\n```dataview\nb\n```\n\n> ```\n> c\n> ```\n\n```JS\nd\n```\n\n```python\ne\n```\n\n```zig\nf\n```\n");
-		assert.equal(body, "```\na\n```\n\n```dataview\nb\n```\n\n> ```\n> c\n> ```\n\n```JS\nd\n```\n\n```python\ne\n```\n\n```zig\nf\n```\n", "the import sends each first line as it is");
-		assert.deepEqual(losses.map((loss) => `${loss.kind} ${loss.line}: ${loss.example}`), ["code language 5: ```", "code language 9: ```dataview", "code language 13: > ```"]);
+	test("a code block with no language is sent as txt and is no loss, and a language that Notion does not know is a loss (measured: Notion stores both as javascript)", () => {
+		const { body, losses } = convert("```\na\n```\n\n> ```\n> b\n> ```\n\n~~~\nc\n~~~\n\n```dataview\nd\n```\n\n```JS\ne\n```\n\n```zig\nf\n```\n");
+		assert.equal(body, "```txt\na\n```\n\n> ```txt\n> b\n> ```\n\n~~~txt\nc\n~~~\n\n```dataview\nd\n```\n\n```JS\ne\n```\n\n```zig\nf\n```\n");
+		assert.deepEqual(losses.map((loss) => `${loss.kind} ${loss.line}: ${loss.example}`), ["code language 17: ```dataview"]);
 	});
 
 	test("a verbatim note keeps each line break", () => {
@@ -206,7 +206,7 @@ describe("convertSection", () => {
 	test("a line of a code block that starts with the fence and has more text does not end the block", () => {
 		const code = "```\n``` not the end\n## Later\n```\n";
 		const section = convertSection(parseNote("x.md", `## Recent Context\n\n${code}\nKept\n\n## Later\n\nOther text\n`, CHANGED), "Recent Context", resolveAll);
-		assert.equal(section?.body, `## Recent Context\n\n${code}\nKept\n`);
+		assert.equal(section?.body, `## Recent Context\n\n${code.replace("```\n", "```txt\n")}\nKept\n`);
 	});
 });
 
