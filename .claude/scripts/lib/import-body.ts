@@ -252,14 +252,14 @@ export function convertBody(note: Pick<SourceNote, "title" | "body" | "bodyLine"
 
 /**
  * One `##` section of `note`, converted, with its heading. `rest` is the
- * first line of text outside the section, or `null` when the section is
- * the only text of the note. A note without the section gives `null`.
+ * first line of text outside the section that is not a title heading, or
+ * `null` when there is none. A note without the section gives `null`.
  */
 export function convertSection(
 	note: Pick<SourceNote, "title" | "body" | "bodyLine" | "text">,
 	heading: string,
 	resolve: (name: string) => Resolution,
-): (ConvertedBody & { readonly rest: string | null }) | null {
+): (ConvertedBody & { readonly rest: { readonly line: number; readonly text: string } | null }) | null {
 	const lines = note.body.split("\n");
 	let fence: string | null = null;
 	const isTopHeading = lines.map((line) => {
@@ -278,7 +278,7 @@ export function convertSection(
 	if (start === -1) return null;
 	const next = isTopHeading.findIndex((top, index) => top && index > start);
 	const end = next === -1 ? lines.length : next;
-	const outside = [...lines.slice(0, start), ...lines.slice(end)].map((line) => line.trim()).find((line) => line !== "" && line !== `# ${note.title}`);
+	const outside = lines.findIndex((line, index) => (index < start || index >= end) && line.trim() !== "" && !/^#\s/.test(line));
 	const converted = convertBody({ ...note, body: lines.slice(start, end).join("\n"), bodyLine: note.bodyLine + start }, resolve);
-	return { ...converted, rest: outside ?? null };
+	return { ...converted, rest: outside === -1 ? null : { line: note.bodyLine + outside, text: (lines[outside] ?? "").trim() } };
 }

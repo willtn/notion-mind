@@ -15,6 +15,7 @@ import { destinationOf, satelliteOf } from "../lib/import-place.ts";
 import { placeholderRefs, placeVault, planImport, SOURCE_PATH_PROPERTY, type ImportPlan, type PlannedPage } from "../lib/import-plan.ts";
 import { lossReport, planReport } from "../lib/import-report.ts";
 import { parseFrontmatter, parseNote, readVault, type Vault } from "../lib/import-source.ts";
+import { A5_BODY } from "../parity/import-vaults.ts";
 import { rmTemp } from "./_helpers.ts";
 
 const CHANGED = new Date("2026-01-05T10:00:30.000Z");
@@ -35,58 +36,13 @@ const urlOf = (path: string): string => `dry-run://${encodeURI(path)}`;
 const idOf = (path: string): string => `dry-run:${path}`;
 const note = (fields: string, body: string): string => `---\n${fields}\n---\n\n${body}`;
 
-/** The source body of part a.5 of the design record, as measured. */
-const A5_BODY = [
-	"# Fixture Work Note",
-	"",
-	"## Context",
-	"",
-	"This note links to [[North Star]], to [[Key Decisions|the decision log]], and to [[Patterns#Error handling]].",
-	"It also links to a block with [[Gotchas#^hook-timeout]].",
-	"",
-	"A paragraph line that the hygiene check calls hard-wrapped",
-	"continues on the next line",
-	"and on one more line.",
-	"",
-	"> [!warning] Footgun",
-	"> A callout with **bold** and `code`.",
-	"",
-	"## What",
-	"",
-	"- [ ] An open task",
-	"- [x] A closed task",
-	"- A bullet with a tag #inline-tag",
-	"- A ==highlight== and a %%hidden comment%%",
-	"",
-	"| Column A | Column B |",
-	"| --- | --- |",
-	"| one | two |",
-	"",
-	"```ts",
-	"const x: number = 1;",
-	"```",
-	"",
-	"```mermaid",
-	"graph TD; A-->B;",
-	"```",
-	"",
-	"A line with a block id. ^fixture-block",
-	"",
-	"![[Patterns]]",
-	"",
-	"## Related",
-	"",
-	"- [[Index]]",
-	"- [[Platform]]",
-	"",
-].join("\n");
 
 const pageTarget = (title: string): Resolution => ({ kind: "page", target: { path: `${title}.md`, title, url: `https://app.notion.com/p/${title.replace(/\W/g, "")}` } });
 const mention = (title: string): string => `<mention url="https://app.notion.com/p/${title.replace(/\W/g, "")}">${title}</mention>`;
 const resolveAll = (name: string): Resolution => pageTarget(name);
 
 describe("convertBody: the constructs of part a.5", () => {
-	const source = parseNote("work/active/Fixture Work Note.md", note("tags: [work-note]", A5_BODY), CHANGED);
+	const source = parseNote("work/active/Construct Fixture.md", note("tags: [work-note]", A5_BODY), CHANGED);
 	const { body, losses, links } = convertBody(source, resolveAll);
 	const kinds = losses.map((loss) => loss.kind);
 
@@ -206,7 +162,7 @@ describe("convertSection", () => {
 	test("gives the section with its heading, and the first line of text outside it", () => {
 		const section = convertSection(memories, "Recent Context", resolveAll);
 		assert.equal(section?.body, `## Recent Context\n\n- Moved to ${mention("Patterns")}\n`);
-		assert.equal(section?.rest, `- [[Patterns]]`);
+		assert.deepEqual(section?.rest, { line: 7, text: "- [[Patterns]]" });
 		assert.deepEqual(section?.links.map((link) => link.target.title), ["Patterns"]);
 	});
 
@@ -414,6 +370,6 @@ describe("planImport", () => {
 		assert.match(places, /\| attachments\/a\.png \| It is not a Markdown note/);
 		const losses = lossReport(plan);
 		assert.match(losses, /\| frontmatter key \| \d+ \| \d+ \| .* \| work\/active\/Billing\/Retry Rules\.md:1: `update: soon` \|/);
-		assert.match(losses, /\| replaced text \| 2 \| 2 \|/);
+		assert.match(losses, /\| replaced text \| 1 \| 1 \| .* \| brain\/Memories\.md:7: `- \[\[Patterns\]\]` \|/, "a title heading outside the section is not a loss");
 	});
 });

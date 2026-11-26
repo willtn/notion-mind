@@ -12,8 +12,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DIGEST_PROPERTY, SOURCE_PATH_PROPERTY } from "../lib/import-plan.ts";
 import { runImport, sectionEdit, verifyImport, type ImportResult } from "../lib/import-run.ts";
-import { parseNote, type Vault } from "../lib/import-source.ts";
+import { parseNote, readVault, type Vault } from "../lib/import-source.ts";
 import { NotionError } from "../lib/notion-client.ts";
+import { writeImportVaults } from "../parity/import-vaults.ts";
 import { isWrite, memoryNotion, type MemoryCall } from "./_import-notion.ts";
 import { rmTemp } from "./_helpers.ts";
 
@@ -223,11 +224,41 @@ describe("runImport", () => {
 	});
 });
 
+describe("the fixture vaults of the proof, in memory", () => {
+	for (const name of ["fixture", "constructs"] as const) {
+		test(`${name}: each page holds its plan, and a second run makes no write`, async () => {
+			const dir = mkdtempSync(join(tmpdir(), "import-vaults-"));
+			try {
+				const vaults = writeImportVaults(dir, new Date("2026-11-26T00:00:00Z"));
+				const notion = memoryNotion();
+				const options = { rootTitle: ROOT, log: () => {}, sleep: async () => {} };
+				const first = await runImport(notion.client, readVault(vaults[name]), notion.map, options);
+				assert.deepEqual(first.failed, []);
+				assert.ok(first.created > 0);
+				const before = notion.calls.length;
+				const second = await runImport(notion.client, readVault(vaults[name]), notion.map, options);
+				assert.deepEqual(counts(second), { created: 0, updated: 0, unchanged: second.plan.pages.length, failed: 0 });
+				assert.deepEqual(writes(notion.calls, before), []);
+				const checks = await verifyImport(notion.client, notion.map, second.plan, second.refs);
+				assert.deepEqual(checks.filter((check) => !check.same).map((check) => [check.path, check.cells]), []);
+			} finally {
+				rmTemp(dir);
+			}
+		});
+	}
+});
+
 describe("sectionEdit", () => {
 	const live = "## Current Focus\n\n<synced-block-reference url=\"x\">\n- a\n</synced-block-reference>\n\n## Open Questions\n\nOld.\n\n<database url=\"y\" inline=\"true\"></database>\n";
 
 	test("replaces the lines of the section only, up to the next block of the setup", () => {
 		assert.deepEqual(sectionEdit(live, "## Open Questions\n\n- New\n", "Open Questions"), { old_str: "## Open Questions\n\nOld.", new_str: "## Open Questions\n\n- New" });
+	});
+
+	test("a section in the forms that Notion stores is the same section (measured on the pages of the setup)", () => {
+		const stored = "## Shifts\n\n<i>What changed?</i>\n\n<ul>\n<li></li>\n</ul>\n\n| Date | Shift |\n| --- | --- |\n|  | Created |\n";
+		assert.equal(sectionEdit(stored, "## Shifts\n\n_What changed?_\n\n-\n\n| Date | Shift |\n|------|-------|\n|      | Created |\n", "Shifts"), null);
+		assert.notEqual(sectionEdit(stored, "## Shifts\n\n_What changed?_\n\n-\n\n| Date | Shift |\n|------|-------|\n|      | Removed |\n", "Shifts"), null);
 	});
 
 	test("makes no edit when the page holds the section, or when the vault has no text for it, and appends a missing section", () => {

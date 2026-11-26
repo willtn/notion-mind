@@ -352,8 +352,9 @@ export function planImport(vault: Vault, places: readonly Placement[], refs: Ref
 	const sectionOf = ({ note, destination }: SectionPlace): { readonly body: string; readonly losses: PlannedLoss[] } => {
 		const converted = convertSection(note, destination.section, resolve);
 		const losses: PlannedLoss[] = (converted?.losses ?? []).map((loss) => ({ ...loss, path: note.path }));
-		const rest = converted === null ? note.body.split("\n").find((line) => line.trim() !== "" && line.trim() !== `# ${note.title}`) : converted.rest;
-		if (rest !== undefined && rest !== null) losses.push({ kind: "replaced text", line: note.bodyLine, example: rest.trim(), path: note.path });
+		const restIndex = note.body.split("\n").findIndex((line) => line.trim() !== "" && !/^#\s/.test(line));
+		const rest = converted === null ? (restIndex === -1 ? null : { line: note.bodyLine + restIndex, text: (note.body.split("\n")[restIndex] ?? "").trim() }) : converted.rest;
+		if (rest !== null) losses.push({ kind: "replaced text", line: rest.line, example: rest.text, path: note.path });
 		return { body: converted?.body ?? "", losses };
 	};
 
