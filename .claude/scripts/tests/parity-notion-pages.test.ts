@@ -318,7 +318,7 @@ describe("wantedOptions", () => {
 
 describe("notionBody", () => {
 	test("a link to a fixture note is a mention of its page, and a link to no note stays as text", () => {
-		assert.equal(notionBody(note("Ticket Links"), pages), `# Ticket Links\n\nThe work is in [[PROJ-123]] and [[OPS-9]]. See <mention url="${pageOf("Patterns").url}"/>.\n`);
+		assert.equal(notionBody(note("Ticket Links"), pages), `# Ticket Links\n\nThe work is in [[PROJ-123]] and [[OPS-9]]. See <mention url="${pageOf("Patterns").url}">Patterns</mention>.\n`);
 	});
 });
 

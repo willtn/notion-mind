@@ -12,9 +12,9 @@ import { passOf, type Pass } from "./findings.ts";
 import { FIXTURE } from "./fixture.ts";
 import { markdownForm } from "./markdown-form.ts";
 import { runScenarios, withReferenceWorktree } from "./runner.ts";
-import type { Finding, FixtureSpec } from "./spec.ts";
+import type { Finding, FixtureSpec, HookForm } from "./spec.ts";
 
-type Edit = { readonly file: string; readonly find: string; readonly replace: string };
+export type Edit = { readonly file: string; readonly find: string; readonly replace: string };
 
 export type Mutation = {
 	readonly id: string;
@@ -413,17 +413,29 @@ function mutatedCopy(scriptsDir: string, dir: string, mutation: Mutation): strin
 /** The scenarios of the fixture that one of `ids` names. */
 const only = (ids: readonly string[]): FixtureSpec => ({ ...FIXTURE, scenarios: FIXTURE.scenarios.filter(({ id }) => ids.includes(id)) });
 
-/** Compare the reference hooks with a mutated copy, for each mutation, on the scenarios that the mutation names. */
-export function runMutations(mutations: readonly Mutation[] = MUTATIONS): MutationResult[] {
+/** The hooks of the port, and the form that runs a copy of them. A mutation run with a port edits that copy and not the reference hooks. */
+export type PortRun = {
+	readonly scriptsDir: string;
+	readonly form: (scriptsDir: string, spec: FixtureSpec) => HookForm;
+};
+
+/**
+ * Compare the reference hooks on the Markdown form with a mutated copy,
+ * for each mutation, on the scenarios that the mutation names. The copy is
+ * a copy of the reference hooks on the Markdown form, or a copy of the
+ * hooks of `port` on the form of `port`.
+ */
+export function runMutations(mutations: readonly Mutation[] = MUTATIONS, port?: PortRun): MutationResult[] {
 	const now = new Date();
 	return withReferenceWorktree(({ scriptsDir, workDir }) => {
-		const pass = (spec: FixtureSpec, hooks: string): Pass =>
-			passOf(runScenarios(spec, workDir, markdownForm(spec, { scriptsDir: hooks, now })), spec);
-		const original = pass(only(mutations.flatMap(({ scenarios }) => scenarios)), scriptsDir);
+		const pass = (spec: FixtureSpec, form: HookForm): Pass => passOf(runScenarios(spec, workDir, form), spec);
+		const markdown = (spec: FixtureSpec, hooks: string): HookForm => markdownForm(spec, { scriptsDir: hooks, now });
+		const allScenarios = only(mutations.flatMap(({ scenarios }) => scenarios));
+		const original = pass(allScenarios, markdown(allScenarios, scriptsDir));
 		return mutations.map((mutation, index): MutationResult => {
 			const spec = only(mutation.scenarios);
-			const mutated = mutatedCopy(scriptsDir, join(workDir, `mutated-${index}`), mutation);
-			const { differences } = comparePasses(original, pass(spec, mutated), spec);
+			const mutated = mutatedCopy(port?.scriptsDir ?? scriptsDir, join(workDir, `mutated-${index}`), mutation);
+			const { differences } = comparePasses(original, pass(spec, port === undefined ? markdown(spec, mutated) : port.form(mutated, spec)), spec);
 			return {
 				mutation,
 				rows: [...new Set(differences.map(({ row }) => row))].sort(),

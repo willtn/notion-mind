@@ -97,6 +97,8 @@ const names: readonly ObjectName[] = [
 	["work/active/<Topic>/", "{a topic group}"],
 	["Missing `{field}` in frontmatter", "{missing field}"],
 	["Missing YAML frontmatter", "{no properties}"],
+	["No [[wikilinks]] found", "{no links}"],
+	["`verbatim: true` in frontmatter", "{verbatim mark}"],
 	["Vault Hygiene", "{hygiene}"],
 	["Vault hygiene", "{hygiene}"],
 	["Vault File Listing", "{listing}"],

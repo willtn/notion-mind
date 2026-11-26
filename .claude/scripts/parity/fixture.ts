@@ -374,6 +374,18 @@ const notes: readonly FixtureNote[] = [
 		},
 		301,
 	),
+	// The same note as "No Links", with its title heading moved into the title as Notion does for a created page.
+	sized(
+		{
+			title: "Moved Title No Links",
+			type: "Loose page",
+			fields: {},
+			body: "# Moved Title No Links\n",
+			changedDaysAgo: 1,
+			titleMoved: true,
+		},
+		301,
+	),
 	sized(
 		{
 			title: "Short No Links",
@@ -660,6 +672,7 @@ const INBOX = [
 const LISTED = [
 	"Home",
 	"Loose Draft",
+	"Moved Title No Links",
 	"North Star",
 	"Patterns",
 	"Gotchas",
@@ -907,6 +920,17 @@ const scenarios: readonly Scenario[] = [
 			{ row: "VW-17", detail: WRITE_CONTEXT },
 			{ row: "VW-13", note: "No Links", count: 1 },
 			{ row: "VW-10", note: "No Links" },
+		],
+	},
+	{
+		id: "write-no-links-moved-title",
+		rows: ["VW-10"],
+		steps: [write("Moved Title No Links")],
+		expect: [
+			{ row: "VW-17", detail: WRITE_CONTEXT },
+			{ row: "VW-13", note: "Moved Title No Links", count: 2 },
+			{ row: "VW-07", note: "Moved Title No Links" },
+			{ row: "VW-10", note: "Moved Title No Links" },
 		],
 	},
 	{

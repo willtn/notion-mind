@@ -200,13 +200,13 @@ describe("hook config — Claude commands find the vault root from a subfolder (
 	// The guard command has one more part after the script: what it prints when node fails.
 	const scriptOf = (command: string) => /\/\.claude\/scripts\/([a-z-]+\.ts)"(?: \|\| printf .+)?$/.exec(command)?.[1] ?? "";
 
-	test("every command walks up with the same text: one rule, six copies that cannot drift", () => {
+	test("every command walks up with the same text: one rule, seven copies that cannot drift", () => {
 		// JSON cannot share a snippet, so each command carries the walk-up. Each
 		// copy is also run below, but only this keeps one copy from quietly
 		// losing a branch (the fallback, say) that the run cases happen not to reach.
 		const walkOf = (command: string) => command.slice(0, command.indexOf("/.claude/scripts/"));
 		const walks = new Set(commands.map(({ command }) => walkOf(command)));
-		assert.equal(commands.length, 6);
+		assert.equal(commands.length, 7);
 		assert.equal(walks.size, 1, `the walk-up differs between commands:\n${[...walks].join("\n")}`);
 		assert.match([...walks][0]!, /vault-manifest\.json/);
 	});
@@ -312,11 +312,13 @@ describe("hook config — SessionStart fires for every source the agent document
 });
 
 describe("hook config — write validation fires on each agent's own file tools (#353)", () => {
-	// validate-write runs after a file write, and a matcher that misses the
-	// agent's file tool names never fires.
+	// validate-write runs after a file write and after a Notion write, and a
+	// matcher that misses the tool name never fires. A Notion write is a Bash
+	// call. A failed one comes as a different event.
 	const agents: ReadonlyArray<{ readonly label: string; readonly path: string; readonly event: string; readonly tools: readonly string[] }> = [
 		// Claude Code: Write and Edit (hooks reference).
-		{ label: "Claude Code", path: ".claude/settings.json", event: "PostToolUse", tools: ["Write", "Edit"] },
+		{ label: "Claude Code", path: ".claude/settings.json", event: "PostToolUse", tools: ["Write", "Edit", "Bash"] },
+		{ label: "Claude Code, failed call", path: ".claude/settings.json", event: "PostToolUseFailure", tools: ["Bash"] },
 	];
 
 	for (const agent of agents) {
@@ -326,8 +328,15 @@ describe("hook config — write validation fires on each agent's own file tools 
 			for (const tool of agent.tools) {
 				assert.ok(firesOn(entries, tool, regex), `no matcher fires on ${tool}`);
 			}
+			const hooks = entries.flatMap((entry) => entry.hooks ?? []) as ReadonlyArray<{ readonly timeout?: number }>;
+			assert.deepEqual(hooks.map((hook) => hook.timeout), [15]);
 		});
 	}
+
+	test("Claude Code: the failed-call entry does not fire on a file tool, which has no Notion write to repeat", () => {
+		const entries = entriesRunning(".claude/settings.json", "PostToolUseFailure", "validate-write.ts");
+		assert.equal(firesOn(entries, "Write", regex), false);
+	});
 });
 
 describe("hook config — the Notion write guard runs before each Bash call", () => {

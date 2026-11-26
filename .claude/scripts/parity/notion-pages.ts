@@ -265,14 +265,23 @@ export function wantedOptions(notes: readonly FixtureNote[], database: DatabaseK
 
 /**
  * The body of a note as Notion-flavored Markdown. A link to a fixture note
- * is a mention of its page. A link to no fixture note stays as text, as a
+ * is a mention of its page with the title as its text, which is the form
+ * that a fetch returns. A link to no fixture note stays as text, as a
  * ticket ID in a link does in the vault.
  */
 export function notionBody(note: FixtureNote, pages: Pages): string {
 	return note.body.replace(WIKILINK, (text, title: string) => {
 		const page = pages.get(title.trim());
-		return page === undefined ? text : `<mention url="${page.url}"/>`;
+		return page === undefined ? text : `<mention url="${page.url}">${title.trim()}</mention>`;
 	});
+}
+
+/** The body that the page of `note` holds after a write of `notionBody(note)`: for a note with `titleMoved`, without its title heading and the blank line below it. */
+export function storedBody(note: FixtureNote, pages: Pages): string {
+	const body = notionBody(note, pages);
+	if (note.titleMoved !== true) return body;
+	const heading = `# ${note.title}\n`;
+	return body.startsWith(heading) ? body.slice(heading.length).replace(/^\n/, "") : body;
 }
 
 const SYNCED_REFERENCE = /<synced-block-reference url="[^"]*"[^>]*>[\s\S]*?<\/synced-block-reference>/g;

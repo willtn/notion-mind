@@ -126,7 +126,7 @@ const WORK_TYPES = ["Work note", "Decision", "Incident", "1:1", "Inbox item", "T
  * can also have the status "active", but it was in `work/incidents/`, so the
  * views that replace the top level of `work/active/` do not return it.
  */
-const LOOSE_ACTIVE_TYPES = ["Work note", "Decision"] as const;
+export const LOOSE_ACTIVE_TYPES = ["Work note", "Decision"] as const;
 const PERF_TYPES = ["PR evidence", "Review brief", "Review artifact", "Brag quarter"] as const;
 const KNOWLEDGE_TYPES = ["Brain topic", "Reference", "Domain note", "Event-log satellite", "Archive note"] as const;
 const STATUSES = ["active", "completed", "archived", "proposed", "accepted", "deprecated", "draft", "inbox"] as const;
