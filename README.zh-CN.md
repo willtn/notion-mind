@@ -346,7 +346,7 @@ node --experimental-strip-types parity/run-mutations.ts --notion --hook validate
 
 - **守卫假定智能体是配合的。** 故意隐藏 `notion` 或 `mcporter` 字样的命令，或包含调用的脚本文件，可以通过守卫。`Hook stamp` 审计会在事后标记这类写入。运行超过 5 秒超时的守卫会让调用继续执行。（[#6](https://github.com/willtn/notion-mind/pull/6)）
 - **同时包含 `mcporter` 和 `notion` 的文本是会被拒绝的命令。** 把提交信息或 PR 正文写到文件中，再用 `git commit -F` 或 `gh pr create --body-file`。（[#6](https://github.com/willtn/notion-mind/pull/6)）
-- **Notion 无法区分客户端。** 来自其他 MCP 客户端的写入看起来和经过钩子的写入一样，只有 `Hook stamp` 视图能显示它。见设计记录 (f) 部分的选择 5。
+- **Notion 无法区分客户端。** 来自其他 MCP 客户端的写入看起来和经过钩子的写入一样，只有 `Hook stamp` 视图能显示它。（[#5](https://github.com/willtn/notion-mind/pull/5)、[#8](https://github.com/willtn/notion-mind/pull/8)）
 - **select 在写入时不接受新选项。** `Quarter`、`Project`、`Cycle` 和级别 select 开始时是空的。第一次带新选项的写入会失败，修复钩子添加该选项，智能体再次运行命令。（[#5](https://github.com/willtn/notion-mind/pull/5)、[#8](https://github.com/willtn/notion-mind/pull/8)）
 - **空属性和不存在的属性是同一种状态。** 缺失字段检查（VW-08）在属性为空时触发。（[#8](https://github.com/willtn/notion-mind/pull/8)）
 - **页面提及按标题计算。** 大小和链接检查把带名称的提及读作 `[[Title]]`。没有标题的提及会多出约 60 字节。关系不增加文本。（[#8](https://github.com/willtn/notion-mind/pull/8)）

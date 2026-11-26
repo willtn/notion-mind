@@ -346,7 +346,7 @@ Obsidian テンプレートのボールトをワークスペースに移すイ�
 
 - **ガードは協力的なエージェントを前提にします。** `notion` や `mcporter` という語を意図的に隠したコマンドや、呼び出しを持つスクリプトファイルはガードを通ります。そのような書き込みは `Hook stamp` の監査が後から指摘します。5 秒のタイムアウトを超えたガードは呼び出しを通します。([#6](https://github.com/willtn/notion-mind/pull/6))
 - **`mcporter` と `notion` の両方を含むテキストは拒否されるコマンドです。** コミットメッセージや PR の本文はファイルに書き、`git commit -F` か `gh pr create --body-file` を使います。([#6](https://github.com/willtn/notion-mind/pull/6))
-- **Notion はクライアントを区別できません。** 他の MCP クライアントからの書き込みは、フック経由の書き込みと同じに見えます。`Hook stamp` のビューだけがそれを示します。設計記録のパート (f) の選択 5 を参照してください。
+- **Notion はクライアントを区別できません。** 他の MCP クライアントからの書き込みは、フック経由の書き込みと同じに見えます。`Hook stamp` のビューだけがそれを示します。([#5](https://github.com/willtn/notion-mind/pull/5)、[#8](https://github.com/willtn/notion-mind/pull/8))
 - **select は書き込み時に新しい選択肢を受け付けません。** `Quarter`、`Project`、`Cycle`、レベルの select は空で始まります。新しい選択肢を含む最初の書き込みは失敗し、修復フックがそれを追加し、エージェントがコマンドを再実行します。([#5](https://github.com/willtn/notion-mind/pull/5)、[#8](https://github.com/willtn/notion-mind/pull/8))
 - **空のプロパティと存在しないプロパティは同じ状態です。** 欠けたフィールドの検査 (VW-08) は空のプロパティで発火します。([#8](https://github.com/willtn/notion-mind/pull/8))
 - **ページメンションはタイトルとして数えます。** サイズとリンクの検査は、名前付きのメンションを `[[Title]]` として読みます。タイトルのないメンションは約 60 バイト増えます。リレーションはテキストを増やしません。([#8](https://github.com/willtn/notion-mind/pull/8))

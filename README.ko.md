@@ -346,7 +346,7 @@ Obsidian 템플릿의 볼트를 워크스페이스로 옮기는 가져오기 도
 
 - **가드는 협조적인 에이전트를 전제로 합니다.** `notion`이나 `mcporter`라는 단어를 일부러 숨긴 명령, 또는 호출을 담은 스크립트 파일은 가드를 통과합니다. 그런 쓰기는 `Hook stamp` 감사가 나중에 지적합니다. 5초 제한 시간을 넘긴 가드는 호출을 실행되게 둡니다. ([#6](https://github.com/willtn/notion-mind/pull/6))
 - **`mcporter`와 `notion`을 모두 담은 텍스트는 거부되는 명령입니다.** 커밋 메시지나 PR 본문은 파일에 쓰고 `git commit -F`나 `gh pr create --body-file`을 사용하세요. ([#6](https://github.com/willtn/notion-mind/pull/6))
-- **Notion은 클라이언트를 구별하지 못합니다.** 다른 MCP 클라이언트의 쓰기는 훅을 거친 쓰기와 똑같이 보입니다. `Hook stamp` 뷰만 그것을 보여 줍니다. 설계 기록 파트 (f)의 선택 5를 참고하세요.
+- **Notion은 클라이언트를 구별하지 못합니다.** 다른 MCP 클라이언트의 쓰기는 훅을 거친 쓰기와 똑같이 보입니다. `Hook stamp` 뷰만 그것을 보여 줍니다. ([#5](https://github.com/willtn/notion-mind/pull/5), [#8](https://github.com/willtn/notion-mind/pull/8))
 - **select는 쓰기에서 새 옵션을 받지 않습니다.** `Quarter`, `Project`, `Cycle`, 레벨 select는 비어 있는 상태로 시작합니다. 새 옵션이 있는 첫 쓰기는 실패하고, 복구 훅이 옵션을 추가하며, 에이전트가 명령을 다시 실행합니다. ([#5](https://github.com/willtn/notion-mind/pull/5), [#8](https://github.com/willtn/notion-mind/pull/8))
 - **빈 속성과 없는 속성은 같은 상태입니다.** 빠진 필드 검사(VW-08)는 빈 속성에서 발동합니다. ([#8](https://github.com/willtn/notion-mind/pull/8))
 - **페이지 멘션은 제목으로 셉니다.** 크기와 링크 검사는 이름 있는 멘션을 `[[Title]]`로 읽습니다. 제목 없는 멘션은 약 60바이트를 더합니다. 관계는 텍스트를 더하지 않습니다. ([#8](https://github.com/willtn/notion-mind/pull/8))

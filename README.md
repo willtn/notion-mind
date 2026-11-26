@@ -8,7 +8,7 @@
 
 [![Claude Code](https://img.shields.io/badge/claude%20code-writes%20%2B%20hooks-D97706)](https://docs.anthropic.com/en/docs/claude-code)
 [![Notion](https://img.shields.io/badge/notion-the%20only%20note%20store-000000)](https://www.notion.com)
-[![mcporter](https://img.shields.io/badge/mcporter-notion%20mcp-4B5563)](https://github.com/steipete/mcporter)
+[![mcporter](https://img.shields.io/badge/mcporter-notion%20mcp-4B5563)](https://github.com/openclaw/mcporter)
 [![Node](https://img.shields.io/badge/node-22.6%2B-339933)](https://nodejs.org)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
@@ -92,7 +92,7 @@ You: "wrap up"
 
 - **Claude Code**: the only client that writes. The mod needs 2.1.287 or later.
 - **Node.js 22.6 or later**: the hooks run TypeScript with `--experimental-strip-types`. No build step, no npm dependency at run time.
-- **[mcporter](https://github.com/steipete/mcporter)**: the hooks and the agent reach Notion through it.
+- **[mcporter](https://github.com/openclaw/mcporter)**: the hooks and the agent reach Notion through it.
 - **A Notion workspace** that you can log in to through Notion MCP.
 
 ### 📦 Install
@@ -100,7 +100,7 @@ You: "wrap up"
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com/breferrari/obsidian-mind.git
+   git clone https://github.com/willtn/notion-mind.git obsidian-mind
    cd obsidian-mind
    ```
 
