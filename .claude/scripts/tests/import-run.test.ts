@@ -112,6 +112,25 @@ describe("runImport", () => {
 		assert.deepEqual(writes(notion.calls, before), []);
 	});
 
+	test("a code block keeps each blank line in Notion and gets the language name of Notion, and a second run makes no write (measured)", async () => {
+		const notion = memoryNotion();
+		const code = (language: string): string => `\`\`\`${language}\nconst value = \`first\n\n\nlast\`;\n\`\`\`\n\n\`\`\`\nplain\n\`\`\``;
+		const files = {
+			...FILES,
+			"reference/Runbook.md": note("tags: [reference]", `Run it twice.\n\n\n\n${code("js")}\n`),
+			"brain/Memories.md": note("tags: [brain]", `# Memories\n\n## Recent Context\n\n- Moved to Notion\n\n\n\n${code("js")}\n`),
+		};
+		const stored = code("javascript").replace(/```\nplain/, "```javascript\nplain");
+		await run(notion, files);
+		assert.equal(notion.row("Runbook").content, `Run it twice.\n\n${stored}\n`);
+		assert.ok(notion.setupPages.north_star.content.endsWith(`## Recent Context\n\n- Moved to Notion\n\n${stored}\n`), notion.setupPages.north_star.content);
+		const before = notion.calls.length;
+		const second = await run(notion, files);
+		assert.deepEqual(counts(second), { created: 0, updated: 0, unchanged: PLANNED, failed: 0 });
+		assert.deepEqual(writes(notion.calls, before), []);
+		assert.deepEqual((await verifyImport(notion.client, notion.map, second.plan, second.refs)).filter((check) => !check.same), []);
+	});
+
 	test("a second run makes no write and reports zero new pages", async () => {
 		const notion = memoryNotion();
 		await run(notion);

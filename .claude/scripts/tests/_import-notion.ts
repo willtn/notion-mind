@@ -37,6 +37,9 @@ const REFERENCE = /(<synced-block-reference url="[^"]+">)\n?([\s\S]*?)\n?(<\/syn
 
 export const isWrite = (call: MemoryCall): boolean => WRITE_TOOLS.includes(call.tool);
 
+/** The measured form of the first line of a code block: Notion returns its own name for the language, and `javascript` for no language. */
+const STORED_FENCE: Readonly<Record<string, string>> = { "```": "```javascript", "```js": "```javascript", "```text": "```txt" };
+
 /** The measured form of a text property: `reference/Runbook.md` is stored as `reference/[Runbook.md](http://Runbook.md)`. */
 export const autolink = (value: string): string => value.replace(/(^|[\s/])([A-Za-z0-9][\w-]*\.md)(?=$|\s)/g, "$1[$2](http://$2)");
 
@@ -100,7 +103,7 @@ export function memoryNotion(options: { readonly rootTitle?: string; readonly pa
 		for (const line of content.replace(/\n-\n<\/synced-block>/g, "\n</synced-block>").split("\n")) {
 			if (line.startsWith("```")) fence = !fence;
 			if (fence || line.startsWith("```")) {
-				out.push(line);
+				out.push(fence ? (STORED_FENCE[line] ?? line) : line);
 				proseAbove = false;
 				continue;
 			}
@@ -117,7 +120,7 @@ export function memoryNotion(options: { readonly rootTitle?: string; readonly pa
 				.replace(/`([^`]+)`/g, "<code>$1</code>");
 			const prose = text !== "" && !BLOCK.test(text);
 			if (prose && proseAbove) out[out.length - 1] += `<br />${text}`;
-			else out.push(text);
+			else if (text !== "" || out.at(-1) !== "") out.push(text);
 			proseAbove = prose;
 		}
 		return out.join("\n");

@@ -16,6 +16,7 @@
 
 import { createLedger, type CreatedKind } from "../notion-setup.ts";
 import { canonicalContent, composeContent, hookStampArguments, propertyArguments, sameContent } from "../parity/notion-pages.ts";
+import { storedLanguage } from "./code-language.ts";
 import type { PageCheck } from "./import-report.ts";
 import { DIGEST_PROPERTY, IMPORT_PROPERTIES, placeholderRefs, placeVault, planImport, setupPageOf, SOURCE_PATH_PROPERTY, type ImportPlan, type PageRef, type PlannedPage, type Value, type Values } from "./import-plan.ts";
 import type { Vault } from "./import-source.ts";
@@ -260,6 +261,7 @@ export async function runImport(client: NotionClient, vault: Vault, map: NotionM
 }
 
 const TABLE_ROW = /^\s*\|.*\|\s*$/;
+const FENCE_LINE = /^(\s*)(`{3,}|~{3,})(.*)$/;
 const UNDERSCORE_ITALIC = /(^|[^\w*\\])_([^_\s][^_\n]*?)_(?![\w])/g;
 
 /**
@@ -269,16 +271,23 @@ const UNDERSCORE_ITALIC = /(^|[^\w*\\])_([^_\s][^_\n]*?)_(?![\w])/g;
  * cell as `---`. An empty bullet is no text on both sides: Notion stores it
  * as a `<ul>` block, and drops it at the end of a synced block. A link that
  * `plainText` removes is text on both sides. A line in a code block stays
- * as it is.
+ * as it is, and the language of the block gets the name that Notion returns.
  */
 function storedForm(content: string): string {
-	let fence = false;
+	let openFence: string | null = null;
 	return plainText(content)
 		.replace(/<ul>\n<li><\/li>\n<\/ul>/g, "")
 		.split("\n")
 		.map((line) => {
-			if (/^\s*(```|~~~)/.test(line)) fence = !fence;
-			if (fence) return line;
+			const [, indent = "", fence, rest = ""] = FENCE_LINE.exec(line) ?? [];
+			if (openFence !== null) {
+				if (fence?.startsWith(openFence) && rest.trim() === "") openFence = null;
+				return line;
+			}
+			if (fence !== undefined) {
+				openFence = fence;
+				return `${indent}${fence}${storedLanguage(rest.trim())?.name ?? rest}`;
+			}
 			if (/^\s*-\s*$/.test(line)) return "";
 			if (!TABLE_ROW.test(line)) return line.replace(UNDERSCORE_ITALIC, "$1<i>$2</i>");
 			const cells = line.trim().slice(1, -1).split("|").map((cell) => cell.trim());

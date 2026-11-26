@@ -115,9 +115,41 @@ describe("convertBody: edge cases", () => {
 	const convert = (body: string, fields = "tags: [reference]", resolve: (name: string) => Resolution = resolveAll) => convertBody(parseNote("reference/Note.md", note(fields, body), CHANGED), resolve);
 
 	test("a link in a code span or a code block stays as it is", () => {
-		const { body, losses } = convert("Use `[[Note]]` here.\n\n```\n[[Other]] ==x==\n```\n");
-		assert.equal(body, "Use `[[Note]]` here.\n\n```\n[[Other]] ==x==\n```\n");
+		const { body, losses } = convert("Use `[[Note]]` here.\n\n```txt\n[[Other]] ==x==\n```\n");
+		assert.equal(body, "Use `[[Note]]` here.\n\n```txt\n[[Other]] ==x==\n```\n");
 		assert.deepEqual(losses, []);
+	});
+
+	test("a code block keeps each blank line, and a gap between two paragraphs becomes one blank line (measured)", () => {
+		const code = "```js\nconst value = `first\n\n\nlast`;\nvalue;\n```\n";
+		const { body, losses } = convert(`Above\n\n\n\nBelow\n\n${code}`);
+		assert.equal(body, `Above\n\nBelow\n\n${code}`);
+		assert.deepEqual(losses, []);
+	});
+
+	test("a code span stays as it is, and a %% in it starts no comment", () => {
+		const { body, losses } = convert("Use `a  %%b%% ==c== [[d]]` and ``e ` [[f]]`` here.\n\nPrint `100%%` now.\n\nThen see [[Note]].\n");
+		assert.equal(body, `Use \`a  %%b%% ==c== [[d]]\` and \`\`e \` [[f]]\`\` here.\n\nPrint \`100%%\` now.\n\nThen see ${mention("Note")}.\n`);
+		assert.deepEqual(losses, []);
+	});
+
+	test("a math block stays as it is", () => {
+		const math = "$$\nx ^2\n\n\n\n[[a]] ==b== %%c%%\n$$\n";
+		const { body, losses } = convert(`Before\n\n${math}`);
+		assert.equal(body, `Before\n\n${math}`);
+		assert.deepEqual(losses, []);
+	});
+
+	test("a code block in a callout or in a quote stays as it is", () => {
+		const { body, losses } = convert("> [!note] Title\n> ```js\n> const a = `[[Note]]\n>\n>\n>\n> ==b==`; %%c%%\n> ```\n\n> Quote\n>\n> ```txt\n> [[Note]] ^id\n> ```\n");
+		assert.equal(body, '<callout icon="📝" color="blue_bg">\nTitle\n\n```js\nconst a = `[[Note]]\n\n\n\n==b==`; %%c%%\n```\n</callout>\n\n> Quote\n>\n> ```txt\n> [[Note]] ^id\n> ```\n');
+		assert.deepEqual(losses, []);
+	});
+
+	test("a code block with no language, or with a language that Notion does not know, is a loss (measured: Notion stores it as javascript)", () => {
+		const { body, losses } = convert("```\na\n```\n\n```dataview\nb\n```\n\n> ```\n> c\n> ```\n\n```JS\nd\n```\n\n```python\ne\n```\n\n```zig\nf\n```\n");
+		assert.equal(body, "```\na\n```\n\n```dataview\nb\n```\n\n> ```\n> c\n> ```\n\n```JS\nd\n```\n\n```python\ne\n```\n\n```zig\nf\n```\n", "the import sends each first line as it is");
+		assert.deepEqual(losses.map((loss) => `${loss.kind} ${loss.line}: ${loss.example}`), ["code language 5: ```", "code language 9: ```dataview", "code language 13: > ```"]);
 	});
 
 	test("a verbatim note keeps each line break", () => {
@@ -169,6 +201,12 @@ describe("convertSection", () => {
 	test("a heading in a code block is not the section, and a note without the section gives null", () => {
 		assert.equal(convertSection(memories, "Missing", resolveAll), null);
 		assert.equal(convertSection(parseNote("x.md", "```\n## Recent Context\n```\n", CHANGED), "Recent Context", resolveAll), null);
+	});
+
+	test("a line of a code block that starts with the fence and has more text does not end the block", () => {
+		const code = "```\n``` not the end\n## Later\n```\n";
+		const section = convertSection(parseNote("x.md", `## Recent Context\n\n${code}\nKept\n\n## Later\n\nOther text\n`, CHANGED), "Recent Context", resolveAll);
+		assert.equal(section?.body, `## Recent Context\n\n${code}\nKept\n`);
 	});
 });
 
