@@ -81,7 +81,7 @@ jobs:
           # Create the tag LOCALLY (not pushed) before generate-changelog runs.
           # The script derives the previous release as the second-newest tag,
           # which assumes the current release tag exists; without it prevTag
-          # would be off by one (wrong changelog range + fingerprint diff). The
+          # would be off by one (wrong changelog range). The
           # "Tag the release commit" step later moves this onto the bump commit
           # and force-pushes it. The push:tags trigger already has its tag
           # locally from checkout, so only the dispatch path needs this.
