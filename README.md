@@ -6,23 +6,21 @@
 
 <h1 align="center">Obsidian Mind</h1>
 
-[![Claude Code](https://img.shields.io/badge/claude%20code-full%20support-D97706)](https://docs.anthropic.com/en/docs/claude-code)
-[![Codex CLI](https://img.shields.io/badge/codex%20cli-hooks%20%2B%20commands-10A37F)](https://github.com/openai/codex)
-[![Gemini CLI](https://img.shields.io/badge/gemini%20cli-hooks%20%2B%20commands-4285F4)](https://github.com/google-gemini/gemini-cli)
-[![Obsidian](https://img.shields.io/badge/obsidian-1.12%2B-7C3AED)](https://obsidian.md)
-[![Obsidian CLI](https://img.shields.io/badge/obsidian--cli-integrated-E6E6E6)](https://github.com/kepano/obsidian-cli)
-[![Obsidian Skills](https://img.shields.io/badge/obsidian--skills-integrated-8B5CF6)](https://github.com/kepano/obsidian-skills)
-[![QMD](https://img.shields.io/badge/qmd-semantic%20search-FF6B6B)](https://github.com/tobi/qmd)
-[![Node](https://img.shields.io/badge/node-22%2B-339933)](https://nodejs.org)
+[![Claude Code](https://img.shields.io/badge/claude%20code-writes%20%2B%20hooks-D97706)](https://docs.anthropic.com/en/docs/claude-code)
+[![Notion](https://img.shields.io/badge/notion-the%20only%20note%20store-000000)](https://www.notion.com)
+[![mcporter](https://img.shields.io/badge/mcporter-notion%20mcp-4B5563)](https://github.com/steipete/mcporter)
+[![Node](https://img.shields.io/badge/node-22.6%2B-339933)](https://nodejs.org)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-> **An Obsidian vault that gives AI coding agents persistent memory.** Built for Claude Code, with working hooks for Codex CLI and Gemini CLI. Start a session, talk about your day, and the agent handles the rest — notes, links, indexes, performance tracking. Every conversation builds on the last.
+> **A Notion workspace that gives AI coding agents persistent memory.** Claude Code writes to it through hooks that check every write. Any client reads it through Notion MCP. Start a session, talk about your day, and the agent handles the rest: notes, links, views, performance tracking. Every conversation builds on the last.
+
+This repository started as an Obsidian vault template. The name stays. The notes moved: one Notion workspace is now the only store of notes, and the repository holds only the hooks, the commands, the subagents, and the setup.
 
 ---
 
 ## 🔴 The Problem
 
-AI coding agents are powerful, but they forget. Every session starts from zero — no context on your goals, your team, your patterns, your wins. You re-explain the same things. You lose decisions made three conversations ago. The knowledge never compounds.
+AI coding agents are powerful, but they forget. Every session starts from zero: no context on your goals, your team, your patterns, your wins. You explain the same things again. You lose decisions made three conversations ago. The knowledge never compounds.
 
 ## 🟢 The Solution
 
@@ -30,31 +28,25 @@ Give your agent a brain.
 
 ```
 You: "start session"
-Agent: *reads North Star, checks active projects, scans recent memories*
+Agent: *reads North Star, checks active projects, scans recent changes*
 Agent: "You're working on Project Alpha, blocked on the BE contract.
         Last session you decided to split the coordinator. Your 1:1
-        with your manager is tomorrow — review brief is ready."
+        with your manager is tomorrow. The review brief is ready."
 ```
 
-Works with **Claude Code** (full support), **Codex CLI**, and **Gemini CLI** — same hooks, same commands, same vault.
-
-Install via `shardmind install` or `git clone` — same vault either way.
+The brain is a Notion workspace. You read it on your phone, in the Notion app, or from any AI client that speaks Notion MCP. Only a Claude Code session in this repository writes to it, so every note that lands passes the same checks.
 
 ---
 
 ## ⚡ See It In Action
 
-<p align="center">
-  <img src="obsidian-mind-demo.gif" alt="Obsidian Mind demo — standup and dump commands" width="800">
-</p>
-
 **Morning kickoff:**
 
 ```bash
 /om-standup
-# → loads North Star, active projects, open tasks, recent git changes
+# → loads North Star, active projects, open tasks, rows changed in the last 48 hours
 # → "You have 2 active projects. The auth refactor is blocked on API contract.
-#    Your 1:1 with Sarah is at 2pm — last time she flagged observability."
+#    Your 1:1 with Sarah is at 2pm. Last time she flagged observability."
 ```
 
 **Brain dump after a meeting:**
@@ -62,16 +54,16 @@ Install via `shardmind install` or `git clone` — same vault either way.
 ```bash
 /om-dump Just had a 1:1 with Sarah. She's happy with the auth work but wants
 us to add error monitoring before release. Also, Tom mentioned the cache
-migration is deferred to Q2 — we decided to focus on the API contract first.
+migration is deferred to Q2, and we decided to focus on the API contract first.
 Decision: defer Redis migration. Win: Sarah praised the auth architecture.
 ```
 
 ```
-→ Updated org/people/Sarah Chen.md with meeting context
-→ Created work/1-1/Sarah 2026-03-26.md with key takeaways
-→ Created Decision Record: "Defer Redis migration to Q2"
-→ Added to perf/Brag Doc.md: "Auth architecture praised by manager"
-→ Updated work/active/Auth Refactor.md with error monitoring task
+→ Updated the People row "Sarah Chen" with meeting context
+→ Created the Work row "Sarah 2026-03-26" (Type 1:1) with key takeaways
+→ Created the Work row "Defer Redis migration to Q2" (Type Decision)
+→ Added to the Q1 brag quarter in Perf docs: "Auth architecture praised by manager"
+→ Updated the Work row "Auth Refactor" with an error monitoring task
 ```
 
 **Incident response:**
@@ -79,16 +71,15 @@ Decision: defer Redis migration. Win: Sarah praised the auth architecture.
 ```bash
 /om-incident-capture https://slack.com/archives/C0INCIDENT/p123456
 # → slack-archaeologist reads every message, thread, and profile
-# → people-profiler creates notes for new people involved
-# → Full timeline, root cause analysis, brag doc entry
+# → people-profiler creates People rows for new people involved
+# → Full timeline, root cause analysis, brag entry
 ```
 
 **End of day:**
 
 ```
 You: "wrap up"
-# → verifies all notes have links
-# → updates indexes
+# → verifies that every new row has a link
 # → brag-spotter finds uncaptured wins
 # → suggests improvements
 ```
@@ -97,131 +88,108 @@ You: "wrap up"
 
 ## 🚀 Quick Start
 
-### 📦 Install via ShardMind (recommended)
+### 📋 Requirements
 
-```bash
-npm install -g shardmind
-mkdir my-vault && cd my-vault
-shardmind install github:breferrari/obsidian-mind
-```
+- **Claude Code**: the only client that writes. The mod needs 2.1.287 or later.
+- **Node.js 22.6 or later**: the hooks run TypeScript with `--experimental-strip-types`. No build step, no npm dependency at run time.
+- **[mcporter](https://github.com/steipete/mcporter)**: the hooks and the agent reach Notion through it.
+- **A Notion workspace** that you can log in to through Notion MCP.
 
-`shardmind install` writes into the current directory, so create and enter a fresh folder first. The wizard collects your name, organization, vault purpose, agents to include, and whether to enable QMD; ShardMind then initializes git, optionally bootstraps QMD, and personalizes `brain/North Star.md` with your answers. Then:
+### 📦 Install
 
-1. Open the installed folder as an **Obsidian vault**
-2. Enable the **Obsidian CLI** in Settings → General (requires Obsidian 1.12+)
-3. Run your agent in the vault directory: **`claude`**, **`codex`**, or **`gemini`**. Codex runs the vault's hooks only once the folder is trusted and each hook approved: see [Using with Other Agents](#-using-with-other-agents).
-4. Start talking about work
+1. Clone the repository:
 
-[ShardMind](https://github.com/breferrari/shardmind) is the package manager for Obsidian vault templates. The install adds a `.shardmind/` sidecar that powers the wizard, optional modules (skip what you don't use), and three-way-merge upgrades. With every value at its default the install is byte-equivalent to `git clone` — clone-UX is preserved exactly. Delete `.shardmind/` and `shard-values.yaml` from the installed vault and it keeps working: ShardMind is additive, not load-bearing.
+   ```bash
+   git clone https://github.com/breferrari/obsidian-mind.git
+   cd obsidian-mind
+   ```
 
-### Or clone directly
+2. Add the Notion MCP server to `mcporter` and log in:
 
-```bash
-git clone https://github.com/breferrari/obsidian-mind.git
-```
+   ```bash
+   mcporter config add notion https://mcp.notion.com/mcp
+   mcporter auth notion
+   ```
 
-Or use it as a **GitHub template**. Skip the wizard, get the bare template. Then run through the same 4 steps above, plus fill in **`brain/North Star.md`** with your goals (the ShardMind wizard does this for you).
+3. Build the workspace. The setup makes a private root page "obsidian-mind" with the databases, the views, the pages, and the templates, and writes `notion-map.json`:
 
-### 🔍 Recommended: QMD Semantic Search
+   ```bash
+   node --experimental-strip-types .claude/scripts/notion-setup.ts
+   ```
 
-QMD is where most of the agent's retrieval intelligence comes from. Optional in the strict sense — the vault falls back to grep + the Obsidian CLI — but the experience is meaningfully better with it:
+   The setup finds each object by its name and makes only what is missing, so a second run makes nothing. `--check` makes nothing and fetches each object of the map file.
 
-- **Semantic recall.** Find "what did we decide about caching" even when the note is titled "Redis Migration ADR."
-- **Brain topics available on demand.** Your agent is instructed (via `AGENTS.md`, which points to `.claude/rules/brain-topics.md`) to consult `brain/` guidance through QMD when the conversation touches a listed topic.
-- **Subagents get sharper context.** `context-loader`, `review-prep`, `brag-spotter`, and friends consult QMD first, then fall back to grep.
-- **Native agent tools via MCP.** Registered as a [Model Context Protocol](https://modelcontextprotocol.io) server in `.mcp.json` — when QMD is installed, `mcp__qmd__query`, `mcp__qmd__get`, and `mcp__qmd__multi_get` appear in the agent's tool menu alongside Read and Edit. Subagents, slash commands, and the main conversation all call the same typed contract. Add another MCP-aware tool later (a database, a ticketing system, a calendar) and it plugs in the same way.
+4. Open Claude Code in the repository and accept the trust prompt. The hooks and the mod load from `.claude/`.
 
-```bash
-npm install -g @tobilu/qmd
-node --experimental-strip-types .scripts/qmd-bootstrap.ts
-```
-
-The bootstrap is idempotent — safe to re-run. It resolves this vault's index name — the `qmd_index` field from `vault-manifest.json` when set, otherwise the vault folder name slugified — reads `qmd_context`, registers the collection, attaches the context, and builds the index + embeddings. The SessionStart hook and `.mcp.json` wrapper both read the same manifest field, so CLI queries, the MCP server, and the re-index all scope to the same named SQLite store. This isolates the vault from any other QMD-using vault on the same machine.
-
-If you want to use a different index name (for example, one vault per engineer on a shared workstation), edit `qmd_index` in `vault-manifest.json` before running the bootstrap. Once the store is populated, always pass `--index <name>` to the CLI:
-
-```bash
-qmd --index obsidian-mind query "what did we decide about caching"
-qmd --index obsidian-mind update   # after bulk edits
-qmd --index obsidian-mind embed    # after many new notes
-```
-
-#### How it works under the hood
-
-QMD runs **three small models locally**, so there is no API key to set up, no per-query cost, and it works offline:
-
-| model | size | job |
-|---|---|---|
-| `embeddinggemma-300M` | ~328MB | turns notes and queries into vectors |
-| `qmd-query-expansion-1.7B` | ~1.28GB | rewrites your query into better search terms |
-| `Qwen3-Reranker-0.6B` | ~640MB | reorders the shortlist by actual relevance |
-
-They download on first use and are cached. QMD offloads to the GPU when it finds one — CUDA on a discrete card, Metal on Apple Silicon — and falls back to CPU otherwise. Check what yours is doing with `qmd doctor`.
-
-Use qmd 2.5.1 or later. In 2.1, `qmd status` probes the GPU, and on a machine without one that can take several seconds (4 to 37 s on CI runners, measured 2026-10-13, #349). SessionStart's self-heal reads `qmd status` under a 5-second limit, so a status that times out leaves it unable to see a broken install.
-
-The three CLI verbs map onto that stack, cheapest first: `qmd search` is BM25 keywords with **no model at all**, `qmd vsearch` is vector-only, and `qmd query` is the full hybrid. If you want to avoid the larger downloads, `search` alone is genuinely useful.
-
-#### What that means for the MCP server
-
-The `om` server sends a lexical *and* a vector sub-query, so retrieval finds the note that answers your question even when it shares no keywords with it. Practical consequences worth knowing:
-
-- **Reads are the expensive side, not writes.** A query embeds locally before it can search, so `recall` with a query takes a couple of seconds while `recall` without one is near-instant. `search` over notes is fast — it is the vector step that costs.
-- **Writing a memory does not wait for the model.** The index update is synchronous, so a new memory is immediately retrievable; generating its vector happens in the background, because that only affects where it *ranks*, not whether it is found.
-- **No index, no problem.** Without QMD the server falls back to lexical matching. Ordering gets worse; nothing disappears.
+5. Fill in North Star, add your people and your competencies, and run `/om-standup`.
 
 > [!NOTE]
-> If QMD isn't installed, everything still works — the agent falls back to grep and the Obsidian CLI, and the MCP server entry is skipped with a harmless warning.
-
----
-
-## 📋 Requirements
-
-- [Obsidian](https://obsidian.md) 1.12+ (for CLI support)
-- An AI coding agent: [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (full support), [Codex CLI](https://github.com/openai/codex), or [Gemini CLI](https://github.com/google-gemini/gemini-cli)
-- [Node 22+ LTS](https://nodejs.org) (for hook scripts — typically already installed alongside Claude Code / Codex / Gemini CLI)
-- Git (for version history)
-- [QMD](https://github.com/tobi/qmd) (optional, for semantic search)
-
-> **Note on the Node flag.** Hook scripts execute TypeScript directly via Node's `--experimental-strip-types` flag, stable in Node 22.6+ (Aug 2024) and the default behaviour in Node 23.6+. The flag is marked experimental but has been unchanged across 22 LTS and 24 LTS; if a future Node release retires or renames it, hook commands in `.claude/settings.json`, `.codex/hooks.json`, and `.gemini/settings.json` need a one-line update.
+> `notion-map.json` holds the IDs of your workspace. It is in `.gitignore`. `notion-map.example.json` shows its shape with placeholders.
 
 ---
 
 ## ⚙️ How It Works
 
-**Procedural code owns the environment. The agent owns content.** The hooks in `.claude/scripts/` handle classification, validation, indexing, and lifecycle injection — deterministic, testable, runs the same for every agent. Writing notes, filing them, linking them, drafting briefs — those are judgments, and they stay with the agent. The two halves meet at small handoffs (hooks inject context, agent reads the vault) so neither has to do the other's job.
+**Procedural code owns the environment. The agent owns content.** The hooks in `.claude/scripts/` handle classification, validation, the derived properties, and lifecycle injection. They are deterministic and tested. Writing notes, filing them, linking them, and drafting briefs are judgments, and they stay with the agent.
 
-**Folders group by purpose. Links group by meaning.** A note lives in one folder (its home) but links to many notes (its context). Your agent maintains this graph — linking work notes to people, decisions, and competencies automatically. When review season arrives, the backlinks on each competency note are already the evidence trail. A note without links is a bug.
+**Databases group by purpose. Links group by meaning.** A note lives in one database but links to many notes. Your agent keeps this graph: it links work rows to people, decisions, and competencies with relation properties. When review season arrives, the `Evidence` relation of each competency is already the evidence trail. A note without links is a bug.
 
-**Vault-first memory** keeps context across sessions and machines. All durable knowledge lives in `brain/` topic notes (git-tracked, Obsidian-browsable, linked). Claude Code's `MEMORY.md` (`~/.claude/`) is an auto-loaded index that points to vault locations — never the storage itself. This means memories survive machine changes and are part of the graph.
+**Workspace-first memory** keeps context across sessions and machines. All durable knowledge lives in the brain topic rows of `Knowledge`. Claude Code's `MEMORY.md` in `~/.claude/` is an index that points to Notion pages, never the storage itself.
 
-**Sessions have a designed lifecycle.** The `SessionStart` hook auto-injects your North Star goals, active projects, recent changes, open tasks, and the full vault file listing — your agent starts every session with context, not a blank slate. At the end, say "wrap up" and the agent runs `/om-wrap-up` — verifying notes, updating indexes, and spotting uncaptured wins. The `AGENTS.md` operating manual governs everything in between: where to file things, how to link, when to split a note, what to do with decisions and incidents.
+**Sessions have a designed lifecycle.** The `SessionStart` hook injects your North Star goals, active projects, recent changes, open tasks, and the workspace listing, so the agent starts every session with context. At the end, say "wrap up" and the agent runs `/om-wrap-up`. `AGENTS.md` governs everything in between: where to file things, how to link, when to split a note, what to do with decisions and incidents.
+
+### 📖 The read path
+
+Any client reads the workspace through Notion MCP: Claude Code, the Claude apps, or another MCP client. A read needs no hook. A remote client cannot read a repository file, so the setup also writes a "Reader map" page under the root. It lists each database, view, and page that `notion-map.json` holds.
+
+Inside a hooked Claude Code session, a read is a `Bash` command:
+
+```bash
+mcporter call notion.notion-search --args '{"query":"auth refactor","query_type":"internal"}' --output json
+```
+
+### ✍️ The write path
+
+Only a Claude Code session that loads the hooks of this repository writes. A write has two steps:
+
+1. The agent writes the JSON arguments to `.claude/state/outbox/<name>.json` with the `Write` tool.
+2. It runs `mcporter call notion.<tool> --args "$(cat .claude/state/outbox/<name>.json)"`.
+
+Three hooks watch that call:
+
+- **The guard** (`PreToolUse`) passes a Notion command only in the write, read, schema, or login form, and denies each other form with the reason. A hook can only check a write whose arguments it can read, so the guard makes every write readable. When the guard cannot run, the command denies, so the guard fails closed.
+- **The write check** (`PostToolUse`) reads the outbox file. It warns about empty required properties, a note with no link, and hard-wrapped prose. It flags a note past 25 KB (split, don't trim) and a topic cluster. Then it sets the derived properties of the row (`Bytes`, `Open tasks`, `Open loops`, `Has content`, `Changed`, `Hook stamp`) and deletes the outbox file.
+- **The repair** (`PostToolUseFailure`) adds a missing select option to the database after a failed write, and asks the agent to run the same command again.
+
+The derived properties let the hygiene scan run as view queries instead of one fetch for each page. `Changed` is the age of a note: a property write moves Notion's own `Last edited`, so no age rule reads it. `Hook stamp` marks a hooked write. The view "Hygiene: edited outside hooks" lists each row that another client changed later, and `/om-vault-audit` reads it.
+
+The full call forms are in [`.claude/rules/notion-calls.md`](.claude/rules/notion-calls.md).
 
 ### 🔗 Hooks
 
-The lifecycle hooks handle routing automatically:
-
 | Hook | When | What |
 |------|------|------|
-| 🚀 SessionStart | On startup/resume | QMD re-index + self-heal, inject North Star focus, active work, recent changes, tasks, file listing, vault-hygiene drift flags — held under a byte budget that fits Claude Code's hook output cap, ending with an injection-size meter |
-| 💬 UserPromptSubmit | Every message | Classifies content (decision, incident, win, 1:1, architecture, person, project update) and injects routing hints; also hands the agent the Stop report from the previous turn |
-| ✍️ PostToolUse | After writing `.md` | Validates frontmatter + wikilinks, blocks misplaced memory files, flags oversized notes (split, don't trim) and write-time topic clusters |
-| 💾 PreCompact | Before context compaction | Backs up session transcript to `thinking/session-logs/` |
-| 🏁 Stop | After every response | Checklist + concrete drift findings (same hygiene scan as SessionStart), shown once per session and again only when they change: you see a short summary, one line per section, and the agent gets the full report with your next message and decides whether to act; hands drift to `om-tidy` |
+| 🚀 SessionStart | On startup, resume, `/clear`, and compaction | Reads the workspace and injects North Star, the brain topics, recent changes, open tasks, active work, the listing, and the hygiene findings, under a byte budget that fits the hook output cap of Claude Code. Ends with a size meter |
+| 💬 UserPromptSubmit | Every message | Classifies content (decision, incident, win, 1:1, architecture, person, project update) and injects routing hints that name the right database. Also hands the agent the Stop report of the previous turn |
+| 🛡️ PreToolUse | Before each `Bash` command | The guard: passes a Notion command only in the forms that the write check can read |
+| ✍️ PostToolUse | After a Notion write, and after a `Write` or `Edit` | The write check and the derived properties. For a `Write` or `Edit`: flags a misplaced memory file |
+| 🩹 PostToolUseFailure | After a failed Notion write | Adds the missing select options, then asks for the same command again |
+| 💾 PreCompact | Before context compaction | Backs up the session transcript to `.claude/state/session-logs/`, outside the note store |
+| 🏁 Stop | After every response | Checklist and the hygiene findings from the saved hygiene views, shown once per session and again only when they change. You see a short summary, and the agent gets the full report with your next message |
 
 > [!TIP]
 > You just talk. The hooks handle the routing.
 
 ### 🧩 The Claude Code mod
 
-On Claude Code 2.1.287 or later, the vault also ships a mod: `.claude/skills/obsidian-mind/`, a plugin whose code runs inside Claude Code. It runs the vault's own hook scripts and changes only how their output reaches the session:
+On Claude Code 2.1.287 or later, the repository also ships a mod: `.claude/skills/obsidian-mind/`, a plugin whose code runs inside Claude Code. It runs the same hook scripts and changes only how their output reaches the session:
 
-- **Session context arrives as an instruction file**, the way `AGENTS.md` does. It is re-read whole after compaction and `/clear` (as hook output it shrinks to a pointer), it reaches general-purpose subagents (hook output never does), and it is not cut at Claude Code's 10,000-character hook limit. Its budget is `eager_layer_instruction_budget_bytes` in `vault-manifest.json`; sections that never shrink, such as open tasks, can still take it past that. `/memory` lists it as `.claude/session-context.md`.
-- **The Stop report becomes one line under the answer.** When the findings change you see a line beneath Claude's reply, starting with the mod's name — `obsidian-mind: vault check: …`. Claude Code joins the names of the plugins that answered on Stop with `+`, so when another plugin also answers, the label reads `obsidian-mind+<plugin>: vault check: …`. Claude gets the full report with your next message, unseen. A finding marked urgent gets Claude's attention at once instead, once per message you send (a second one waits inside the report); the template's own report has none.
+- **Session context arrives as an instruction file**, the way `AGENTS.md` does. Claude Code reads it again whole after compaction and `/clear`, it reaches general-purpose subagents, and the 10,000-character hook limit does not cut it. Its budget is `eager_layer_instruction_budget_bytes` in `vault-manifest.json`. `/memory` lists it as `.claude/session-context.md`.
+- **The Stop report becomes one line under the answer.** When the findings change, you see a line under the reply of Claude that starts with the name of the mod: `obsidian-mind: vault check: …`. When another plugin also answers on Stop, Claude Code joins the names with `+`. Claude gets the full report with your next message, unseen. A finding marked urgent gets the attention of Claude at once instead, once for each message you send.
 
-For each event it handles, the mod tells the matching hook to stand down. Wherever the mod does not load, the hooks run exactly as before: Codex and Gemini, older Claude Code, a session started in a vault subfolder (launch from the vault root, or `/cd` there and `/clear`), or a folder you have not trusted. It loads only after you accept Claude Code's trust prompt for the vault.
+For each event it handles, the mod tells the matching hook to stand down. Where the mod does not load, the hooks run as before: older Claude Code, a session started in a subfolder (launch from the repository root, or `/cd` there and `/clear`), or a folder you have not trusted.
 
-A mod is unsandboxed code that runs with your permissions, so check what it does before trusting the folder: `claude plugin validate .claude/skills/obsidian-mind` lists every event it hooks and every call it makes (it runs the vault's own scripts, writes the context file, remembers in its own store which report each session was shown, and can submit a prompt for an urgent finding, nothing else). To turn it off, add `"enabledPlugins": { "obsidian-mind@skills-dir": false }` to `.claude/settings.local.json`.
+A mod is unsandboxed code that runs with your permissions, so check what it does before you trust the folder: `claude plugin validate .claude/skills/obsidian-mind` lists every event it hooks and every call it makes. To turn it off, add `"enabledPlugins": { "obsidian-mind@skills-dir": false }` to `.claude/settings.local.json`.
 
 <!-- mod-validate:start -->
 The two lines that matter in its output, for this version of the mod:
@@ -234,177 +202,40 @@ The two lines that matter in its output, for this version of the mod:
 
 ### ⚡ Token Efficiency
 
-obsidian-mind does **not** dump your entire vault into context. It uses tiered loading to keep token costs low:
+obsidian-mind does **not** dump your workspace into context:
 
 | Tier | What | When | Cost |
 |------|------|------|------|
-| **Always** | `AGENTS.md` (plus `.claude/rules/` on Claude Code) + SessionStart context (North Star excerpt, git summary, tasks, vault file listing) | Session start | capped by the manifest budget, itself held under Claude Code's 10,000-character hook output cap; the meter reports the real size every session |
-| **On-demand** | QMD semantic search results | When the agent needs specific context | Targeted |
+| **Always** | `AGENTS.md`, `.claude/rules/`, and the SessionStart context (North Star excerpt, recent changes, tasks, listing) | Session start | Capped by the budget in `vault-manifest.json`, under the 10,000-character hook output cap. The meter reports the real size every session |
+| **On demand** | `notion-search` results, then the pages that match | When the agent needs specific context | Targeted |
 | **Triggered** | Classification routing hints | Every message | ~100 tokens |
-| **Triggered** | PostToolUse validation | After `.md` writes | ~200 tokens |
-| **Rare** | Full file reads | Only when explicitly needed | Variable |
+| **Triggered** | Write check findings | After a Notion write | ~200 tokens |
 
-SessionStart loads **lightweight context** — small excerpts from key files, filenames, and git summary — not full note contents. Five mechanisms keep the eager layer honest as the vault grows: **source-aware injection** (resume/compact re-inject only volatile sections — the static bulk is already in-conversation), an **injection-size meter** as the last line of every injection (you always see what context costs), an **injection budget** that enforces what the meter measures (over the ceiling, the cheapest-to-lose sections degrade to pointers — and the meter names every one it dropped, because a silent loss is worse than the bloat), a **single hook spawn per write** (the QMD refresh rides the validation hook), and **listing collapse** (any folder past a note-count threshold folds to one count line, so a vault can't outgrow the ceiling through whichever folder nobody thought to configure). Both the budget and the threshold are tunable in `vault-manifest.json`, and the budget is held under Claude Code's 10,000-character hook output cap whatever it is set to, because past the cap a session receives only a 2,000-character preview. The agent queries by meaning via QMD before reading files, so it pulls only what's relevant. The classification hook is one lightweight Node call per message. The validation hook only fires on markdown writes and skips excluded paths.
-
-### 🌐 Using with Other Agents
-
-obsidian-mind works with Claude Code, Codex CLI, Gemini CLI, Antigravity and Grok. Every agent reads one instruction file, `AGENTS.md`. The hook scripts in `.claude/scripts/` and the commands in `.claude/commands/` are agent-agnostic — pure Markdown, TypeScript, and shell with no SDK dependencies. `.claude/rules/` holds guidance only Claude Code can use (its skills, subagents, auto-memory index, hooks and mod), and the sections `AGENTS.md` moved out to stay under its size cap. Claude Code and Grok load every file there at session start, so Claude keeps the whole manual; the other agents read a moved section when `AGENTS.md` points them to it.
-
-| Agent | Reads `AGENTS.md` | From a vault subfolder | Also loads | Known gaps |
-|---|---|---|---|---|
-| **Claude Code** | Natively, when no `CLAUDE.md` is present | Yes, but `@` imports are dropped (upstream) | `.claude/rules/*.md` | A `CLAUDE.md` beside or above `AGENTS.md` is read instead, silently: see [Troubleshooting](#-troubleshooting) |
-| **Codex CLI** | Natively | Yes (walks up to the git root) | — | Stops reading past ~32 KiB, silently |
-| **Gemini CLI** | Through `.gemini/settings.json` (`context.fileName`) | **No**: see [Troubleshooting](#-troubleshooting) | — | What a live session does with it is not yet observed (TBC) |
-| **Antigravity** | Natively | Yes | — (not `.claude/rules/`, not `CLAUDE.md`) | Stops reading past ~24,000 bytes, silently. Has a workspace-trust dialog; whether it gates `AGENTS.md` is TBC (a headless `-p` run loaded it in a never-opened folder). Its `.agents/` manifests are not exercised here (TBC) |
-| **Grok** | Once the folder is trusted | Yes, once trusted | `.claude/rules/*.md` and `CLAUDE.md`, plus project `.claude/settings.json` hooks and user-level `~/.claude` skills, permissions and hooks | An untrusted folder gets no project instructions at all: see [Troubleshooting](#-troubleshooting) |
-
-Observed with scratch vaults as of 2026-10-06 (Claude Code 2.1.291, Codex CLI 0.160.0, Gemini CLI 0.37.1 discovery log, Antigravity 1.3.0, Grok 1.0.46); the measurements are in [#321](https://github.com/breferrari/obsidian-mind/issues/321). A test keeps `AGENTS.md` under 22,000 bytes, so no agent cuts it off.
-
-**Claude Code** — full support. Hooks, commands, subagents, and the memory system all work out of the box.
-
-**Codex CLI** — hook config at `.codex/hooks.json` wires the same hook scripts Claude Code uses — session context, message classification, and write validation work automatically. Commands work as regular prompts (e.g. type `om-standup` without the `/` prefix).
-
-Codex runs a project's hooks only once two kinds of trust are in place (observed with Codex CLI 0.160.0 as of 2026-10-13, [#345](https://github.com/breferrari/obsidian-mind/issues/345)):
-- **The vault folder is trusted.** Codex records this in `~/.codex/config.toml` under `[projects.'<path>']`. On Windows the key is the `\\?\`-prefixed path, e.g. `[projects.'\\?\C:\path\to\vault']`.
-- **Each hook is approved.** Codex stores each approval as a `trusted_hash` under `[hooks.state]`. Approving them in an interactive `codex` session is expected to write these (inferred: the #345 check stood in for them with `--dangerously-bypass-hook-trust`, a flag for one non-interactive run).
-
-Until both are in place, Codex runs no hook, and the session gets no vault context.
-
-**Gemini CLI** — hook config at `.gemini/settings.json` maps Gemini's event names to the shared hook scripts, and its `context.fileName` setting points Gemini at `AGENTS.md`. Gemini reads custom commands only as TOML, so `.gemini/commands/` holds a generated wrapper per command that injects the command's `.md` (`node --experimental-strip-types .scripts/gemini-commands.ts` regenerates them).
-
-**Antigravity** and **Grok** — read `AGENTS.md` for vault conventions. Their hook, skill and command layers are tracked in [#322](https://github.com/breferrari/obsidian-mind/issues/322) and [#323](https://github.com/breferrari/obsidian-mind/issues/323).
-
-**Other agents** (Cursor, Windsurf, GitHub Copilot, JetBrains AI) — read `AGENTS.md` for vault conventions. Hook support varies by agent.
-
-> [!NOTE]
-> Hooks, commands, subagent prompts, and vault memory (`brain/`) are all agent-agnostic. Only the `~/.claude/` auto-memory loader and the `obsidian-mind` mod are Claude Code-specific. `.claude/rules/hooks-per-agent.md` maps each hook to each agent's event.
+SessionStart loads titles, counts, and short excerpts, not full pages. Over the budget, the cheapest sections become pointers, and the meter names each one that it dropped. A group of the listing past a row-count threshold folds to one count line.
 
 ---
 
-## 🧠 Reach Your Vault From Any Repo
+## 🗂️ The Workspace
 
-Your vault normally only helps while you are sitting in it. The **`om` MCP server** changes that: a coding session in *any other repository* can search your notes, read them, follow the graph, and record what it learned back into the vault.
+The setup builds one private root page, "obsidian-mind", with seven databases:
 
-### Step 1 — register the server once, for every repo
+| Database | Holds |
+|----------|-------|
+| `Work` | Work notes, decisions, incidents, 1:1 notes, inbox items, and thinking notes, told apart by `Type`. `Status` replaces the active and archive folders, and `Project` groups a workstream |
+| `People` | One row for each person, with `Team` |
+| `Teams` | One row for each team, with `Members` |
+| `Competencies` | One row for each competency, with `Evidence` from work rows and an `Evidence count` rollup |
+| `Perf docs` | PR evidence, review briefs, review artifacts, and brag quarters |
+| `Knowledge` | Brain topics (Key Decisions, Patterns, Gotchas), reference notes, domain notes, event-log satellites, and archive notes |
+| `Templates` | One row for each template |
 
-```bash
-claude mcp add --scope user om node "/absolute/path/to/your-vault/.claude/scripts/om-mcp.mjs"
-```
+And these pages: **Home** (the dashboard, with linked views and the Current Focus of North Star), **North Star**, **People & Context**, **Recently Touched** (one view of each database sorted by `Changed`), and **Reader map**.
 
-User scope is the right default here: it registers in your own config, so the server is available in **every directory on the machine** with nothing added to any repository. No env var is needed either, because the launcher resolves the vault from its own location.
+**Relations replace wikilinks** where a view, a rollup, or a hygiene check reads the link: `Work.Decisions`, `Work.Competencies`, `Work.Person`, `Work.Team`, `Work.Feeds into`, `Perf docs.Work evidence`, and `Parent`. Every other link is a page mention in the body.
 
-<details>
-<summary>Per-repo alternative, and one trap to avoid</summary>
+**Saved views replace the Bases and the hand-kept indexes.** Examples: Active Work, Stale Actives, Completed, Incidents, 1:1 History, Competency Map, Review Evidence, Brain index. The hooks read the hygiene views (oversized, open loops, inbox pressure, loose active) in view mode, which has no plan quota.
 
-If you would rather a specific repo carry the wiring (so a teammate gets it on clone), put it in that project's `.mcp.json`:
-
-```json
-{
-  "mcpServers": {
-    "om": {
-      "command": "node",
-      "args": ["/absolute/path/to/your-vault/.claude/scripts/om-mcp.mjs"]
-    }
-  }
-}
-```
-
-Note the cost: that path is **absolute and machine-specific**, so committing it breaks every collaborator and every other machine of yours.
-
-**Use an absolute path, and do not copy the relative one.** This vault's own `.mcp.json` registers `qmd` with a *relative* path (`.claude/scripts/qmd-mcp.mjs`). That is correct there, because a relative path resolves against the current working directory and a session in the vault is already in it. Reused for `om` in a consuming project, the same shape silently resolves against *that* project instead, and the server never starts.
-</details>
-
-### Step 2 — point the consuming project at the vault
-
-Add this to that project's own instruction file (`CLAUDE.md` or `AGENTS.md`), filling in the triggers:
-
-```markdown
-## Where design decisions live
-
-Design rationale for this project is recorded outside this repo, reachable
-through the `om` MCP server.
-
-- **`search`** reaches the written record: why a choice was made, what was
-  rejected, what a constraint was set against. **Start here.**
-- **`expand`** shows a known note's links and backlinks, which is cheaper than
-  searching again for its neighbourhood.
-- **`recall`** returns short durable lessons scoped to this project. It is empty
-  until sessions put things in it, so early on it returns nothing, and that is
-  *not* evidence the record is missing.
-- **`health`** when something that should be there cannot be found. Every failure
-  in this layer looks identical from outside (no results), and this tells them
-  apart.
-
-Consult the record before changing:
-
-- <the storage format or schema>
-- <the ID or key semantics>
-- <the public surface: CLI flags, API shape, exported names>
-
-If that record and this repo disagree, the record holds the *why*. Reconcile
-before changing behaviour.
-
-**Say what came back, in whatever you write before implementing:** a plan, a
-design note, an issue comment. Name the recorded decisions the work rests on,
-anything you found that argues *against* the approach, and an explicit "nothing
-recorded on this" when the record is empty, which is a finding rather than a
-blank to skip. Consulting once at the start of a task is consulting at the
-moment you know least about what you will need; writing the result down moves it
-to the moment you commit, while a contradiction is still free to fix.
-
-## Recording what you learn
-
-Two tools, and picking the wrong one is the common mistake. The test is whether
-it would help someone working on a **different** project.
-
-- **`remember`** stores a durable lesson: a constraint you discovered, a gotcha
-  that cost time, a rule that generalises. Set `confidence`
-  (`verified` / `inferred` / `unverified`) honestly and supply `verification`
-  when you claim `verified`. For something specific to this project use
-  `scope: "project"` with `projects: ["<this-repo>"]`. Reach for
-  `scope: "platform"` before `"general"`: a dependency's quirk or a language's
-  rule is platform-level however hard-won, and `general` claims it would help
-  someone whose stack shares nothing with yours. When you do claim `general`,
-  supply `generality` saying why, the same way `verification` backs `verified`.
-- **`record_work`** files what happened *here*: changes, decisions and the
-  alternatives rejected, what was learned, what is still open, how it was
-  verified.
-
-A dependency limitation that would bite any project is a `remember`. "Landed the
-watch engine and here is what it cost" is a `record_work`. Do both when both are
-true.
-```
-
-**Three to five triggers, and name specific nouns.** `Consult it before changing the storage format, ID semantics, or the CLI surface` works. `Check the vault for context` is exactly the advisory phrasing that gets skipped, because it gives the model nothing to match against the task in front of it.
-
-**Anchor the consultation to an artifact, not to a moment.** "Consult before changing X" fires once, at the start of a task, which is when the session knows least about what it will need. Requiring the *result* to appear in whatever the project writes before implementing turns consultation from something a session intends to do into something an artifact is incomplete without. Measured across a day of real use: captures ran roughly four times heavier than consultations, because `remember` fires on an **event** (you just learned something) while consulting fires on **intention**. Event-triggered behaviour happens; intention-triggered behaviour decays.
-
-> [!TIP]
-> **Do not lead with `recall`.** It returns *memories*, and the store is empty on a project's first session **by construction**: `remember` refuses when called from inside the vault, since a memory written there would be scoped to the vault and reach nobody. So memories only ever arrive from outside. A snippet that promises `recall` will return this project's decisions therefore returns nothing on the first run, and fails **silently as "no results"** rather than as an error.
-
-> [!IMPORTANT]
-> **Both steps are required, and the second is not paperwork.** Measured: with the server wired and no repo-side instruction, a session made **zero** vault calls and implemented a design the vault had recorded as explicitly rejected. With the instruction present, it refused and cited the note.
->
-> A **prohibition** in the MCP `instructions` field propagates into the calling session reliably. A positive *"go consult the vault"* is advisory and gets skipped whenever a nearer source exists. The server can stop a session doing something; only the project's own law makes one go looking.
->
-> That asymmetry decides *which side* a rule belongs on, and it matters most for anything you would rather not advertise. Writing "this repo deliberately excludes X" into a **public** repo announces the withholding and points at exactly what is being withheld. The same rule as a prohibition in `instructions` reaches every session invisibly, and the repo says nothing at all. Routing belongs repo-side because it has to; constraints belong server-side because they can.
-
-**What the session gets:** `search` (semantic + keyword), `expand` (a note's links and backlinks), `recall` (durable lessons scoped to that repo), `remember` (record a lesson), `record_work` (file what happened), `reason` (judgement across several notes), and `health` (is the wiring intact?). Plus your notes as readable resources.
-
-**`reason` is the one that thinks.** The others retrieve; this one reads the vault with a second Claude session and answers questions that need judgement across notes — *is what I am about to do consistent with what these six notes decided?* It seeds itself from search, so you never have to search first. It runs on your own CLI default model, so the vault answers at the level you are already working at, and nothing about it is capped: it is Claude, on your machine, under your auth. Every call is logged with its cost, turns, model and wall time. Its answers are marked `confidence: inferred` and are never recorded as memories on their own — your session decides whether any of it is worth keeping.
-
-**Repos are identified by folder name**, which is right until it isn't — two repos both called `api` share one identity and therefore each other's memories. Drop a `.om-project` file with a distinct name at the repo root to separate them; `health` tells you which repo it thinks is calling and where that name came from.
-
-**Cross-repo memory with an epistemic contract.** A lesson learned in one repo reaches the repos it was scoped to and no others. Reach is *declared at write time*, never guessed at read time, so a sibling project does not inherit another's constraints. Everything recorded carries `confidence: verified | inferred | unverified`, dated volatile facts, and provenance derived server-side — a session cannot claim to be a project it is not. Corrections supersede rather than overwrite, so the store gets *more* trustworthy as it grows instead of accumulating contradictions.
-
-**Which notes it serves.** Your vault, your notes, your session — the default is simply what your vault already declares as your content (`user_content_roots`), at the granularity you wrote it (`work/active/`, not all of `work/`). Set `mcp_exposed_roots` in `vault-manifest.json` only if this vault holds material that is **not yours to share** — employer-confidential notes, a client's data. A note tagged `private` is never served, and memories are never served as ordinary notes, since they carry their own scope. One case reads across the two: when a capture's `promoted:` marker carries an anchor, `recall` serves that block out of `brain/` so a foreign repo gets the corrected version rather than the capture as first written — bounded by this same policy, so a `private` or withheld note is refused there too.
-
-Every read is logged with the calling repo, so "what did that session actually see" is answerable afterwards.
-
-> [!NOTE]
-> Keeping vault material out of a public PR is the **contract's** job, not the exposure list's — a session can read your vault directly regardless. The prohibition injected into the calling session is the part that measurably holds.
-
-**Want the mechanics?** `ARCHITECTURE.md` → *Reaching the Vault From Another Repo* walks the whole layer with diagrams: the four MCP surfaces and why the non-tool ones matter, the identity handshake, a `search` call traced end to end, how each memory's reach is evaluated, the write path, and every failure mode against the signal that reveals it.
+**Templates** are rows of `Templates`: Work Note, Decision Record, Thinking Note, Competency Note, and Review Template.
 
 ---
 
@@ -412,11 +243,11 @@ Every read is logged with the calling repo, so "what did that session actually s
 
 **Morning**: Run `/om-standup`. Your agent loads your North Star, active projects, open tasks, and recent changes. You get a structured summary and suggested priorities.
 
-**Throughout the day**: Talk naturally. Mention a decision you made, an incident that happened, a 1:1 you just had, a win you want to remember. The classification hook nudges the agent to file each piece correctly. For bigger brain dumps, use `/om-dump` and narrate everything at once.
+**Throughout the day**: Talk naturally. Mention a decision you made, an incident that happened, a 1:1 you just had, a win you want to remember. The classification hook nudges the agent to file each piece in the right database. For bigger brain dumps, use `/om-dump` and narrate everything at once.
 
-**End of day**: Say "wrap up" and the agent invokes `/om-wrap-up` — verifies notes, updates indexes, checks links, spots uncaptured wins.
+**End of day**: Say "wrap up" and the agent invokes `/om-wrap-up`. It verifies rows, checks links, and spots uncaptured wins.
 
-**Weekly**: Run `/om-weekly` for cross-session synthesis — North Star alignment, patterns, uncaptured wins, and next-week priorities. Run `/om-vault-audit` to catch orphan notes, broken links, and stale content.
+**Weekly**: Run `/om-weekly` for cross-session synthesis: North Star alignment, patterns, uncaptured wins, and next-week priorities. Run `/om-vault-audit` to catch orphan rows, empty properties, and rows edited outside the hooks.
 
 **Review season**: Run `/om-review-brief manager` and get a structured review prep document with all the evidence already linked.
 
@@ -424,48 +255,48 @@ Every read is logged with the calling repo, so "what did that session actually s
 
 ## 🛠️ Commands
 
-Defined in `.claude/commands/`. Run them in Claude Code, Codex CLI, or Gemini CLI.
+Defined in `.claude/commands/`. Run them in Claude Code.
 
 | Command | What It Does |
 |---------|-------------|
-| `/om-standup` | Morning kickoff — loads context, reviews yesterday, surfaces tasks, suggests priorities |
-| `/om-dump` | Freeform capture — talk naturally about anything, routes it all to the right notes |
-| `/om-wrap-up` | Full session review — verify notes, indexes, links, suggest improvements |
-| `/om-humanize` | Voice-calibrated editing — makes Claude-drafted text sound like you wrote it |
-| `/om-weekly` | Weekly synthesis — cross-session patterns, North Star alignment, uncaptured wins |
-| `/om-capture-1on1` | Capture a 1:1 meeting transcript into a structured vault note |
-| `/om-incident-capture` | Capture an incident from Slack/channels into structured notes |
-| `/om-slack-scan` | Deep scan Slack channels/DMs for evidence |
-| `/om-peer-scan` | Deep scan a peer's GitHub PRs for review prep |
+| `/om-standup` | Morning kickoff: loads context, reviews yesterday, surfaces tasks, suggests priorities |
+| `/om-dump` | Freeform capture: talk naturally about anything, and it routes each piece to the right rows |
+| `/om-wrap-up` | Full session review: verify rows, links, and properties, and suggest improvements |
+| `/om-humanize` | Voice-calibrated editing: makes text that Claude drafted sound like you wrote it |
+| `/om-weekly` | Weekly synthesis: cross-session patterns, North Star alignment, uncaptured wins |
+| `/om-capture-1on1` | Capture a 1:1 meeting transcript into a structured `Work` row |
+| `/om-incident-capture` | Capture an incident from Slack into structured rows |
+| `/om-slack-scan` | Deep scan Slack channels and DMs for evidence |
+| `/om-peer-scan` | Deep scan the GitHub PRs of a peer for review prep |
 | `/om-review-brief` | Generate a review brief (manager or peer version) |
-| `/om-self-review` | Write your self-assessment for review season — projects, competencies, principles |
-| `/om-review-peer` | Write a peer review — projects, principles, performance summary |
-| `/om-tidy` | Self-maintenance — acts on every hygiene flag: archive, group, split. Never deletes, never commits |
-| `/om-correct` | Sweep a corrected fact — applies it at the single source, links restatements, preserves dated records |
-| `/om-vault-audit` | Audit indexes, links, orphans, stale context |
-| `/om-vault-upgrade` | Upgrade this vault through ShardMind (keeps your local improvements), or import content from an existing vault — version detection, classification, migration |
-| `/om-prep-1on1` | Prep for an upcoming 1:1 — load person context, open items, suggested agenda |
-| `/om-meeting` | Prep for any meeting by topic — subject-forward briefing with open items and considerations |
-| `/om-intake` | Process meeting notes inbox — classify and route to the right vault notes |
-| `/om-project-archive` | Move a completed project from active/ to archive/, update indexes |
+| `/om-self-review` | Write your self-assessment for review season: projects, competencies, principles |
+| `/om-review-peer` | Write a peer review: projects, principles, performance summary |
+| `/om-tidy` | Self-maintenance: acts on every hygiene flag. Completes, groups, splits. Never deletes |
+| `/om-correct` | Sweep a corrected fact: applies it at the single source, links restatements, keeps dated records |
+| `/om-vault-audit` | Audit properties, links, orphans, views, and rows edited outside the hooks |
+| `/om-prep-1on1` | Prep for an upcoming 1:1: person context, open items, suggested agenda |
+| `/om-meeting` | Prep for any meeting by topic: a subject-forward briefing with open items and considerations |
+| `/om-intake` | Process the meeting notes inbox: classify the inbox items and route them to the right rows |
+| `/om-project-archive` | Mark a completed project done, so it leaves the active views |
 
 ---
 
 ## 🤖 Subagents
 
-Specialized agents that run in isolated context windows. They handle heavy operations without polluting your main conversation.
+Specialized agents that run in isolated context windows. They handle heavy operations without filling your main conversation.
 
 | Agent | Purpose | Invoked by |
 |-------|---------|------------|
 | `brag-spotter` | Finds uncaptured wins and competency gaps | `/om-wrap-up`, `/om-weekly` |
-| `context-loader` | Loads all vault context about a person, project, or concept | Direct |
-| `cross-linker` | Finds missing wikilinks, orphans, broken backlinks | `/om-vault-audit` |
-| `people-profiler` | Bulk creates/updates person notes from Slack profiles | `/om-incident-capture` |
+| `context-loader` | Loads all Notion context about a person, project, or concept | Direct |
+| `correction-sweep` | Finds every page that restates a corrected fact and classifies it. Never edits | `/om-correct` |
+| `cross-linker` | Finds missing relations and mentions, orphans, and one-way links | `/om-vault-audit` |
+| `people-profiler` | Bulk creates or updates `People` rows from Slack profiles | `/om-incident-capture` |
 | `review-prep` | Aggregates all performance evidence for a review period | `/om-review-brief` |
-| `slack-archaeologist` | Full Slack reconstruction — every message, thread, profile | `/om-incident-capture` |
-| `vault-librarian` | Deep vault maintenance — orphans, broken links, stale notes | `/om-vault-audit` |
-| `review-fact-checker` | Verify every claim in a review draft against vault sources | `/om-self-review`, `/om-review-peer` |
-| `vault-migrator` | Classify, transform, and migrate content from a source vault | `/om-vault-upgrade` |
+| `slack-archaeologist` | Full Slack reconstruction: every message, thread, and profile | `/om-incident-capture` |
+| `vault-librarian` | Deep workspace maintenance: orphans, broken links, empty properties, stale rows | `/om-vault-audit` |
+| `review-fact-checker` | Verifies every claim in a review draft against Notion sources | `/om-self-review`, `/om-review-peer` |
+| `vault-migrator` | Classifies and migrates content from a source vault. The import tool takes it over | None until the import tool lands |
 
 > [!NOTE]
 > Subagents are defined in `.claude/agents/`. You can add your own for domain-specific workflows.
@@ -474,133 +305,87 @@ Specialized agents that run in isolated context windows. They handle heavy opera
 
 ## 📊 Performance Graph
 
-The vault doubles as a performance tracking system:
+The workspace doubles as a performance tracking system:
 
-1. **Competency notes** in `perf/competencies/` define your org's competency framework — one note per competency
-2. **Work notes** link to competencies in their `## Related` section, annotated with what was demonstrated
-3. **Backlinks accumulate automatically** — review prep becomes reading the backlinks panel on each competency note
-4. **Brag Doc** aggregates wins per quarter with links to evidence notes
-5. **`/om-peer-scan`** deep-scans a colleague's GitHub PRs and writes structured evidence to `perf/evidence/`
-6. **`/om-review-brief`** generates a full review brief by aggregating everything: brag entries, decisions, incidents, competency evidence, and 1:1 feedback
+1. **`Competencies` rows** define the competency framework of your org, one row for each competency
+2. **Work rows** set their `Competencies` relation, with what was demonstrated in the body
+3. **Evidence accumulates automatically**: the reverse relation `Evidence` and the `Evidence count` rollup fill as you go, and the Competency Map view sorts by them
+4. **Brag quarters** in `Perf docs` collect wins for each quarter, with `Work evidence` set
+5. **`/om-peer-scan`** deep-scans the GitHub PRs of a colleague and writes a `Perf docs` row with `Type` PR evidence
+6. **`/om-review-brief`** generates a full review brief from brag quarters, decisions, incidents, competency evidence, and 1:1 feedback
 
 > [!TIP]
-> To get started: create competency notes from the template, then link your work notes to them as you go. The graph does the rest.
+> To get started: create competency rows from the template, then link your work rows to them as you go. The graph does the rest.
 
 ---
 
-## 📋 Bases
+## 🧪 Parity With the Obsidian Version
 
-The `bases/` folder contains database views that query your notes' frontmatter properties. They update automatically as notes change.
+Commit `fae7be4` is the last Obsidian version, and it is the reference for each hook. The parity harness in `.claude/scripts/parity/` runs the hook at that commit on a Markdown fixture vault and the ported hook on the same notes in Notion, then compares the findings, the notes, and the counts:
 
-| Base | Shows |
-|------|-------|
-| Work Dashboard | Active projects filtered by quarter, grouped by status — plus a Stale Actives view (active but untouched 14+ days) |
-| Recently Touched | Every note by real modified time — the correct answer to "what did I work on recently" (filename dates lie for living notes) |
-| Incidents | All incidents sorted by severity and date |
-| People Directory | Everyone in `org/people/` with role, team |
-| 1:1 History | All 1:1 notes sortable by person and date |
-| Review Evidence | PR scans and evidence grouped by person and cycle |
-| Competency Map | Competencies with evidence counts from backlinks |
-| Templates | Quick access to all templates |
-
-`Home.md` embeds these views, making it the vault's dashboard.
-
----
-
-## 📁 Vault Structure
-
-```
-Home.md                 Vault entry point — embedded Base views, quick links
-AGENTS.md               Operating manual — read by every agent, every session
-vault-manifest.json     Template metadata — version, structure, schemas
-.shardmindignore        Files excluded from `shardmind install` (CONTRIBUTING, translations, marketing media)
-CHANGELOG.md            Version history
-CONTRIBUTING.md         Template development checklist
-README.md               Product documentation
-LICENSE                 MIT license
-
-bases/                  Dynamic database views (Work Dashboard, Incidents, People, etc.)
-
-work/
-  active/               Current projects (1–3 files at a time)
-  archive/YYYY/         Completed work, organized by year
-  incidents/            Incident docs (main note + RCA + deep dive)
-  1-1/                  1:1 meeting notes — named <Person> YYYY-MM-DD.md
-  Index.md              Map of Content for all work
-
-org/
-  people/               One note per person — role, team, relationship, key moments
-  teams/                One note per team — members, scope, interactions
-  People & Context.md   MOC for organizational knowledge
-
-perf/
-  Brag Doc.md           Running log of wins, linked to evidence
-  brag/                 Quarterly brag notes (one per quarter)
-  competencies/         One note per competency (link targets)
-  evidence/             PR deep scans, data extracts for reviews
-  <cycle>/              Review cycle briefs and artifacts
-
-brain/
-  North Star.md         Goals and focus areas — read every session
-  Memories.md           Index of memory topics
-  Key Decisions.md      Significant decisions and their reasoning
-  Patterns.md           Recurring patterns observed across work
-  Gotchas.md            Things that have gone wrong and why
-  Skills.md             Custom workflows and slash commands
-
-reference/              Codebase knowledge, architecture maps, flow docs
-thinking/               Scratchpad for drafts — promote findings, then delete
-templates/              Obsidian templates with YAML frontmatter
-
-.claude/
-  rules/                Claude Code-only guidance, loaded beside AGENTS.md
-  commands/             20 slash commands
-  agents/               10 subagents
-  scripts/              Hook scripts + charcount.ts utility
-  skills/               Obsidian + QMD skills, and the obsidian-mind mod
-  settings.json         5 hooks configuration
-
-.scripts/                Vault-level tooling — QMD bootstrap (run once on a fresh clone)
-
-.shardmind/             ShardMind sidecar — only used if installed via `shardmind install`
-  shard.yaml            Manifest (name, version, modules, hooks)
-  shard-schema.yaml     Wizard values + module gating
-  hooks/                bootstrap (git init + QMD), personalize (North Star), post-update
+```bash
+cd .claude/scripts
+node --experimental-strip-types parity/run-parity.ts                       # the reference against itself
+node --experimental-strip-types parity/run-parity.ts --notion --hook validate-write
+node --experimental-strip-types parity/run-mutations.ts --notion --hook validate-write
 ```
 
-> [!NOTE]
-> `.shardmind/` is **additive, not load-bearing.** A clone-and-open vault never reads it; only the `shardmind` CLI does. Delete it and the vault keeps working. See the v6 layout contract in [shardmind/docs/SHARD-LAYOUT.md](https://github.com/breferrari/shardmind/blob/main/docs/SHARD-LAYOUT.md).
+`--notion` needs a second root for the fixtures, made with `notion-setup.ts --root-title "obsidian-mind parity fixtures" --map notion-map.fixtures.json` and filled by `parity/write-notion-fixture.ts`. `npm test` runs the same comparison offline on a stand-in runtime. The live tests run only with `NOTION_LIVE=1` and a map file, and skip in each other run. The record of each check and each known difference is [`NOTION-PORT-DESIGN.md`](NOTION-PORT-DESIGN.md), part (d).
 
 ---
 
-## 📝 Templates
+## 📥 Importing an Existing Vault
 
-Templates with YAML frontmatter, each including a `description` field for progressive disclosure:
-
-- **Work Note** — date, description, project, status, quarter, tags
-- **Decision Record** — date, description, status (proposed/accepted/deprecated), owner, context
-- **Thinking Note** — date, description, context, tags (scratchpad — delete after promoting)
-- **Competency Note** — date, description, current-level, target-level, proficiency table
-- **1:1 Note** — date, person, key takeaways, action items, quotes
-- **Incident Note** — date, ticket, severity, role, timeline, root cause, impact
+An import tool that moves a vault of the Obsidian template into the workspace is planned as item 11 of part (e) of [`NOTION-PORT-DESIGN.md`](NOTION-PORT-DESIGN.md). It is not in the repository yet. Until it lands, `vault-migrator` has no command, and you move notes by hand or with `/om-dump`.
 
 ---
 
-## 🔧 What's Included
+## ⚠️ Known Limits
 
-### 🧩 Obsidian Skills
+Each limit below comes from a measurement in the pull request that it links.
 
-[kepano/obsidian-skills](https://github.com/kepano/obsidian-skills) pre-installed in `.claude/skills/`:
+- **The guard trusts a cooperative agent.** A command that hides the word `notion` or `mcporter` on purpose, or a script file that holds the call, passes the guard. The `Hook stamp` audit flags such a write after the fact. A guard that runs past its 5 s timeout lets the call run. ([#6](https://github.com/willtn/notion-mind/pull/6))
+- **Text that names both `mcporter` and `notion` is a denied command.** Write a commit message or a PR body to a file and use `git commit -F` or `gh pr create --body-file`. ([#6](https://github.com/willtn/notion-mind/pull/6))
+- **Notion cannot tell clients apart.** A write from another MCP client looks the same as a hooked write. Only the `Hook stamp` view shows it. ([#5](https://github.com/willtn/notion-mind/pull/5), [#8](https://github.com/willtn/notion-mind/pull/8))
+- **A select takes no new option on a write.** `Quarter`, `Project`, `Cycle`, and the level selects start empty. The first write with a new option fails, the repair hook adds it, and the agent runs the command again. ([#5](https://github.com/willtn/notion-mind/pull/5), [#8](https://github.com/willtn/notion-mind/pull/8))
+- **An empty property and an absent property are one state.** The check for a missing field (VW-08) fires on an empty property. ([#8](https://github.com/willtn/notion-mind/pull/8))
+- **A page mention counts as its title.** The size and link checks read a named mention as `[[Title]]`. A mention with no title adds about 60 bytes. A relation adds no text. ([#8](https://github.com/willtn/notion-mind/pull/8))
+- **The write hook does not set `Quarter`.** A missing `Quarter` stays a finding, as at the reference. ([#8](https://github.com/willtn/notion-mind/pull/8))
+- **The request limit is 180 calls in 60 s.** The client waits and tries again. A long wait can leave a row with no `Hook stamp`, and the hook says so. ([#8](https://github.com/willtn/notion-mind/pull/8))
+- **The Stop hook costs time on every turn.** It reads the hygiene views in parallel, with a timeout of 15 s. A page outside the databases has no `Bytes`, so the size check cannot flag it. ([#11](https://github.com/willtn/notion-mind/pull/11))
+- **Recent changes are page titles, not commit subjects.** SessionStart reads `Changed`, so a change of Home or North Star is not in that section. The open tasks section fetches at most 10 rows. ([#12](https://github.com/willtn/notion-mind/pull/12))
+- **A completed note cannot sit in the active folder.** `Status` is the only place for state, so that hygiene check (HY-01) has no Notion form. See part (f), choice 2, of the design record.
+- **No aliases and no daily notes.** The content model has no alias property and no daily note type, so `cross-linker`, `/om-standup`, and `/om-weekly` lost those steps. ([#9](https://github.com/willtn/notion-mind/pull/9))
+- **Notion does not return formula text.** After a change to a formula of the model, run the setup with `--reapply-formulas`. ([#5](https://github.com/willtn/notion-mind/pull/5))
+- **A lost reply on the first create of the root leaves no ledger line for it.** The setup still converges. ([#5](https://github.com/willtn/notion-mind/pull/5))
+- **The transcript backup stays local**, in `.claude/state/session-logs/`. ([#10](https://github.com/willtn/notion-mind/pull/10))
 
-- **obsidian-markdown** — Obsidian-flavored markdown (wikilinks, embeds, callouts, properties)
-- **obsidian-cli** — CLI commands for vault operations
-- **obsidian-bases** — Database-style `.base` files
-- **json-canvas** — Visual `.canvas` file creation
-- **defuddle** — Web page to markdown extraction
+---
 
-### 🔍 QMD Skill
+## 📁 Repository Structure
 
-A custom skill in `.claude/skills/qmd/` that teaches the agent to use [QMD](https://github.com/tobi/qmd) semantic search proactively — before reading files, before creating notes (to check for duplicates), and after creating notes (to find related content that should link to it).
+```
+obsidian-mind/
+├── AGENTS.md                      # The operating manual, read every session
+├── vault-manifest.json            # Root marker of the hooks, and hook settings
+├── notion-map.example.json        # Shape of notion-map.json (the real one is not committed)
+├── NOTION-PORT-DESIGN.md          # The design record of the Notion port
+├── brain/Skills.md                # The command catalog
+└── .claude/
+    ├── commands/                  # Slash commands
+    ├── agents/                    # Subagents
+    ├── rules/                     # Rules that Claude Code loads beside AGENTS.md
+    ├── skills/                    # defuddle, mermaid-visualizer, and the obsidian-mind mod
+    ├── settings.json              # Hook configuration
+    └── scripts/
+        ├── session-start.ts, classify-message.ts, guard-notion-write.ts,
+        │   validate-write.ts, pre-compact.ts, stop-checklist.ts   # The hooks
+        ├── notion-setup.ts        # Builds the workspace and writes notion-map.json
+        ├── scaffold/              # Source text of the scaffold pages and the templates
+        ├── lib/                   # The Notion client, the model, the checks
+        ├── parity/                # The parity harness
+        └── tests/                 # npm test
+```
 
 ---
 
@@ -610,125 +395,58 @@ This is a starting point. Adapt it to how you work:
 
 | What | Where |
 |------|-------|
-| Your goals | `brain/North Star.md` — grounds every session |
-| Your org | `org/` — add your manager, team, key collaborators |
-| Your competencies | `perf/competencies/` — match your org's framework |
-| Your tools | `.claude/commands/` — edit for your GitHub org, Slack workspace |
-| Your conventions | `AGENTS.md` — the operating manual, evolve it as you go (`.claude/rules/` for Claude Code-only additions) |
-| Your domain | Add folders, subagents in `.claude/agents/`, or classification rules in `.claude/scripts/` |
+| Your goals | The North Star page: grounds every session |
+| Your org | `People`, `Teams`, and the People & Context page |
+| Your competencies | `Competencies`: match the framework of your org |
+| Your tools | `.claude/commands/`: edit for your GitHub org and Slack workspace |
+| Your conventions | `AGENTS.md`: the operating manual, evolve it as you go (`.claude/rules/` for Claude Code additions) |
+| Your model | `.claude/scripts/lib/notion-model.ts`: databases, properties, views. Run the setup again after a change |
 
 > [!IMPORTANT]
-> `AGENTS.md` is the operating manual. When you change conventions, update it — your agent reads it every session.
+> `AGENTS.md` is the operating manual. When you change conventions, update it. Your agent reads it every session.
 
 ---
 
-## 🔄 Upgrading
-
-### Ask your agent
-
-The easiest way — just tell your agent:
-
-```
-Update this vault to the latest obsidian-mind from https://github.com/breferrari/obsidian-mind
-```
-
-The agent will pull the latest changes, resolve conflicts, and update infrastructure files. Works with Claude Code, Codex CLI, or Gemini CLI.
-
-### Updating an existing clone
-
-If you cloned the repo directly:
+## 🔄 Updating
 
 ```bash
-cd your-vault
-git pull origin main
+git pull
+node --experimental-strip-types .claude/scripts/notion-setup.ts
 ```
 
-New files appear automatically and hook scripts are updated in place. If you edited `CLAUDE.md`, the pull stops on it, because you changed a file the template deleted: move your additions out as [Troubleshooting](#-troubleshooting) describes, then delete it.
-
-### Updating a fork
-
-If you forked the repo:
-
-```bash
-git remote add upstream https://github.com/breferrari/obsidian-mind.git
-git fetch upstream
-git merge upstream/main
-```
-
-Resolve any conflicts in files you customized (typically `AGENTS.md`, `brain/` notes; a `CLAUDE.md` you edited conflicts with its deletion, see [Troubleshooting](#-troubleshooting)). Infrastructure files (`.claude/scripts/`, `.codex/`, `.gemini/`) should merge cleanly.
-
-### Adopting an existing clone into ShardMind (v5.x → v6)
-
-Already cloned obsidian-mind and want the wizard, optional modules, and three-way-merge upgrades without losing your customizations? `shardmind adopt` reconciles your existing vault into a managed v6 install — keeping every byte of your edits and only adding the `.shardmind/` sidecar + `shard-values.yaml`:
-
-```bash
-npm install -g shardmind
-shardmind adopt github:breferrari/obsidian-mind
-```
-
-The 2-way diff UI walks you through any local changes, asks per-file what to keep, then writes the engine metadata. Result: a v6-managed vault with your existing content intact, ready for `shardmind update` from there forward. No re-cloning.
-
-### Migrating from an older vault (or any other vault)
-
-Using a pre-v5 obsidian-mind, or migrating from a totally different Obsidian vault? The `/om-vault-upgrade` command migrates your content into the latest template:
-
-```bash
-# 1. Clone the latest obsidian-mind
-git clone https://github.com/breferrari/obsidian-mind.git ~/new-vault
-
-# 2. Open it in your agent
-cd ~/new-vault && claude   # or codex, or gemini
-
-# 3. Run the upgrade pointing to your old vault
-/om-vault-upgrade ~/my-old-vault
-```
-
-The agent will:
-1. **Detect** your vault version (v1–v3.x, or identify it as a non-obsidian-mind vault)
-2. **Inventory** every file — classify as user content, scaffold, infrastructure, or uncategorized
-3. **Present a migration plan** — you see exactly what will be copied, transformed, and skipped
-4. **Execute** after your approval — transforms frontmatter, fixes wikilinks, rebuilds indexes
-5. **Validate** — checks for orphans, broken links, missing frontmatter
-
-Your old vault is **never modified**. Use `--dry-run` to preview the plan without executing.
-
-> [!NOTE]
-> Works with any Obsidian vault, not just obsidian-mind. For non-obsidian-mind vaults, the agent reads each note and classifies it semantically — routing work notes, people, incidents, 1:1s, and decisions to the right folders.
+The pull updates the hooks, the commands, and the rules. The setup adds what a new version of the model needs and makes nothing else. Your notes stay in Notion and are not touched.
 
 ---
 
 ## 🩺 Troubleshooting
 
-**Claude Code ignores the vault's conventions.** Claude Code reads a `CLAUDE.md` in place of `AGENTS.md` and skips `AGENTS.md` without saying so. Two ways that happens:
+**Claude Code ignores the conventions.** Claude Code reads a `CLAUDE.md` in place of `AGENTS.md` and skips `AGENTS.md` without saying so. The hygiene flags say `CLAUDE.md present beside AGENTS.md` when one is in the repository root. Move what you added to `.claude/rules/local.md` or into `AGENTS.md`, then delete `CLAUDE.md`. A `CLAUDE.md` in a folder above the repository has the same effect, and the flag cannot see it.
 
-- **A leftover `CLAUDE.md` in the vault.** An update keeps a `CLAUDE.md` you edited. The session hygiene flags say `CLAUDE.md present beside AGENTS.md`, and `/om-vault-upgrade` lists it under **Move out**. Move what you added to `.claude/rules/local.md` (or into `AGENTS.md` if every agent needs it, keeping `AGENTS.md` under 23 KB, where the hygiene flags start: Antigravity stops reading it at ~24,000 bytes), then delete `CLAUDE.md`. Nothing is merged automatically.
-- **A `CLAUDE.md` in a folder above the vault.** Claude Code reads that one too, and `AGENTS.md` is skipped. The hygiene flag cannot see it, because it checks the vault root only. Move the vault out from under that folder, or move that file's content somewhere it applies only where you want it.
+**A Notion command is denied.** Read the reason. It shows the allowed forms. Most often the read has a pipe or a redirect, or a commit message names both `mcporter` and `notion`. See [`.claude/rules/notion-calls.md`](.claude/rules/notion-calls.md).
 
-**Gemini CLI loads no instructions when started in a vault subfolder.** Gemini's context search walks up the folders, but its settings lookup does not, so a session started in a subfolder never reads the vault's `.gemini/settings.json` and never learns to look for `AGENTS.md`. Start Gemini from the vault root.
+**A section says `(not read: …)`.** SessionStart or Stop could not read that part of the workspace. Check `mcporter auth notion`, then `node --experimental-strip-types .claude/scripts/notion-setup.ts --check`.
 
-**Gemini ignores what you added to `GEMINI.md`.** Gemini now reads `AGENTS.md` (through `.gemini/settings.json`), so a leftover `GEMINI.md` is never loaded. The hygiene flags say `GEMINI.md present beside AGENTS.md`, and `/om-vault-upgrade` lists it under **Move out**. Move your additions to `AGENTS.md`, then delete it.
-
-**Grok reads nothing from the vault.** Grok loads project instructions only from a trusted folder. Trust the vault once: run `/hooks-trust` in a Grok session, or launch with `--trust`. One grant covers MCP, LSP, hooks, project instructions and project skills.
+**The setup stops on the workspace.** `--workspace-id` and the map file both name a workspace. The setup stops when the login is in a different one. Log in to the right workspace, or move the old `notion-map.json` away.
 
 ---
 
 ## 🗺️ Roadmap
 
-**Issues and bug reports welcome.** Code contributions go through assignment: comment on an issue to ask for it, and open a PR once it's assigned to you. A PR for an issue not assigned to you is closed without review. See [CONTRIBUTING.md](CONTRIBUTING.md).
+**Issues and bug reports welcome.** Code contributions go through assignment: comment on an issue to ask for it, and open a PR once it is assigned to you. A PR for an issue not assigned to you is closed without review. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
 ## 🙏 Design Influences
 
-- [kepano/obsidian-skills](https://github.com/kepano/obsidian-skills) — Official Obsidian agent skills
-- [James Bedford](https://x.com/jameesy) — Vault structure philosophy, separation of AI-generated content
-- [arscontexta](https://github.com/agenticnotetaking/arscontexta) — Progressive disclosure via description fields, session hooks
+- [kepano/obsidian-skills](https://github.com/kepano/obsidian-skills): the agent skills of the Obsidian version
+- [James Bedford](https://x.com/jameesy): vault structure philosophy, separation of AI-generated content
+- [arscontexta](https://github.com/agenticnotetaking/arscontexta): progressive disclosure through description fields, session hooks
 
 ---
 
 ## 👤 Author
 
-Created by **[Brenno Ferrari](https://brennoferrari.com)** — Senior iOS Engineer in Berlin, building developer tools with Claude Code.
+Created by **[Brenno Ferrari](https://brennoferrari.com)**, Senior iOS Engineer in Berlin, building developer tools with Claude Code.
 
 ---
 
