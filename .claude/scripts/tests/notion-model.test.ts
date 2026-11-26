@@ -25,12 +25,23 @@ import {
 	type DatabaseKey,
 	type ViewSpec,
 } from "../lib/notion-model.ts";
+import { SIGNALS } from "../lib/signals.ts";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const spec = (key: DatabaseKey) => DATABASES.find((d) => d.key === key) ?? assert.fail(`no database ${key}`);
 const dataSourceOf = (key: DatabaseKey): string => `collection://ds-${key}`;
 
 describe("the model tables", () => {
+	test("each Status property offers the value that the decision reversal hint tells the agent to set", () => {
+		const hint = SIGNALS.find(({ name }) => name === "DECISION")?.subHint?.message ?? assert.fail("no reversal hint");
+		const value = hint.match(/`Status` (\w+)/)?.[1] ?? assert.fail("the hint names no Status value");
+		const statuses = DATABASES.flatMap(({ key, properties }) => {
+			const status = properties["Status"];
+			return status?.type === "select" ? [[key, status.options] as const] : [];
+		});
+		assert.deepEqual(statuses.map(([key]) => key).sort(), ["perf_docs", "work"]);
+		assert.deepEqual(statuses.filter(([, options]) => !options.includes(value)).map(([key]) => key), []);
+	});
 	test("each scaffold source is a file of the repository", () => {
 		for (const [source, path] of Object.entries(SCAFFOLD_SOURCES)) assert.ok(existsSync(join(repoRoot, path)), `${source}: ${path}`);
 	});

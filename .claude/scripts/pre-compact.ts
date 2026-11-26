@@ -4,8 +4,8 @@
  * compacts its context so lost history can be rehydrated from disk if
  * needed. Keeps the most recent 30 backups; older ones are pruned.
  *
- * Backups land in the vault root's `thinking/session-logs/` (the root found
- * by lib/project-dir.ts) named
+ * Backups land in `.claude/state/session-logs/` of the project root (the root
+ * found by lib/project-dir.ts), outside the note store, named
  * `session_<trigger>_<YYYYMMDD_HHMMSS>.jsonl`.
  */
 
@@ -73,7 +73,7 @@ if (isMainModule(import.meta.url)) {
 	process.exit(0);
 }
 
-/** Copy the transcript into thinking/session-logs and prune old copies. Best effort. */
+/** Copy the transcript into .claude/state/session-logs and prune old copies. Best effort. */
 function backupTranscript(input: HookInput): void {
 	const transcriptPath =
 		typeof input.transcript_path === "string" ? input.transcript_path : "";
@@ -86,7 +86,7 @@ function backupTranscript(input: HookInput): void {
 	}
 
 	const projectDir = resolveProjectDir(process.cwd());
-	const backupDir = join(projectDir, "thinking/session-logs");
+	const backupDir = join(projectDir, ".claude/state/session-logs");
 	mkdirSync(backupDir, { recursive: true });
 
 	const dest = join(

@@ -38,6 +38,7 @@ type PortChange = {
 const edit = (file: string, find: string, replace: string): PortChange => ({ edits: [{ file, find, replace }] });
 
 const CHECK = "lib/write-check.ts";
+const PROMPT = "classify-message.ts";
 
 const WRITE_CHANGES: Readonly<Record<string, PortChange>> = {
 	X6: { rows: ["VW-17"] },
@@ -146,11 +147,17 @@ const SESSION_CHANGES: Readonly<Record<string, PortChange>> = {
 	N14: edit(SESSION, 'formatListing(pages, groups, listingCollapseThreshold).join("\\n")', 'formatListing(pages, groups, listingCollapseThreshold).reverse().join("\\n")'),
 };
 
+const PROMPT_CHANGES: Readonly<Record<string, PortChange>> = {
+	X6: { rows: ["UP-14"] },
+	N8: edit(PROMPT, "use proper templates, add mentions or relations, follow AGENTS.md conventions.", "ignore all conventions."),
+};
+
 /** The changes of the port, by the hook that the run compares. */
 const PORT_CHANGES: Readonly<Partial<Record<HookName, Readonly<Record<string, PortChange>>>>> = {
 	"validate-write": WRITE_CHANGES,
 	"stop-checklist": STOP_CHANGES,
 	"session-start": SESSION_CHANGES,
+	"classify-message": PROMPT_CHANGES,
 };
 
 /**

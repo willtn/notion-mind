@@ -8,7 +8,7 @@
  * the hooks of this repository (`port-mutations.ts`), and the mutated copy
  * runs on the Notion form.
  *
- * Usage: node --experimental-strip-types parity/run-mutations.ts [--lines] [--notion --hook <name> [--now <instant>] [--map <path>]]
+ * Usage: node --experimental-strip-types parity/run-mutations.ts [--lines] [--notion --hook <name> [--own-scenarios] [--now <instant>] [--map <path>]]
  */
 
 import { MUTATIONS, runMutations } from "./mutations.ts";
@@ -20,7 +20,7 @@ const unknown = rest.filter((name) => name !== "--lines");
 if (unknown.length > 0) throw new Error(`Unknown option: ${unknown.join(" ")}. Read the header of run-mutations.ts for the options.`);
 
 const withLines = rest.includes("--lines");
-const results = notion === null ? runMutations(MUTATIONS) : runMutations(portMutations(notion.hook), { scriptsDir: notion.scriptsDir, form: notion.form });
+const results = notion === null ? runMutations(MUTATIONS) : runMutations(portMutations(notion.hook, MUTATIONS, notion.spec), { scriptsDir: notion.scriptsDir, form: notion.form });
 let holes = 0;
 
 console.log("| ID | Mutation | Differences | Rows | Result |");
