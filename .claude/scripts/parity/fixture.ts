@@ -746,7 +746,7 @@ const volatileSections = (step: number): ExpectedFinding[] => [
 ];
 
 /** The full context. `channel` is the row of the payload read: SS-19, or SS-01 when stdin is not a payload. */
-const fullContext = (step: number, channel: "SS-19" | "SS-01"): ExpectedFinding[] => [
+const fullContext = (step: number, channel: "SS-19" | "SS-01", openLoops = OPEN_LOOPS): ExpectedFinding[] => [
 	{ row: channel, step, detail: "additional context, event SessionStart" },
 	{ row: "SS-19", step, detail: "session title" },
 	{ row: "SS-19", step, detail: "size meter" },
@@ -768,7 +768,7 @@ const fullContext = (step: number, channel: "SS-19" | "SS-01"): ExpectedFinding[
 	...LISTED.map((note): ExpectedFinding => ({ row: "SS-16", step, note, detail: "listed" })),
 	...COLLAPSED.map((note): ExpectedFinding => ({ row: "SS-16", step, note, detail: "collapsed" })),
 	{ row: "SS-17", step },
-	...hygiene(step),
+	...hygiene(step, openLoops),
 	vaultPathExport(step),
 ];
 
@@ -817,6 +817,13 @@ const scenarios: readonly Scenario[] = [
 		expect: fullContext(0, "SS-19"),
 		// The manifest read prints no line. "Follow Ups" is a heading that only the manifest of the fixture names.
 		provenBy: { "SS-06": { row: "HY-04", note: "Planning Export", count: 1 } },
+	},
+	{
+		id: "session-start-work-notes-watched",
+		// The watched places come only from the manifest. With the work notes, two more notes have open loops.
+		rows: ["SS-06", "HY-04"],
+		steps: [{ ...payload("session-start", { source: "startup" }), replaceRepoFile: MANIFEST_WITH_WORK_NOTES_WATCHED }],
+		expect: fullContext(0, "SS-19", OPEN_LOOPS_AT_THE_CAP),
 	},
 	{
 		id: "session-start-bad-stdin",

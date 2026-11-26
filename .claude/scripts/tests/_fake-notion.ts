@@ -101,7 +101,13 @@ export function fakeMap(): { readonly map: NotionMap; readonly nextId: () => str
 				{ ...ref(database.title), data_source: `collection://${nextId()}`, views: Object.fromEntries(database.views.map(({ name }) => [name, `view://${nextId()}`])) },
 			]),
 		),
-		pages: { home: ref("Home"), north_star: ref("North Star") },
+		pages: {
+			home: ref("Home"),
+			north_star: ref("North Star"),
+			people_and_context: ref("People & Context"),
+			recently_touched: ref("Recently Touched"),
+			reader_map: ref("Reader map"),
+		},
 		templates: {},
 	} as unknown as NotionMap;
 	return { map, nextId };
@@ -156,11 +162,13 @@ export const viewRows = (rows: readonly Readonly<Record<string, unknown>>[]): st
 
 /**
  * A project directory with a map file, a manifest, and a stand-in runtime
- * that answers each view query. A hook that runs with `env` reads only
- * these rows.
+ * that answers each view query and each page fetch. A hook that runs with
+ * `env` reads only these rows and these pages. A view with no rows set is
+ * empty, and a fetch of a page with no content set fails.
  *
  *     const workspace = fakeWorkspace(dir);
  *     workspace.setRows("knowledge", "Hygiene: oversized", [{ Name: "Runbook", Bytes: 26_000 }]);
+ *     workspace.setPage(workspace.map.pages.home.id, "Home", "- [ ] Plan the offsite");
  *     runScript(HOOK, payload, workspace.env);
  */
 export interface FakeWorkspace {
@@ -170,6 +178,8 @@ export interface FakeWorkspace {
 	readonly map: NotionMap;
 	/** The rows that one view returns from now on, or the error of its query. */
 	readonly setRows: (database: DatabaseKey, view: string, rows: readonly Readonly<Record<string, unknown>>[] | { readonly error: string }) => void;
+	/** The title and the content that a fetch of one page returns from now on. */
+	readonly setPage: (id: string, title: string, content: string) => void;
 	readonly calls: () => FakeCall[];
 }
 
@@ -179,8 +189,9 @@ export function fakeWorkspace(root: string, manifest: Readonly<Record<string, un
 	writeFileSync(join(root, "vault-manifest.json"), JSON.stringify(manifest));
 	writeFileSync(join(root, NOTION_MAP_FILE), JSON.stringify(map));
 	const byView: Record<string, string | { readonly error: string }> = {};
+	const byId: Record<string, string> = {};
 	const tools = join(root, ".fake-notion");
-	const fake = (): FakeNotion => fakeNotion(tools, { "notion-query-data-sources": { byView } });
+	const fake = (): FakeNotion => fakeNotion(tools, { "notion-query-data-sources": { byView }, "notion-fetch": { byId } });
 	const { env, calls } = fake();
 	return {
 		root,
@@ -192,6 +203,27 @@ export function fakeWorkspace(root: string, manifest: Readonly<Record<string, un
 			byView[url] = "error" in rows ? rows : viewRows(rows);
 			fake();
 		},
+		setPage: (id, title, content) => {
+			byId[id] = fetchedPage({ id, title, properties: { title }, content, under: [] });
+			fake();
+		},
 		calls,
 	};
+}
+
+/** The content of the root page: one child for each page of `pages`, by title. */
+export const rootContent = (pages: readonly { readonly url: string; readonly title: string }[]): string => pages.map(({ url, title }) => `<page url="${url}">${title}</page>`).join("\n");
+
+/**
+ * A `fakeWorkspace` whose pages a hook can fetch: an empty Home, a North
+ * Star with one goal, and a root page that holds the pages of the setup. A
+ * test sets the rows and the pages that it is about.
+ */
+export function readableWorkspace(root: string, manifest: Readonly<Record<string, unknown>> = {}): FakeWorkspace {
+	const workspace = fakeWorkspace(root, manifest);
+	const { pages } = workspace.map;
+	workspace.setPage(pages.home.id, "Home", "");
+	workspace.setPage(pages.north_star.id, "North Star", "## Current Focus\n\n- placeholder\n");
+	workspace.setPage(workspace.map.root.id, workspace.map.root.title, rootContent(Object.values(pages)));
+	return workspace;
 }

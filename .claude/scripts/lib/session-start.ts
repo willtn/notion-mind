@@ -1,17 +1,13 @@
 /**
  * Pure helpers for session-start context assembly — extracted so the
- * formatting logic is unit-testable without spawning git, reading the file
- * system, or invoking the Obsidian CLI.
+ * formatting logic is unit-testable without a Notion call or a file read.
+ * lib/session-sources.ts gives the data that the formatters take.
  */
 
 import { basename, join, resolve } from "node:path";
 
 import { envelopedLimit } from "./hook-io.ts";
 import { escapeRegex } from "./regex.ts";
-
-export function take(stdout: string, n: number): string {
-	return stdout.split("\n").slice(0, n).join("\n");
-}
 
 /**
  * Injection-size meter line: eager-layer bloat becomes visible the day it
@@ -78,7 +74,7 @@ export function formatInjectionSize(
  * section had before (#304).
  */
 export type BudgetSection = {
-	/** Section heading, e.g. "### Vault File Listing". Empty for preamble. */
+	/** Section heading, e.g. "### Workspace Listing". Empty for preamble. */
 	readonly header: string;
 	readonly body: string;
 	readonly priority: number;
@@ -210,41 +206,46 @@ export function applyInjectionBudget(
 }
 
 /**
- * Collapse a FLAT directory holding more than `threshold` notes to a single
- * count line.
- *
- * Replaces a hardcoded folder list: a fixed list only ever collapses the
- * folders someone remembered to name, so a vault grows past the ceiling
- * through whichever directory nobody listed. A threshold cannot go stale as
- * a vault evolves.
- *
- * `hasSubdirs` is the guard that makes this safe. Collapsing on recursive
- * subtree count folds whole TREES — `projects/`, `brain/`, `work/` all
- * vanish behind one line and the vault's shape becomes invisible, which is
- * far worse than the bytes it saves. The signal we actually want is flat
- * bulk: a folder of same-shaped sibling notes (people, archives, captures)
- * whose names are retrievable on demand. Structure is navigation and is
- * kept; flat bulk is noise and is folded. Anything the threshold declines
- * to fold is still caught by the byte budget — two mechanisms, two jobs.
+ * A group of the listing with more notes than this is one count line. A
+ * group is a set of rows of one kind, whose titles a query gives on demand.
+ * The byte budget holds what this limit does not fold.
  */
 export const DEFAULT_LISTING_COLLAPSE_THRESHOLD = 12;
 
-export function shouldCollapseDir(
-	noteCount: number,
-	threshold: number,
-	alwaysCollapse: readonly string[],
-	posixPath: string,
-	hasSubdirs: boolean,
-): boolean {
-	if (alwaysCollapse.includes(posixPath)) return true;
-	if (hasSubdirs) return false;
+/** A group of the listing collapses past `threshold` notes. `alwaysCollapsed` is the archived work, which is one line at any size. */
+export function shouldCollapseGroup(noteCount: number, threshold: number, alwaysCollapsed: boolean): boolean {
+	if (alwaysCollapsed) return true;
 	if (!Number.isFinite(threshold) || threshold <= 0) return false;
 	return noteCount > threshold;
 }
 
-/** The one-line stand-in for a collapsed directory. Shape predates the threshold. */
-export function formatCollapsedDir(posixPath: string, noteCount: number): string {
-	return `./${posixPath}/ — ${noteCount} notes (listing collapsed — Glob on demand)`;
+/** The one-line stand-in for a collapsed group. */
+export function formatCollapsedGroup(group: string, noteCount: number): string {
+	return `${group} — ${noteCount} notes (listing collapsed — query the database on demand)`;
+}
+
+/** One group of the listing: the rows of a database with one `Type`, or the archived work. */
+export type ListingGroup = {
+	/** The database and the `Type`, such as "Knowledge / Reference". */
+	readonly name: string;
+	readonly titles: readonly string[];
+	readonly alwaysCollapsed: boolean;
+};
+
+/**
+ * The listing as lines: the pages under the root page by title, then each
+ * group by name, with `Group / Title` for each row or one line for a group
+ * that collapses.
+ */
+export function formatListing(pages: readonly string[], groups: readonly ListingGroup[], threshold: number): string[] {
+	return [
+		...[...pages].sort(),
+		...[...groups]
+			.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
+			.flatMap(({ name, titles, alwaysCollapsed }) =>
+				shouldCollapseGroup(titles.length, threshold, alwaysCollapsed) ? [formatCollapsedGroup(name, titles.length)] : [...titles].sort().map((title) => `${name} / ${title}`),
+			),
+	];
 }
 
 function parsePositiveIntField(
@@ -397,46 +398,16 @@ export function formatEnvExport(name: string, value: string): string {
 	return `export ${name}=${quoteForPosixShell(value)}\n`;
 }
 
-/**
- * Format the "Active Work" section from a list of filenames in work/active.
- * Strips `.md`, keeps the first `limit`, returns "(none)" for empty input.
- */
-export function formatActiveWork(
-	filenames: readonly string[],
-	limit: number,
-): string {
-	const names = filenames
-		.filter((f) => isMarkdownFilename(f))
-		.map((f) => f.replace(/\.md$/i, ""))
-		.slice(0, limit);
-	return names.length > 0 ? names.join("\n") : "(none)";
+/** The "Active Work" section: the first `limit` titles, or "(none)". */
+export function formatActiveWork(titles: readonly string[], limit: number): string {
+	const kept = titles.slice(0, limit);
+	return kept.length > 0 ? kept.join("\n") : "(none)";
 }
 
-/**
- * Format the "Recent Changes" section from raw `git log --oneline` output.
- * Strips blank lines, keeps the first `limit`, falls back to
- * "(no git history)" when empty (matching the legacy shell message).
- */
-export function formatRecentChanges(gitOutput: string, limit: number): string {
-	const lines = gitOutput
-		.split("\n")
-		.filter((l) => l.length > 0)
-		.slice(0, limit);
-	return lines.length > 0 ? lines.join("\n") : "(no git history)";
-}
-
-/**
- * Return true if a path (relative, using "/" separators) falls under any
- * of the supplied skip prefixes. A prefix like ".git" matches ".git" and
- * ".git/anything" but not ".github" (exact segment boundary).
- */
-export function isSkippedPath(
-	pathRel: string,
-	skipPrefixes: readonly string[],
-): boolean {
-	return skipPrefixes.some(
-		(p) => pathRel === p || pathRel.startsWith(p + "/"),
-	);
+/** The "Recent Changes" section: the first `limit` titles, or "(no recent changes)". */
+export function formatRecentChanges(titles: readonly string[], limit: number): string {
+	const kept = titles.slice(0, limit);
+	return kept.length > 0 ? kept.join("\n") : "(no recent changes)";
 }
 
 /**
@@ -645,12 +616,11 @@ export function collectOpenTasks(
 }
 
 /**
- * Format the "Brain Topics" section — one line per brain/ note with its
- * description from frontmatter, so Claude sees what topic notes exist
- * without loading their full content. Omits North Star (already loaded
- * in its own section) and Memories (an index that just points here).
- * Appends "(empty)" when the note has no filled bullets, so Claude
- * knows not to waste a read on a stub.
+ * The "Brain Topics" section: one line for each brain topic with its
+ * description, so the agent sees which topics exist and loads none. It
+ * leaves out North Star, which has its own section, and Memories, which is
+ * an index of the same topics. A topic with no filled bullet gets
+ * " (empty)", so the agent does not read a stub.
  */
 export function formatBrainIndex(
 	entries: readonly {
@@ -664,7 +634,7 @@ export function formatBrainIndex(
 		.map((e) => {
 			const desc = e.description ?? "(no description)";
 			const suffix = e.hasContent ? "" : " (empty)";
-			return `- [[${e.name}]] — ${desc}${suffix}`;
+			return `- ${e.name} — ${desc}${suffix}`;
 		});
 	return lines.length > 0 ? lines.join("\n") : "(none)";
 }
@@ -690,7 +660,7 @@ export const HEADLINE_MAX_CHARS = 200;
 /** A first sentence shorter than this is a label; the headline takes more. */
 export const HEADLINE_MIN_CHARS = 40;
 
-export const NORTH_STAR_POINTER = "Read brain/North Star.md before suggesting priorities or deciding what to work on.";
+export const NORTH_STAR_POINTER = "Read the North Star page before suggesting priorities or deciding what to work on.";
 
 const LIST_ITEM = /^(\s*)(?:[-*+]|\d+[.)])\s+(.*)$/;
 
@@ -792,7 +762,7 @@ export function northStarLadder(raw: string): NorthStarLadder {
 
 	const { kept, dropped } = dropDeadItems(withoutLog);
 	if (dropped > 0) {
-		kept.splice(1, 0, `_(${dropped} completed item${dropped === 1 ? "" : "s"} hidden — full history in brain/North Star.md)_`);
+		kept.splice(1, 0, `_(${dropped} completed item${dropped === 1 ? "" : "s"} hidden — full history in the North Star page)_`);
 	}
 	const full = kept.join("\n");
 
@@ -802,7 +772,7 @@ export function northStarLadder(raw: string): NorthStarLadder {
 	}
 	const focusLines = dropDeadItems(untilNextH2(scoped, 0));
 	if (focusLines.dropped > 0) {
-		focusLines.kept.splice(1, 0, `_(${focusLines.dropped} completed item${focusLines.dropped === 1 ? "" : "s"} hidden — full history in brain/North Star.md)_`);
+		focusLines.kept.splice(1, 0, `_(${focusLines.dropped} completed item${focusLines.dropped === 1 ? "" : "s"} hidden — full history in the North Star page)_`);
 	}
 	const headlines = focusLines.kept
 		.filter((l) => LIST_ITEM.exec(l)?.[1] === "")
@@ -825,7 +795,7 @@ export function renderHeadlines(headlines: readonly string[]): string {
  */
 export function topHeadlines(headlines: readonly string[], fits: (body: string) => boolean): string | null {
 	for (let n = headlines.length - 1; n >= 1; n--) {
-		const body = `${renderHeadlines(headlines.slice(0, n))}\n_(+${headlines.length - n} more goals in brain/North Star.md)_`;
+		const body = `${renderHeadlines(headlines.slice(0, n))}\n_(+${headlines.length - n} more goals in the North Star page)_`;
 		if (fits(body)) return body;
 	}
 	return null;

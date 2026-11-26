@@ -10,7 +10,7 @@
 
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -23,13 +23,15 @@ import {
 	northStarLadder,
 	renderHeadlines,
 	stripFrontmatter,
-	take,
 	topHeadlines,
 	HEADLINE_MAX_CHARS,
 	NORTH_STAR_POINTER,
 	type BudgetSection,
 } from "../lib/session-start.ts";
+import { fakeUrl, readableWorkspace } from "./_fake-notion.ts";
 import { hookContext, runScript as spawnHook, rmTemp } from "./_helpers.ts";
+
+const SESSION_START = resolve(dirname(fileURLToPath(import.meta.url)), "../session-start.ts");
 
 const bytes = (s: string): number => Buffer.byteLength(s, "utf-8");
 const render = (s: readonly BudgetSection[]): number =>
@@ -172,9 +174,9 @@ function oldNorthStar(raw: string): string {
 	const struckCount = scoped.filter((l) => l.trimStart().startsWith("- ~~")).length;
 	const live = scoped.filter((l) => !l.trimStart().startsWith("- ~~"));
 	if (struckCount > 0) {
-		live.splice(1, 0, `_(${struckCount} completed item${struckCount === 1 ? "" : "s"} hidden — full history in brain/North Star.md)_`);
+		live.splice(1, 0, `_(${struckCount} completed item${struckCount === 1 ? "" : "s"} hidden — full history in the North Star page)_`);
 	}
-	return take(live.join("\n"), 30);
+	return live.join("\n").split("\n").slice(0, 30).join("\n");
 }
 
 describe("northStarLadder", () => {
@@ -207,7 +209,7 @@ describe("northStarLadder", () => {
 		const after = northStarLadder(raw).full.split("\n");
 		const gone = before.filter((l) => !after.includes(l));
 		assert.deepEqual(gone, [
-			"_(1 completed item hidden — full history in brain/North Star.md)_",
+			"_(1 completed item hidden — full history in the North Star page)_",
 			"  - a sub-bullet of the old goal",
 			"- [x] Checked goal",
 			"  continuation of the checked goal",
@@ -215,14 +217,14 @@ describe("northStarLadder", () => {
 			"| Date | Shift | Reason |",
 			"| 2026-01-01 | Created | Setup |",
 		]);
-		assert.ok(after.includes("_(2 completed items hidden — full history in brain/North Star.md)_"));
+		assert.ok(after.includes("_(2 completed items hidden — full history in the North Star page)_"));
 		assert.ok(after.includes("## Anti-goals") && after.includes("- Not this"), "later goal sections stay in full");
 	});
 
 	test("focus is Current Focus only; headlines are its live top-level bullets", () => {
 		const raw = "## Current Focus\n- [[Alpha]] — the first goal, stated in one full sentence. More.\n  - detail\n- ~~done~~\n\n## Goals\n- Later";
 		const l = northStarLadder(raw);
-		assert.equal(l.focus, "## Current Focus\n_(1 completed item hidden — full history in brain/North Star.md)_\n- [[Alpha]] — the first goal, stated in one full sentence. More.\n  - detail");
+		assert.equal(l.focus, "## Current Focus\n_(1 completed item hidden — full history in the North Star page)_\n- [[Alpha]] — the first goal, stated in one full sentence. More.\n  - detail");
 		assert.deepEqual(l.headlines, ["Alpha — the first goal, stated in one full sentence."]);
 	});
 
@@ -235,10 +237,10 @@ describe("northStarLadder", () => {
 
 describe("topHeadlines", () => {
 	const heads = ["one", "two", "three"];
-	const two = `${renderHeadlines(["one", "two"])}\n_(+1 more goals in brain/North Star.md)_`;
+	const two = `${renderHeadlines(["one", "two"])}\n_(+1 more goals in the North Star page)_`;
 	test("the first N that fit, and how many more", () => {
 		assert.equal(topHeadlines(heads, (b) => bytes(b) <= bytes(two)), two);
-		assert.equal(topHeadlines(heads, (b) => bytes(b) <= bytes(two) - 1), `${renderHeadlines(["one"])}\n_(+2 more goals in brain/North Star.md)_`);
+		assert.equal(topHeadlines(heads, (b) => bytes(b) <= bytes(two) - 1), `${renderHeadlines(["one"])}\n_(+2 more goals in the North Star page)_`);
 	});
 	test("null when not one fits", () => {
 		assert.equal(topHeadlines(heads, (b) => bytes(b) <= 5), null);
@@ -250,15 +252,15 @@ describe("topHeadlines", () => {
 });
 
 describe("session-start — #304's fixture on the hook path", () => {
-	test("30 long [[link]] — clause bullets: goals reach the session, listing and brain index stay", () => {
+	test("30 long mention — clause bullets: goals reach the session, listing and brain index stay", () => {
 		const dir = mkdtempSync(join(tmpdir(), "session-start-ladder-"));
 		try {
-			mkdirSync(join(dir, "brain"));
+			const workspace = readableWorkspace(dir);
 			const clause = "move the release build onto tagged artifacts so nobody edits the changelog by hand. ";
-			const bullets = Array.from({ length: 30 }, (_, i) => `- [[Project ${i}]] — ${clause}${"More detail on how it is measured and what counts. ".repeat(5)}`);
-			writeFileSync(join(dir, "brain", "North Star.md"), `---\ndescription: d\n---\n# North Star\n\n## Current Focus\n\n${bullets.join("\n")}\n`);
-			writeFileSync(join(dir, "brain", "Gotchas.md"), "---\ndescription: pitfalls\n---\n# G\n");
-			const run = spawnHook(resolve(dirname(fileURLToPath(import.meta.url)), "../session-start.ts"), { source: "startup" }, { CLAUDE_PROJECT_DIR: dir });
+			const bullets = Array.from({ length: 30 }, (_, i) => `- <mention url="${fakeUrl(workspace.map.pages.home.id)}">Project ${i}</mention> — ${clause}${"More detail on how it is measured and what counts. ".repeat(5)}`);
+			workspace.setPage(workspace.map.pages.north_star.id, "North Star", `## Current Focus\n\n${bullets.join("\n")}\n`);
+			workspace.setRows("knowledge", "Brain index", [{ Name: "Gotchas", Description: "pitfalls" }]);
+			const run = spawnHook(SESSION_START, { source: "startup" }, workspace.env);
 			const { code } = run;
 			const stdout = hookContext(run.stdout);
 			assert.equal(code, 0);
@@ -298,13 +300,9 @@ describe("North Star full level — no silent cut", () => {
 	test("on the 20 kB instruction budget all 30 goals are delivered, and the meter reports no cut or degradation", () => {
 		const dir = mkdtempSync(join(tmpdir(), "session-start-thirty-"));
 		try {
-			mkdirSync(join(dir, "brain"));
-			writeFileSync(join(dir, "brain", "North Star.md"), northStar);
-			const { stdout, code } = spawnHook(
-				resolve(dirname(fileURLToPath(import.meta.url)), "../session-start.ts"),
-				{ source: "startup", om_mod: "deliver" },
-				{ CLAUDE_PROJECT_DIR: dir },
-			);
+			const workspace = readableWorkspace(dir);
+			workspace.setPage(workspace.map.pages.north_star.id, "North Star", stripFrontmatter(northStar));
+			const { stdout, code } = spawnHook(SESSION_START, { source: "startup", om_mod: "deliver" }, workspace.env);
 			assert.equal(code, 0);
 			for (let i = 1; i <= 30; i++) assert.ok(stdout.includes(`GOAL-${String(i).padStart(2, "0")}`), `goal ${i} not delivered`);
 			const meter = stdout.trim().split("\n").pop() ?? "";
@@ -317,13 +315,10 @@ describe("North Star full level — no silent cut", () => {
 	test("a section delivered from a cut of its source is named in the meter, with what was kept", () => {
 		const dir = mkdtempSync(join(tmpdir(), "session-start-cutmeter-"));
 		try {
+			const workspace = readableWorkspace(dir);
 			const tasks = Array.from({ length: 14 }, (_, i) => `- [ ] task ${i + 1}`).join("\n");
-			writeFileSync(join(dir, "Tasks.md"), `# Tasks\n\n${tasks}\n`);
-			const run = spawnHook(
-				resolve(dirname(fileURLToPath(import.meta.url)), "../session-start.ts"),
-				{ source: "startup" },
-				{ CLAUDE_PROJECT_DIR: dir },
-			);
+			workspace.setPage(workspace.map.pages.home.id, "Home", `${tasks}\n`);
+			const run = spawnHook(SESSION_START, { source: "startup" }, workspace.env);
 			const { code } = run;
 			const stdout = hookContext(run.stdout);
 			assert.equal(code, 0);
@@ -409,7 +404,7 @@ describe("a fitted rung sizes itself as the budget measures it (#340)", () => {
 			// The most headlines any top-N body could keep inside this budget.
 			let best = 0;
 			for (let n = 1; n < headlines.length; n++) {
-				const body = `${renderHeadlines(headlines.slice(0, n))}\n_(+${headlines.length - n} more goals in brain/North Star.md)_`;
+				const body = `${renderHeadlines(headlines.slice(0, n))}\n_(+${headlines.length - n} more goals in the North Star page)_`;
 				if (enveloped(textOf(body)) <= budget) best = n;
 			}
 			assert.ok(best > 0, `budget ${budget} leaves room for at least one`);

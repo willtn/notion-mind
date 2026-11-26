@@ -1,8 +1,7 @@
 /**
- * Unit tests for session-start pure helpers.
- * The entry point itself (fs walk, git log, Obsidian CLI probe) is exercised
- * live when the hook fires; these tests lock the deterministic formatting
- * logic that doesn't need a real environment.
+ * Unit tests for session-start pure helpers. These tests lock the
+ * deterministic formatting logic, which needs no Notion call.
+ * tests/session-start.integration.test.ts runs the entry point.
  */
 
 import { test, describe } from "node:test";
@@ -13,15 +12,15 @@ import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
 import {
-	take,
 	formatDateHeader,
 	quoteForPosixShell,
 	formatEnvExport,
 	formatInjectionSize,
 	injectionMode,
 	applyInjectionBudget,
-	shouldCollapseDir,
-	formatCollapsedDir,
+	shouldCollapseGroup,
+	formatCollapsedGroup,
+	formatListing,
 	parseInjectionBudget,
 	parseInstructionBudget,
 	DEFAULT_INSTRUCTION_BUDGET_BYTES,
@@ -33,7 +32,6 @@ import {
 	type BudgetSection,
 	formatActiveWork,
 	formatRecentChanges,
-	isSkippedPath,
 	MACHINERY_DIRS,
 	extractFrontmatterField,
 	formatBrainIndex,
@@ -48,18 +46,6 @@ import {
 import { cutLine, envelopedLimit, fitEncoded, fitWithMeter, HOOK_OUTPUT_LIMIT, HOOK_OUTPUT_MAX_CHARS, type OutputLimit } from "../lib/hook-io.ts";
 const CUT_LINE = cutLine(HOOK_OUTPUT_LIMIT);
 import { rmTemp } from "./_helpers.ts";
-
-describe("take", () => {
-	test("keeps first N lines", () => {
-		assert.equal(take("a\nb\nc\nd", 2), "a\nb");
-	});
-	test("N >= line count is a pass-through", () => {
-		assert.equal(take("a\nb", 10), "a\nb");
-	});
-	test("empty string stays empty", () => {
-		assert.equal(take("", 5), "");
-	});
-});
 
 describe("formatDateHeader", () => {
 	test("pads single-digit month and day; includes weekday", () => {
@@ -160,27 +146,6 @@ describe("session-start entry — env export cannot be hand-rolled", () => {
 			/quoteForPosixShell\(/,
 			"the entry should call formatEnvExport, which quotes internally",
 		);
-	});
-
-	// SKIP_PREFIXES is module-private and the entry runs on import, so the
-	// wiring can only be pinned at the source level. Without this, #156
-	// regresses silently: MACHINERY_DIRS keeps its entries and its own tests
-	// keep passing while the listing walks a hardcoded list again.
-	const SKIP_DEF = /const SKIP_PREFIXES[^=]*=\s*\[\s*\.\.\.MACHINERY_DIRS\s*,/;
-
-	test("builds SKIP_PREFIXES from the shared machinery list (#156)", () => {
-		assert.match(
-			entry,
-			SKIP_DEF,
-			"the listing walk must spread MACHINERY_DIRS, not re-list dirs by hand",
-		);
-	});
-
-	test("GUARD IS NOT VACUOUS — the pattern rejects a hand-listed set", () => {
-		// The exact pre-#156 definition.
-		const regression =
-			'const SKIP_PREFIXES: readonly string[] = [\n\t".git",\n\t".obsidian",\n\t"thinking",\n\t".claude",\n];';
-		assert.doesNotMatch(regression, SKIP_DEF, "guard must reject the old literal");
 	});
 
 	// A guard that cannot fail is worse than no guard: it reads as coverage
@@ -332,84 +297,34 @@ describe("quoteForPosixShell — verified against a real POSIX shell", () => {
 });
 
 describe("formatActiveWork", () => {
-	test("strips .md, respects limit, returns sorted input order", () => {
-		const out = formatActiveWork(
-			["project-a.md", "project-b.md", "project-c.md"],
-			2,
-		);
-		assert.equal(out, "project-a\nproject-b");
+	test("keeps the first titles up to the limit, in the order of the input", () => {
+		assert.equal(formatActiveWork(["Project C", "Project A", "Project B"], 2), "Project C\nProject A");
 	});
-	test("filters out non-.md files", () => {
-		const out = formatActiveWork(
-			["a.md", "b.txt", "c.md", ".DS_Store"],
-			10,
-		);
-		assert.equal(out, "a\nc");
+	test("a title that ends in .md stays whole, because a title is not a file name", () => {
+		assert.equal(formatActiveWork(["Notes on README.md"], 10), "Notes on README.md");
 	});
 	test("empty input → '(none)'", () => {
 		assert.equal(formatActiveWork([], 10), "(none)");
 	});
-	test("all-filtered-out → '(none)'", () => {
-		assert.equal(formatActiveWork(["not-markdown.txt"], 10), "(none)");
-	});
-	test("preserves `.MD` and `.Md` files (case-insensitive matching)", () => {
-		const out = formatActiveWork(
-			["Note.md", "Note.MD", "Note.Md", "notes.txt"],
-			10,
-		);
-		assert.equal(out, "Note\nNote\nNote");
-	});
 });
 
 describe("formatRecentChanges", () => {
-	test("filters blank lines, respects limit", () => {
-		const out = formatRecentChanges("abc123 one\n\ndef456 two\n\nghi789 three", 2);
-		assert.equal(out, "abc123 one\ndef456 two");
+	test("keeps the first titles up to the limit, the latest first as the input has them", () => {
+		assert.equal(formatRecentChanges(["Runbook", "Checkout Outage", "Ada Park"], 2), "Runbook\nCheckout Outage");
 	});
-	test("empty git output → '(no git history)'", () => {
-		assert.equal(formatRecentChanges("", 15), "(no git history)");
-	});
-	test("whitespace-only git output → '(no git history)'", () => {
-		assert.equal(formatRecentChanges("\n\n\n", 15), "(no git history)");
-	});
-});
-
-describe("isSkippedPath", () => {
-	const PREFIXES = [".git", ".obsidian", "thinking", ".claude"];
-
-	test("exact prefix match is skipped", () => {
-		assert.equal(isSkippedPath(".git", PREFIXES), true);
-	});
-	test("child of prefix is skipped", () => {
-		assert.equal(isSkippedPath(".claude/commands/foo.md", PREFIXES), true);
-	});
-	test("segment-boundary enforcement — .github is NOT skipped under .git", () => {
-		assert.equal(isSkippedPath(".github/workflow.md", PREFIXES), false);
-	});
-	test("unrelated path is not skipped", () => {
-		assert.equal(isSkippedPath("work/active/note.md", PREFIXES), false);
-	});
-	test("empty prefix list never skips", () => {
-		assert.equal(isSkippedPath(".git/foo", []), false);
+	test("no title → '(no recent changes)'", () => {
+		assert.equal(formatRecentChanges([], 15), "(no recent changes)");
 	});
 });
 
 describe("MACHINERY_DIRS", () => {
-	test("skips .github, which the segment boundary excludes from .git", () => {
-		assert.equal(
-			isSkippedPath(".github/pull_request_template.md", MACHINERY_DIRS),
-			true,
-		);
+	test("holds .github as its own entry, which a segment match on .git does not cover", () => {
+		assert.equal(MACHINERY_DIRS.includes(".git"), true);
+		assert.equal(MACHINERY_DIRS.includes(".github"), true);
 	});
 
-	test("leaves user content alone", () => {
-		for (const p of [
-			"work/active/Note.md",
-			"brain/Patterns.md",
-			"templates/Work Note.md", // scaffold, but the listing does show it
-		]) {
-			assert.equal(isSkippedPath(p, MACHINERY_DIRS), false);
-		}
+	test("holds no folder of user content", () => {
+		for (const folder of ["work", "brain", "templates"]) assert.equal(MACHINERY_DIRS.includes(folder), false);
 	});
 
 	test("holds only what is machinery for BOTH consumers", () => {
@@ -743,21 +658,21 @@ describe("collectOpenTasks", () => {
 });
 
 describe("formatBrainIndex", () => {
-	test("renders one wikilink + description per entry", () => {
+	test("renders one name + description per entry", () => {
 		const out = formatBrainIndex([
 			{ name: "Patterns", description: "recurring patterns", hasContent: true },
 			{ name: "Gotchas", description: "things that bite", hasContent: true },
 		]);
 		assert.equal(
 			out,
-			"- [[Patterns]] — recurring patterns\n- [[Gotchas]] — things that bite",
+			"- Patterns — recurring patterns\n- Gotchas — things that bite",
 		);
 	});
 	test("appends '(empty)' for stub notes", () => {
 		const out = formatBrainIndex([
 			{ name: "Gotchas", description: "things that bite", hasContent: false },
 		]);
-		assert.equal(out, "- [[Gotchas]] — things that bite (empty)");
+		assert.equal(out, "- Gotchas — things that bite (empty)");
 	});
 	test("skips North Star and Memories (already surfaced elsewhere)", () => {
 		const out = formatBrainIndex([
@@ -765,13 +680,13 @@ describe("formatBrainIndex", () => {
 			{ name: "Memories", description: "index", hasContent: true },
 			{ name: "Patterns", description: "patterns", hasContent: true },
 		]);
-		assert.equal(out, "- [[Patterns]] — patterns");
+		assert.equal(out, "- Patterns — patterns");
 	});
 	test("falls back to '(no description)' for null description", () => {
 		const out = formatBrainIndex([
 			{ name: "Patterns", description: null, hasContent: true },
 		]);
-		assert.equal(out, "- [[Patterns]] — (no description)");
+		assert.equal(out, "- Patterns — (no description)");
 	});
 	test("empty input → '(none)'", () => {
 		assert.equal(formatBrainIndex([]), "(none)");
@@ -918,49 +833,52 @@ describe("applyInjectionBudget", () => {
 	});
 });
 
-describe("shouldCollapseDir", () => {
-	const flat = false;
-	const tree = true;
-
-	test("collapses a flat folder strictly above the threshold, not at it", () => {
-		assert.equal(shouldCollapseDir(12, 12, [], "people", flat), false);
-		assert.equal(shouldCollapseDir(13, 12, [], "people", flat), true);
+describe("shouldCollapseGroup", () => {
+	test("collapses a group strictly above the threshold, not at it", () => {
+		assert.equal(shouldCollapseGroup(12, 12, false), false);
+		assert.equal(shouldCollapseGroup(13, 12, false), true);
 	});
 
-	test("NEVER collapses a folder with subdirectories, however large", () => {
-		// The regression this locks: collapsing on recursive subtree count
-		// folded `projects/`, `brain/` and `work/` into three lines and made
-		// the vault's shape invisible. Structure is navigation; only flat
-		// bulk is noise.
-		assert.equal(shouldCollapseDir(9_999, 12, [], "projects", tree), false);
-	});
-
-	test("an always-collapse dir folds regardless of size OR structure", () => {
-		// work/archive is year-foldered, so the subdir guard would spare it;
-		// the explicit list is what makes semantic exceptions still work.
-		assert.equal(
-			shouldCollapseDir(1, 999, ["work/archive"], "work/archive", tree),
-			true,
-		);
-	});
-
-	test("matching is on the posix path, so nesting is respected", () => {
-		assert.equal(shouldCollapseDir(1, 999, ["reference/cv"], "cv", flat), false);
+	test("the archived work folds at any size and at any threshold", () => {
+		assert.equal(shouldCollapseGroup(1, 999, true), true);
+		assert.equal(shouldCollapseGroup(1, 0, true), true);
 	});
 
 	test("a nonsense threshold collapses nothing by size", () => {
 		for (const t of [0, -1, Number.NaN]) {
-			assert.equal(shouldCollapseDir(9_999, t, [], "people", flat), false);
+			assert.equal(shouldCollapseGroup(9_999, t, false), false);
 		}
 	});
 });
 
-describe("formatCollapsedDir", () => {
-	test("keeps the pre-threshold line shape verbatim", () => {
-		assert.equal(
-			formatCollapsedDir("work/archive", 42),
-			"./work/archive/ — 42 notes (listing collapsed — Glob on demand)",
-		);
+describe("formatCollapsedGroup", () => {
+	test("the line has the group, the count, and where the titles are", () => {
+		assert.equal(formatCollapsedGroup("Work / Archived", 42), "Work / Archived — 42 notes (listing collapsed — query the database on demand)");
+	});
+});
+
+describe("formatListing", () => {
+	const group = (name: string, titles: readonly string[], alwaysCollapsed = false) => ({ name, titles, alwaysCollapsed });
+
+	test("the pages under the root are first by title, then each group by name with its rows by title", () => {
+		const lines = formatListing(["North Star", "Home"], [group("Work / Incident", ["Payments Latency", "Checkout Outage"]), group("People", ["Ben Ortiz", "Ada Park"])], 12);
+		assert.deepEqual(lines, ["Home", "North Star", "People / Ada Park", "People / Ben Ortiz", "Work / Incident / Checkout Outage", "Work / Incident / Payments Latency"]);
+	});
+
+	test("a group past the threshold is one line with its count, and a group at the threshold shows each row", () => {
+		const titles = (count: number): string[] => Array.from({ length: count }, (_, index) => `Note ${String(index).padStart(2, "0")}`);
+		const lines = formatListing([], [group("Knowledge / Reference", titles(13)), group("Work / Inbox item", titles(12))], 12);
+		assert.equal(lines[0], "Knowledge / Reference — 13 notes (listing collapsed — query the database on demand)");
+		assert.equal(lines.length, 13);
+		assert.equal(lines[1], "Work / Inbox item / Note 00");
+	});
+
+	test("the archived work is one line also below the threshold", () => {
+		assert.deepEqual(formatListing([], [group("Work / Archived", ["Legacy Importer"], true)], 12), ["Work / Archived — 1 notes (listing collapsed — query the database on demand)"]);
+	});
+
+	test("no page and no group gives no line", () => {
+		assert.deepEqual(formatListing([], [], 12), []);
 	});
 });
 
