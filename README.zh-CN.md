@@ -1,221 +1,198 @@
 🌐 [English](README.md) | [日本語](README.ja.md) | **中文** | [한국어](README.ko.md)
 
-> [!NOTE]
-> 本翻译在AI辅助下完成。如果您发现不自然的表达或翻译错误，欢迎通过Issue或Pull Request告知我们。我们非常欢迎社区的修正和贡献。
-
 <p align="center">
   <img src="obsidian-mind-logo.png" alt="Obsidian Mind" width="120">
 </p>
 
 <h1 align="center">Obsidian Mind</h1>
 
-[![Claude Code](https://img.shields.io/badge/claude%20code-full%20support-D97706)](https://docs.anthropic.com/en/docs/claude-code)
-[![Codex CLI](https://img.shields.io/badge/codex%20cli-hooks%20%2B%20commands-10A37F)](https://github.com/openai/codex)
-[![Gemini CLI](https://img.shields.io/badge/gemini%20cli-hooks%20%2B%20commands-4285F4)](https://github.com/google-gemini/gemini-cli)
-[![Obsidian](https://img.shields.io/badge/obsidian-1.12%2B-7C3AED)](https://obsidian.md)
-[![Obsidian CLI](https://img.shields.io/badge/obsidian--cli-integrated-E6E6E6)](https://github.com/kepano/obsidian-cli)
-[![Obsidian Skills](https://img.shields.io/badge/obsidian--skills-integrated-8B5CF6)](https://github.com/kepano/obsidian-skills)
-[![QMD](https://img.shields.io/badge/qmd-semantic%20search-FF6B6B)](https://github.com/tobi/qmd)
-[![Node](https://img.shields.io/badge/node-22%2B-339933)](https://nodejs.org)
+[![Claude Code](https://img.shields.io/badge/claude%20code-writes%20%2B%20hooks-D97706)](https://docs.anthropic.com/en/docs/claude-code)
+[![Notion](https://img.shields.io/badge/notion-the%20only%20note%20store-000000)](https://www.notion.com)
+[![mcporter](https://img.shields.io/badge/mcporter-notion%20mcp-4B5563)](https://github.com/openclaw/mcporter)
+[![Node](https://img.shields.io/badge/node-22.6%2B-339933)](https://nodejs.org)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-> **一个让 Claude Code 记住一切的 Obsidian 仓库。** 开始一次会话，聊聊你的一天，Claude 会处理剩下的一切——笔记、链接、索引、绩效追踪。每一次对话都建立在上一次的基础之上。
+> **一个为 AI 编程智能体提供持久记忆的 Notion 工作区。** Claude Code 通过检查每次写入的钩子来写入。任何客户端都可以通过 Notion MCP 读取。开始一个会话，聊聊你的一天，智能体会处理其余的事：笔记、链接、视图、绩效记录。每次对话都建立在上一次之上。
+
+这个仓库最初是一个 Obsidian vault 模板。名字保持不变。笔记已经迁移：现在一个 Notion 工作区是唯一的笔记存储，仓库只保存钩子、命令、子智能体和初始化脚本。
 
 ---
 
 ## 🔴 问题
 
-Claude Code 功能强大，但它会遗忘。每次会话都从零开始——不了解你的目标、你的团队、你的工作模式、你的成就。你不得不反复解释相同的事情。三次对话前做出的决策就丢失了。知识永远无法积累。
+AI 编程智能体很强大，但它们会遗忘。每个会话都从零开始：不知道你的目标、团队、模式和成果。你一次次重复解释同样的事，丢失三次对话之前做出的决定。知识无法积累。
 
 ## 🟢 解决方案
 
-给你的 Agent 一个大脑。
+给你的智能体一个大脑。
 
 ```
-你: "开始会话"
-Agent: *读取北极星目标，检查活跃项目，扫描最近的记忆*
-Agent: "你正在做 Project Alpha，被后端契约阻塞了。
-         上次会话你决定拆分协调器。你明天和经理有个
-         1:1——Review 简报已经准备好了。"
+You: "start session"
+Agent: *reads North Star, checks active projects, scans recent changes*
+Agent: "You're working on Project Alpha, blocked on the BE contract.
+        Last session you decided to split the coordinator. Your 1:1
+        with your manager is tomorrow. The review brief is ready."
 ```
 
-通过 `shardmind install` 或 `git clone` 安装 —— 两种方式得到相同的仓库。
+大脑是一个 Notion 工作区。你可以在手机、Notion 应用，或任何支持 Notion MCP 的 AI 客户端中读取它。只有这个仓库中的 Claude Code 会话会写入，所以每条存入的笔记都经过同样的检查。
 
 ---
 
 ## ⚡ 实际效果
 
-<p align="center">
-  <img src="obsidian-mind-demo.gif" alt="Obsidian Mind 演示 — standup 和 dump 命令" width="800">
-</p>
-
-**早间启动：**
+**早晨启动：**
 
 ```bash
 /om-standup
-# → 加载北极星目标、活跃项目、待办任务、最近的 git 变更
-# → "你有 2 个活跃项目。auth 重构被 API 契约阻塞了。
-#    你下午2点和 Sarah 有 1:1——上次她提到了可观测性的问题。"
+# → loads North Star, active projects, open tasks, rows changed in the last 48 hours
+# → "You have 2 active projects. The auth refactor is blocked on API contract.
+#    Your 1:1 with Sarah is at 2pm. Last time she flagged observability."
 ```
 
-**会后头脑转储：**
+**会后头脑倾倒：**
 
 ```bash
 /om-dump Just had a 1:1 with Sarah. She's happy with the auth work but wants
 us to add error monitoring before release. Also, Tom mentioned the cache
-migration is deferred to Q2 — we decided to focus on the API contract first.
+migration is deferred to Q2, and we decided to focus on the API contract first.
 Decision: defer Redis migration. Win: Sarah praised the auth architecture.
 ```
 
 ```
-→ 更新了 org/people/Sarah Chen.md，添加了会议上下文
-→ 创建了 work/1-1/Sarah 2026-03-26.md，记录关键要点
-→ 创建了决策记录："将 Redis 迁移推迟到 Q2"
-→ 添加到 perf/Brag Doc.md："Auth 架构获得经理好评"
-→ 更新了 work/active/Auth Refactor.md，添加错误监控任务
+→ Updated the People row "Sarah Chen" with meeting context
+→ Created the Work row "Sarah 2026-03-26" (Type 1:1) with key takeaways
+→ Created the Work row "Defer Redis migration to Q2" (Type Decision)
+→ Added to the Q1 brag quarter in Perf docs: "Auth architecture praised by manager"
+→ Updated the Work row "Auth Refactor" with an error monitoring task
 ```
 
-**事件响应：**
+**事故响应：**
 
 ```bash
 /om-incident-capture https://slack.com/archives/C0INCIDENT/p123456
-# → slack-archaeologist 读取每一条消息、线程和个人资料
-# → people-profiler 为新涉及的人员创建笔记
-# → 完整的时间线、根因分析、成就记录
+# → slack-archaeologist reads every message, thread, and profile
+# → people-profiler creates People rows for new people involved
+# → Full timeline, root cause analysis, brag entry
 ```
 
-**收工：**
+**一天结束：**
 
 ```
-你: "wrap up"
-# → 验证所有笔记都有链接
-# → 更新索引
-# → brag-spotter 发现未记录的成就
-# → 提出改进建议
+You: "wrap up"
+# → verifies that every new row has a link
+# → brag-spotter finds uncaptured wins
+# → suggests improvements
 ```
 
 ---
 
 ## 🚀 快速开始
 
-### 📦 通过 ShardMind 安装（推荐）
+### 📋 环境要求
 
-```bash
-npm install -g shardmind
-mkdir my-vault && cd my-vault
-shardmind install github:breferrari/obsidian-mind
-```
+- **Claude Code**：唯一会写入的客户端。mod 需要 2.1.287 或更高版本。
+- **Node.js 22.6 或更高版本**：钩子用 `--experimental-strip-types` 运行 TypeScript。没有构建步骤，运行时没有 npm 依赖。
+- **[mcporter](https://github.com/openclaw/mcporter)**：钩子和智能体通过它连接 Notion。
+- **一个 Notion 工作区**：可以通过 Notion MCP 登录。
 
-`shardmind install` 会写入当前目录，因此请先创建并进入一个新文件夹。向导会收集你的姓名、组织、仓库用途、要包含的 Agent，以及是否启用 QMD。随后 ShardMind 会初始化 git、按需引导 QMD，并根据你的答案个性化 `brain/North Star.md`。然后：
+### 📦 安装
 
-1. 将已安装的文件夹作为 **Obsidian 仓库** 打开
-2. 在 设置 → 通用 中启用 **Obsidian CLI**（需要 Obsidian 1.12+）
-3. 在仓库目录中运行你的 Agent：**`claude`**、**`codex`** 或 **`gemini`**。Codex 只有在文件夹被信任、且每个钩子都被批准后才会运行 vault 的钩子：见[与其他 Agent 配合使用](#-与其他-agent-配合使用)。
-4. 开始谈论工作
+1. 克隆仓库：
 
-[ShardMind](https://github.com/breferrari/shardmind) 是 Obsidian 仓库模板的包管理器。安装时会添加 `.shardmind/` 旁挂目录，提供向导、可选模块（不需要的可以跳过）和三方合并升级。所有值采用默认值时，安装结果与 `git clone` 字节等价——克隆体验完全保留。从已安装的仓库中删除 `.shardmind/` 和 `shard-values.yaml`，仓库仍可正常工作：ShardMind 是附加功能，并非必需。
+   ```bash
+   git clone https://github.com/willtn/notion-mind.git obsidian-mind
+   cd obsidian-mind
+   ```
 
-### 或直接克隆
+2. 把 Notion MCP 服务器加入 `mcporter` 并登录：
 
-```bash
-git clone https://github.com/breferrari/obsidian-mind.git
-```
+   ```bash
+   mcporter config add notion https://mcp.notion.com/mcp
+   mcporter auth notion
+   ```
 
-或将其作为 **GitHub 模板** 使用。跳过向导，获取裸模板。然后按上面的 4 个步骤操作，并在 **`brain/North Star.md`** 中填写你的目标（ShardMind 向导会自动完成此项）。
+3. 构建工作区。初始化脚本会创建私有根页面「obsidian-mind」，建立数据库、视图、页面和模板，并写入 `notion-map.json`：
 
-### 🔍 推荐：QMD 语义搜索
+   ```bash
+   node --experimental-strip-types .claude/scripts/notion-setup.ts
+   ```
 
-用于在仓库中进行语义搜索（即使笔记标题是 "Redis Migration ADR"，也能找到 "我们关于缓存做了什么决策"）：
+   初始化脚本按名称查找每个对象，只创建缺少的部分，所以第二次运行不会创建任何东西。`--check` 不创建任何东西，只获取映射文件中的每个对象。
 
-```bash
-npm install -g @tobilu/qmd
-node --experimental-strip-types .scripts/qmd-bootstrap.ts
-```
+4. 在仓库中打开 Claude Code 并接受信任提示。钩子和 mod 从 `.claude/` 加载。
 
-引导脚本是幂等的，可以安全地重复运行。它读取 `vault-manifest.json` 中的 `qmd_index` 和 `qmd_context` 字段，注册命名索引并生成嵌入向量（索引名为 `qmd_index` 的值；未设置时取 vault 文件夹名的 slug）。SessionStart 钩子、`.mcp.json` 封装脚本和 CLI 命令都读取同一个清单字段，因此同一台机器上的其他 vault 不会与本 vault 的 QMD 数据混淆。CLI 命令始终需要传递 `--index <名称>`：
+5. 填写 North Star，添加你的同事和能力项，然后运行 `/om-standup`。
 
-```bash
-qmd --index obsidian-mind query "我们关于缓存做了什么决策"
-qmd --index obsidian-mind update   # 批量编辑后
-qmd --index obsidian-mind embed    # 大量新笔记后
-```
-
-**通过 MCP 原生集成为 Agent 工具。** 在 `.mcp.json` 中注册为 [Model Context Protocol](https://modelcontextprotocol.io) 服务器——当 QMD 已安装时，`mcp__qmd__query`、`mcp__qmd__get`、`mcp__qmd__multi_get` 会与 Read、Edit 一起出现在 Agent 的工具菜单中。子代理、斜杠命令和主对话都通过同一个带类型的契约进行调用。之后再接入其他 MCP 兼容工具（数据库、工单系统、日历），接入方式完全一致。
-
-#### 底层是怎么工作的
-
-QMD **在本地运行三个小模型**，因此不需要配置 API 密钥，没有按次查询的费用，离线也能用：
-
-| 模型 | 大小 | 作用 |
-|---|---|---|
-| `embeddinggemma-300M` | ~328MB | 把笔记和查询转成向量 |
-| `qmd-query-expansion-1.7B` | ~1.28GB | 把你的查询改写成更好的检索词 |
-| `Qwen3-Reranker-0.6B` | ~640MB | 按真实相关性重排候选结果 |
-
-它们在首次使用时下载并缓存。QMD 在发现 GPU 时会做卸载计算（独立显卡走 CUDA，Apple Silicon 走 Metal），否则回退到 CPU。用 `qmd doctor` 可以查看你这边的实际情况。
-
-三个 CLI 命令按开销从低到高对应这套栈：`qmd search` 是 BM25 关键词检索、**完全不用模型**，`qmd vsearch` 只用向量，`qmd query` 是完整的混合检索。如果想避免较大的下载，单用 `search` 也已经很有用。
-
-#### 这对 MCP 服务器意味着什么
-
-`om` 服务器会同时发送词法查询和向量查询，因此即使笔记与你的问题没有共同关键词，也能被找到。几点实际影响：
-
-- **贵的是读取，不是写入。** 查询在检索前需要先在本地做嵌入，所以带查询的 `recall` 要几秒，而不带查询的 `recall` 几乎是瞬时的。对笔记的 `search` 很快，真正花时间的是向量那一步。
-- **写入记忆不会等待模型。** 索引更新是同步的，所以新记忆立刻可被检索；生成向量在后台进行，因为它只影响**排序**，不影响能否被找到。
-- **没有索引也能用。** 没有 QMD 时服务器回退到词法匹配。排序会变差，但不会丢东西。
-
----
-
-## 📋 环境要求
-
-- [Obsidian](https://obsidian.md) 1.12+（支持 CLI）
-- [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
-- [Node 22+ LTS](https://nodejs.org)（用于钩子脚本 — 通常与 Claude Code / Codex / Gemini CLI 一起已安装）
-- Git（用于版本历史）
-- [QMD](https://github.com/tobi/qmd)（可选，用于语义搜索）
-
-> **关于 Node 标志。** 钩子脚本通过 Node 的 `--experimental-strip-types` 标志直接执行 TypeScript。该标志自 Node 22.6+（2024 年 8 月）起稳定，并在 Node 23.6+ 中成为默认行为。虽然被标记为实验性（experimental），但在 22 LTS 和 24 LTS 中行为均未改变。如果未来的 Node 版本废弃或重命名该标志，只需在 `.claude/settings.json`、`.codex/hooks.json` 和 `.gemini/settings.json` 中对钩子命令做一行修改即可。
+> [!NOTE]
+> `notion-map.json` 保存你的工作区的 ID。它在 `.gitignore` 中。`notion-map.example.json` 用占位符展示它的结构。
 
 ---
 
 ## ⚙️ 工作原理
 
-**过程化代码负责环境，Agent 负责内容。** `.claude/scripts/` 中的钩子处理分类、验证、索引和生命周期注入——可复现、可测试，对每个 Agent 都以相同方式运行。撰写笔记、归类、链接、起草简报——这些属于判断范畴，交由 Agent 处理。两侧通过小而清晰的交接相遇（钩子注入上下文，Agent 读取仓库），因此双方都不需要越界做对方的工作。
+**过程式代码负责环境，智能体负责内容。** `.claude/scripts/` 中的钩子负责分类、校验、派生属性和生命周期注入。它们是确定性的，并且有测试。写笔记、归档、链接、起草简报属于判断，由智能体负责。
 
-**文件夹按用途组织，链接按含义组织。** 一个笔记存放在一个文件夹中（它的归属），但链接到许多笔记（它的上下文）。Agent 维护这个图谱——自动将工作笔记链接到人员、决策和能力项。当绩效评估季到来时，每个能力项笔记上的反向链接就是现成的证据链。一个没有链接的笔记就是一个 bug。
+**数据库按用途分组，链接按含义分组。** 一条笔记位于一个数据库中，但链接到许多笔记。智能体维护这张图：用关系属性把工作行连到人、决策和能力项。到了绩效评估季，每个能力项的 `Evidence` 关系已经是证据链。没有链接的笔记就是 bug。
 
-**仓库优先的记忆** 使上下文能跨会话和设备持续存在。所有持久知识存储在 `brain/` 主题笔记中（git 跟踪、Obsidian 可浏览、相互链接）。Claude Code 的 `MEMORY.md`（`~/.claude/`）是一个自动加载的索引，指向仓库中的位置——本身不存储内容。这意味着记忆可以在更换设备后保留，并且是知识图谱的一部分。
+**工作区优先的记忆**让上下文跨越会话和机器。所有持久知识都在 `Knowledge` 的 brain topic 行中。`~/.claude/` 中 Claude Code 的 `MEMORY.md` 是指向 Notion 页面的索引，从不是存储本身。
 
-**会话有设计好的生命周期。** `SessionStart` 钩子自动注入你的北极星目标、活跃项目、最近变更、待办任务、完整的仓库文件列表和仓库卫生标志——Claude 每次会话都带着上下文启动，而不是从空白开始。结束时，说 "wrap up"，Claude 就会运行 `/om-wrap-up`——验证笔记、更新索引、发现未记录的成就。`CLAUDE.md` 规范了中间的一切：文件归档位置、链接方式、何时拆分笔记、如何处理决策和事件。
+**会话有设计好的生命周期。** `SessionStart` 钩子注入 North Star 目标、进行中的项目、最近的变更、未完成的任务和工作区清单，所以智能体每次都带着上下文开始。结束时说「wrap up」，智能体会运行 `/om-wrap-up`。中间的一切由 `AGENTS.md` 规定：放在哪里、如何链接、何时拆分笔记、如何处理决策和事故。
+
+### 📖 读取路径
+
+任何客户端都可以通过 Notion MCP 读取工作区：Claude Code、Claude 应用或其他 MCP 客户端。读取不需要钩子。远程客户端无法读取仓库文件，所以初始化脚本还会在根页面下写入「Reader map」页面。它列出 `notion-map.json` 中的每个数据库、视图和页面。
+
+在启用了钩子的 Claude Code 会话中，读取是一条 `Bash` 命令：
+
+```bash
+mcporter call notion.notion-search --args '{"query":"auth refactor","query_type":"internal"}' --output json
+```
+
+### ✍️ 写入路径
+
+只有加载了本仓库钩子的 Claude Code 会话会写入。写入分两步：
+
+1. 智能体用 `Write` 工具把 JSON 参数写到 `.claude/state/outbox/<name>.json`。
+2. 运行 `mcporter call notion.<tool> --args "$(cat .claude/state/outbox/<name>.json)"`。
+
+三个钩子监视这次调用：
+
+- **守卫**（`PreToolUse`）只放行写入、读取、schema 和登录形式的 Notion 命令，并带原因拒绝其他形式。钩子只能检查它能读到参数的写入，所以守卫让每次写入都可读。守卫无法运行时命令会被拒绝，所以守卫在失败时偏向安全。
+- **写入检查**（`PostToolUse`）读取 outbox 文件。它对空的必填属性、没有链接的笔记和硬换行的正文发出警告。它标记超过 25 KB 的笔记（拆分，不要删减）和主题聚集。然后设置该行的派生属性（`Bytes`、`Open tasks`、`Open loops`、`Has content`、`Changed`、`Hook stamp`），并删除 outbox 文件。
+- **修复**（`PostToolUseFailure`）在写入失败后把缺少的 select 选项加到数据库，并让智能体再次运行同一条命令。
+
+派生属性让卫生扫描可以用视图查询完成，而不是逐页获取。`Changed` 是笔记的年龄：写属性会改变 Notion 自己的 `Last edited`，所以年龄规则不读取它。`Hook stamp` 标记经过钩子的写入。视图「Hygiene: edited outside hooks」列出之后被其他客户端修改的行，`/om-vault-audit` 会读取它。
+
+完整的调用形式见 [`.claude/rules/notion-calls.md`](.claude/rules/notion-calls.md)。
 
 ### 🔗 钩子
 
-五个生命周期钩子自动处理路由：
-
-| 钩子 | 触发时机 | 功能 |
-|------|---------|------|
-| 🚀 SessionStart | 启动/恢复时 | QMD 重新索引＋自愈，注入北极星焦点、活跃工作、最近变更、任务、文件列表、仓库卫生标志 — 整体受字节预算约束（预算本身限制在 Claude Code 的钩子输出上限之内），末行为注入大小计量 |
-| 💬 UserPromptSubmit | 每条消息 | 对内容分类（决策、事件、成就、1:1、架构、人员、项目更新）并注入路由提示；同时把上一轮的 Stop 报告交给智能体 |
-| ✍️ PostToolUse | 写入 `.md` 后 | 验证 frontmatter＋wikilinks，拦截误放的记忆文件，标记过大笔记（拆分而非删减）与写入时的主题集群 |
-| 💾 PreCompact | 上下文压缩前 | 将会话记录备份到 `thinking/session-logs/` |
-| 🏁 Stop | 每次响应结束后 | 检查清单＋具体漂移发现（与 SessionStart 相同的卫生扫描），每个会话显示一次，仅在内容变化时再次显示；你只看到简短摘要（每个部分一行），完整报告随你的下一条消息交给智能体，由其判断是否处理；处理交给 `om-tidy` |
+| 钩子 | 时机 | 作用 |
+|------|------|------|
+| 🚀 SessionStart | 启动、恢复、`/clear` 和压缩时 | 读取工作区，并在适合 Claude Code 钩子输出上限的字节预算内注入 North Star、brain topics、最近变更、未完成任务、进行中的工作、清单和卫生发现。最后输出大小计 |
+| 💬 UserPromptSubmit | 每条消息 | 对内容分类（决策、事故、成果、1:1、架构、人物、项目更新），注入指明正确数据库的路由提示。也把上一轮的 Stop 报告交给智能体 |
+| 🛡️ PreToolUse | 每条 `Bash` 命令之前 | 守卫：只放行写入检查能读取的形式的 Notion 命令 |
+| ✍️ PostToolUse | Notion 写入之后，以及 `Write` 或 `Edit` 之后 | 写入检查和派生属性。对 `Write` 或 `Edit`：标记放错位置的记忆文件 |
+| 🩹 PostToolUseFailure | Notion 写入失败之后 | 添加缺少的 select 选项，然后要求再次运行同一条命令 |
+| 💾 PreCompact | 上下文压缩之前 | 把会话记录备份到笔记存储之外的 `.claude/state/session-logs/` |
+| 🏁 Stop | 每次回复之后 | 检查清单和来自已保存卫生视图的发现，每个会话显示一次，只在变化时再次显示。你看到简短摘要，智能体在你的下一条消息中收到完整报告 |
 
 > [!TIP]
-> 你只需要正常对话。钩子会处理路由。
+> 你只需要说话。路由由钩子处理。
 
 ### 🧩 Claude Code mod
 
-在 Claude Code 2.1.287 及以上版本中，仓库还附带一个 mod：`.claude/skills/obsidian-mind/`，一个在 Claude Code 内部运行的插件。它运行仓库自身的钩子脚本，只改变其输出到达会话的方式：
+在 Claude Code 2.1.287 或更高版本上，仓库还提供一个 mod：`.claude/skills/obsidian-mind/`，一个代码在 Claude Code 内部运行的插件。它运行同样的钩子脚本，只改变输出到达会话的方式：
 
-- **会话上下文像 `CLAUDE.md` 一样以 instruction 文件的形式送达。** 压缩和 `/clear` 之后会被完整地重新读取（作为钩子输出时会缩减为一个指针），能送达通用子代理（钩子输出送达不了），也不会被 Claude Code 钩子输出的 10,000 字符上限截断。其预算是 `vault-manifest.json` 中的 `eager_layer_instruction_budget_bytes`；像未完成任务这样不会缩减的部分仍可能超出它。`/memory` 中显示为 `.claude/session-context.md`。
-- **Stop 报告变成回答下方的一行。** 发现项变化时，你会在 Claude 的回复下方看到以该 mod 名称开头的一行 `obsidian-mind: vault check: …`。Claude Code 会把在 Stop 上作出应答的插件名称用 `+` 连接起来，因此当其他插件也作出应答时，该标签会显示为 `obsidian-mind+<插件>: vault check: …`。Claude 会随你的下一条消息收到完整报告，对你不可见。标记为紧急的发现项则会立即送达 Claude（你每发送一条消息最多一次，第二个会在报告中等待）；模板自身的报告中没有这类发现项。
+- **会话上下文以指令文件的形式到达**，与 `AGENTS.md` 相同。压缩和 `/clear` 之后 Claude Code 会完整地重新读取它，它能到达通用子智能体，并且不受 10,000 字符钩子上限的截断。它的预算是 `vault-manifest.json` 中的 `eager_layer_instruction_budget_bytes`。`/memory` 将它列为 `.claude/session-context.md`。
+- **Stop 报告变成回答下方的一行。** 发现变化时，你会在 Claude 的回复下方看到一行以 mod 名称开头的文字：`obsidian-mind: vault check: …`。其他插件也在 Stop 上应答时，Claude Code 用 `+` 连接名称。Claude 会在你的下一条消息中收到完整报告，你看不到。标记为紧急的发现会立即引起 Claude 的注意，你每发一条消息最多一次。
 
-对于它处理的每个事件，mod 会通知对应的钩子让出。在 mod 未加载的地方，钩子与以前完全一样地运行：Codex 和 Gemini、旧版 Claude Code、在仓库子文件夹中启动的会话（请在仓库根目录启动，或 `/cd` 到根目录后执行 `/clear`）、以及未信任的文件夹。只有在你接受了 Claude Code 对该仓库的信任提示之后，mod 才会加载。
+对它处理的每个事件，mod 会让对应的钩子待命。在 mod 不加载的地方，钩子照常运行：旧版 Claude Code、在子文件夹中启动的会话（从仓库根目录启动，或 `/cd` 到那里再 `/clear`），或你尚未信任的文件夹。
 
-mod 是没有沙箱、以你的权限运行的代码，因此在信任该文件夹之前请先检查它的行为：`claude plugin validate .claude/skills/obsidian-mind` 会列出它挂钩的每个事件和发出的每个调用（它只运行仓库自身的脚本、写入上下文文件、在自己的存储中记录每个会话看过哪份报告，并在有紧急发现项时提交一条提示）。要关闭它，在 `.claude/settings.local.json` 中加入 `"enabledPlugins": { "obsidian-mind@skills-dir": false }`。
+mod 是以你的权限运行、没有沙箱的代码，所以在信任文件夹之前先检查它做什么：`claude plugin validate .claude/skills/obsidian-mind` 会列出它挂接的每个事件和它进行的每个调用。要关闭它，在 `.claude/settings.local.json` 中加入 `"enabledPlugins": { "obsidian-mind@skills-dir": false }`。
 
 <!-- mod-validate:start -->
-对于这一版本的 mod，其输出中值得确认的两行如下：
+对于这个版本的 mod，输出中重要的两行：
 
 ```text
   ❯ ./register.ts hooks: classic.SessionStart, prompt.context, classic.Stop, turn.complete, prompt.submit, turn.start
@@ -225,385 +202,251 @@ mod 是没有沙箱、以你的权限运行的代码，因此在信任该文件�
 
 ### ⚡ Token 效率
 
-obsidian-mind **不会**将整个 vault 加载到上下文中。它使用分层加载来控制 token 成本：
+obsidian-mind **不会**把整个工作区塞进上下文：
 
 | 层级 | 内容 | 时机 | 成本 |
 |------|------|------|------|
-| **始终** | `CLAUDE.md` + SessionStart 上下文（北极星摘要、git 摘要、任务、vault 文件列表） | 会话启动时 | 以清单中的预算为上限（预算本身限制在 Claude Code 10,000 字符的钩子输出上限之内）；每次会话末尾的计量器报告实际大小 |
-| **按需** | QMD 语义搜索结果 | Agent 需要特定上下文时 | 精准定向 |
-| **触发** | 分类路由提示 | 每条消息 | ~100 tokens |
-| **触发** | PostToolUse 验证 | `.md` 写入后 | ~200 tokens |
-| **罕见** | 完整文件读取 | 仅在明确需要时 | 可变 |
+| **始终** | `AGENTS.md`、`.claude/rules/` 和 SessionStart 上下文（North Star 摘录、最近变更、任务、清单） | 会话开始 | 受 `vault-manifest.json` 中预算的限制，低于 10,000 字符的钩子输出上限。大小计每次报告实际大小 |
+| **按需** | `notion-search` 结果，然后是匹配的页面 | 智能体需要特定上下文时 | 有针对性 |
+| **触发** | 分类路由提示 | 每条消息 | 约 100 token |
+| **触发** | 写入检查的发现 | Notion 写入之后 | 约 200 token |
 
-SessionStart 加载**轻量级上下文** — 关键文件的简短摘要、文件名和 git 摘要，而非完整笔记内容。Agent 通过 QMD 进行语义搜索后再读取文件，因此只获取相关内容。分类钩子每条消息仅执行一次轻量级 Node 调用。验证钩子仅在 markdown 写入时触发，跳过排除的路径。 五个机制让注入层随仓库增长仍保持诚实：**来源感知注入**（resume/compact 时只重新注入易变部分——静态大块已在会话中）、每次注入末行的**注入大小计量**、真正强制执行计量结果的**注入预算**（超出上限时，最容易舍弃的部分降级为指针，且计量行会逐一列出被降级的部分——因为悄无声息的丢失比膨胀更糟）、每次写入**仅一次钩子进程**（QMD 刷新搭载在验证钩子上）、**列表折叠**（笔记数超过阈值的文件夹折叠为一行计数，因此仓库不会通过某个没人想到要配置的文件夹突破上限）。预算与阈值均可在 `vault-manifest.json` 中调整，但无论如何设置，预算都会被限制在 Claude Code 10,000 字符的钩子输出上限之内——超过上限时，会话只能收到 2,000 字符的预览。
-
-### 🌐 与其他 Agent 配合使用
-
-obsidian-mind 支持 Claude Code、Codex CLI 和 Gemini CLI。`CLAUDE.md` 中的 vault 规约、`.claude/scripts/` 中的钩子脚本、`.claude/commands/` 中的命令都是 Agent 无关的 — 纯 Markdown、TypeScript 和 Shell，无 SDK 依赖。
-
-**Claude Code** — 完整支持。钩子、命令、子代理和记忆系统全部开箱即用。
-
-**Codex CLI** — 原生读取 `AGENTS.md`。`.codex/hooks.json` 中的钩子配置连接了与 Claude Code 相同的钩子脚本 — 会话上下文、消息分类和写入验证自动工作。
-
-Codex 只有在两种信任都具备时才会运行项目的钩子（使用 Codex CLI 0.160.0 观察，截至 2026-10-13，[#345](https://github.com/breferrari/obsidian-mind/issues/345)）：
-- **vault 文件夹已被信任。** Codex 将其记录在 `~/.codex/config.toml` 的 `[projects.'<path>']` 下。在 Windows 上，键是带 `\\?\` 前缀的路径，例如 `[projects.'\\?\C:\path\to\vault']`。
-- **每个钩子已被批准。** Codex 将每次批准作为 `trusted_hash` 存储在 `[hooks.state]` 下。在交互式 `codex` 会话中批准预计会写入这些条目（推断：#345 的检查用仅适用于单次非交互运行的标志 `--dangerously-bypass-hook-trust` 代替了它们）。
-
-两者都具备之前，Codex 不会运行任何钩子，会话也得不到 vault 上下文。
-
-**Gemini CLI** — 原生读取 `GEMINI.md`。`.gemini/settings.json` 中的钩子配置将 Gemini 的事件名称映射到共享钩子脚本。
-
-**其他 Agent**（Cursor、Windsurf、GitHub Copilot、JetBrains AI）— 通过 `AGENTS.md` 读取 vault 规约。钩子支持因 Agent 而异。
-
-> [!NOTE]
-> 钩子、命令、子代理提示和 vault 记忆（`brain/`）都是 Agent 无关的。只有 `~/.claude/` 自动记忆加载器是 Claude Code 专属功能。详见 `AGENTS.md`。
+SessionStart 加载标题、计数和简短摘录，而不是完整页面。超过预算时，代价最低的部分会变成指针，大小计会逐一列出被丢弃的部分。清单中超过行数阈值的分组会折叠成一行计数。
 
 ---
 
-## 🧠 从任意仓库访问你的 vault
+## 🗂️ 工作区
 
-vault 通常只在你身处其中时才有用。**`om` MCP 服务器**改变了这一点：*任何其他仓库*中的编码会话都可以搜索你的笔记、阅读它们、沿图谱跳转，并把学到的东西记录回 vault。
+初始化脚本创建一个带七个数据库的私有根页面「obsidian-mind」：
 
-```json
-{
-  "mcpServers": {
-    "om": {
-      "command": "node",
-      "args": ["/path/to/your-vault/.claude/scripts/om-mcp.mjs"]
-    }
-  }
-}
-```
+| 数据库 | 内容 |
+|----------|-------|
+| `Work` | 工作笔记、决策、事故、1:1 笔记、收件箱条目和思考笔记，用 `Type` 区分。`Status` 取代进行中和归档文件夹，`Project` 把一个工作流归为一组 |
+| `People` | 每人一行，带 `Team` |
+| `Teams` | 每个团队一行，带 `Members` |
+| `Competencies` | 每个能力项一行，带来自工作行的 `Evidence` 和 `Evidence count` 汇总 |
+| `Perf docs` | PR 证据、评估简报、评估产物和季度 brag |
+| `Knowledge` | brain topics（Key Decisions、Patterns、Gotchas）、参考笔记、领域笔记、事件日志卫星和归档笔记 |
+| `Templates` | 每个模板一行 |
 
-这段配置放在**使用方项目**的 `.mcp.json` 中。然后在该项目自己的 `CLAUDE.md` 里加上一小节，指向这个 vault。
+还有这些页面：**Home**（仪表盘，带链接视图和 North Star 的 Current Focus）、**North Star**、**People & Context**、**Recently Touched**（按 `Changed` 排序的各数据库视图）和 **Reader map**。
 
-> [!IMPORTANT]
-> **两步缺一不可，第二步不是走过场。** 实测：服务器已接好但没有仓库侧说明时，会话**一次**都没有调用 vault，并径直实现了一个 vault 明确记录为已否决的设计。有说明时，它拒绝实现并引用了那条笔记。
->
-> MCP `instructions` 字段中的**禁止性规则**会可靠地传播到调用方会话；而“去查阅 vault”这类肯定式指令只是建议性的，只要存在更近的信息源就会被跳过。服务器能阻止会话做某件事，但只有项目自身的规约能让它主动去查。
+**关系取代 wikilink**，用在视图、汇总或卫生检查会读取链接的地方：`Work.Decisions`、`Work.Competencies`、`Work.Person`、`Work.Team`、`Work.Feeds into`、`Perf docs.Work evidence` 和 `Parent`。其他链接都是正文中的页面提及。
 
-**会话得到的能力：** `search`（语义 + 关键词）、`expand`（笔记的出链与反链）、`recall`（限定到该仓库的持久经验）、`remember`（记录一条经验）、`record_work`（归档所做的工作）、`reason`（跨多条笔记的判断）、`health`（接线是否完好）。此外还把笔记作为可读资源暴露出来。
+**已保存的视图取代 Bases 和手工维护的索引。** 例如：Active Work、Stale Actives、Completed、Incidents、1:1 History、Competency Map、Review Evidence、Brain index。钩子以视图模式读取卫生视图（oversized、open loops、inbox pressure、loose active），视图模式没有套餐配额。
 
-**真正会思考的是 `reason`。** 其余的都是检索，而它会用第二个 Claude 会话读你的 vault，回答那些需要跨笔记做判断的问题 — *我接下来要做的事，和这六条笔记当初的决定一致吗？* 它会先自行检索一遍作为起点，所以你不需要先搜。它跑在你自己的 CLI 默认模型上，因此 vault 会以你当前工作的水准回答；并且没有任何上限 — 这就是 Claude，在你的机器上、用你的凭证运行。每次调用都会记录费用、轮数、模型和实际耗时。答案标记为 `confidence: inferred`，不会自行写入记忆 — 值不值得留下由你的会话决定。
-
-**仓库按文件夹名识别。** 这在大多数情况下是对的，偶尔不是：两个都叫 `api` 的仓库会共享同一个身份，于是彼此收到对方的记忆。在仓库根目录放一个 `.om-project` 文件并写入不同的名字即可分开；`health` 会告诉你它认为是哪个仓库在调用，以及这个名字从哪里来。
-
-**带认知契约的跨仓库记忆。** 在一个仓库学到的经验只会到达它被限定的那些仓库。触及范围是在*写入时声明*的，而非读取时猜测，因此同类项目不会继承彼此的约束。所有记录都带有 `confidence: verified | inferred | unverified`、易变事实的日期，以及服务端推导的来源 — 会话无法冒充自己以外的项目。更正以取代而非覆盖的方式记录，因此这个存储不会累积矛盾，反而会随着增长变得**更**可信。
-
-**它提供哪些笔记。** 你的 vault、你的笔记、你的会话。默认就是 vault 已经声明为你自己内容的部分（`user_content_roots`），并保持你书写时的粒度（是 `work/active/`，而不是整个 `work/`）。只有当这个 vault 存放着**并非你有权分享**的材料 —— 雇主的机密信息、客户的数据 —— 时，才需要在 `vault-manifest.json` 里设置 `mcp_exposed_roots`。标记为 `private` 的笔记不会被提供；记忆有自己的作用域，因此也不会作为普通笔记提供。有一种情况会跨越两者：当一条捕获的 `promoted:` 标记带有锚点时，`recall` 会提供 `brain/` 中的那个片段，让其他仓库拿到修正后的版本，而不是最初写下的捕获。它同样受这条策略约束，因此 `private` 或被withheld的笔记在这里也会被拒绝。每次读取都会连同调用方仓库一起记入日志。
-
-> [!NOTE]
-> 让 vault 内容不出现在公开 PR 里，是**契约**的职责，而不是这份开放清单的职责 —— 会话本来就能直接读取你的 vault。真正被实测证明有效的，是注入到调用方会话中的禁止性规则。
+**模板**是 `Templates` 中的行：Work Note、Decision Record、Thinking Note、Competency Note 和 Review Template。
 
 ---
 
 ## 📅 日常工作流
 
-**早晨**：运行 `/om-standup`。Agent 加载你的北极星目标、活跃项目、待办任务和最近变更。你会得到一份结构化的摘要和优先事项建议。
+**早晨**：运行 `/om-standup`。智能体加载 North Star、进行中的项目、未完成的任务和最近的变更。你会得到结构化的摘要和优先级建议。
 
-**全天**：自然地交谈。提到你做的决策、发生的事件、刚结束的 1:1、想记住的成就。分类钩子会引导 Agent 将每条信息归档到正确位置。对于更大量的信息转储，使用 `/om-dump` 一次性叙述所有内容。
+**白天**：自然地说话。提到你做出的决定、发生的事故、刚开完的 1:1、想记住的成果。分类钩子会引导智能体把每条信息存入正确的数据库。较大的头脑倾倒用 `/om-dump`，一次说完。
 
-**收工**：说 "wrap up"，Agent 就会调用 `/om-wrap-up`——验证笔记、更新索引、检查链接、发现未记录的成就。
+**一天结束**：说「wrap up」，智能体会调用 `/om-wrap-up`。它核对行、检查链接、发现未记录的成果。
 
-**每周**：运行 `/om-weekly` 进行跨会话综合——北极星对齐、模式识别、未记录的成就和下周优先事项。运行 `/om-vault-audit` 捕获孤立笔记、断开的链接和过时的内容。
+**每周**：运行 `/om-weekly` 做跨会话综合：North Star 对齐、模式、未记录的成果和下周优先级。运行 `/om-vault-audit` 找出孤立的行、空属性和在钩子之外编辑的行。
 
-**绩效评估季**：运行 `/om-review-brief manager`，获得一份结构化的评估准备文档，所有证据都已链接就绪。
+**评估季**：运行 `/om-review-brief manager`，得到一份证据已链接好的评估准备文档。
 
 ---
 
 ## 🛠️ 命令
 
-定义在 `.claude/commands/` 中。可在任何 Claude Code 会话中运行。
+定义在 `.claude/commands/` 中。在 Claude Code 中运行。
 
-| 命令 | 功能 |
-|------|------|
-| `/om-standup` | 早间启动——加载上下文，回顾昨天，浮现任务，建议优先事项 |
-| `/om-dump` | 自由捕获——随意交谈，将所有内容路由到正确的笔记 |
-| `/om-wrap-up` | 完整的会话回顾——验证笔记、索引、链接，提出改进建议 |
-| `/om-humanize` | 语气校准编辑——让 Claude 起草的文字听起来像是你自己写的 |
-| `/om-weekly` | 每周综合——跨会话模式、北极星对齐、未记录的成就 |
-| `/om-prep-1on1` | 1:1 准备——加载对方上下文、未解决事项、建议议程 |
-| `/om-meeting` | 按主题准备会议——未解决事项、障碍、需要考虑的要点 |
-| `/om-intake` | 处理会议笔记收件箱——分类 `work/meetings/` 中的文件并路由到正确的笔记 |
-| `/om-capture-1on1` | 将 1:1 会议记录捕获为结构化的仓库笔记 |
-| `/om-incident-capture` | 从 Slack/频道中捕获事件，生成结构化笔记 |
-| `/om-slack-scan` | 深度扫描 Slack 频道/私信以获取证据 |
-| `/om-peer-scan` | 深度扫描同事的 GitHub PR，用于评估准备 |
+| 命令 | 作用 |
+|---------|-------------|
+| `/om-standup` | 早晨启动：加载上下文、回顾昨天、列出任务、建议优先级 |
+| `/om-dump` | 自由记录：随意说任何事，它把每条信息分到正确的行 |
+| `/om-wrap-up` | 完整的会话回顾：核对行、链接和属性，并提出改进建议 |
+| `/om-humanize` | 按你的语气编辑：让 Claude 起草的文字听起来像你写的 |
+| `/om-weekly` | 每周综合：跨会话模式、North Star 对齐、未记录的成果 |
+| `/om-capture-1on1` | 把 1:1 会议记录存为结构化的 `Work` 行 |
+| `/om-incident-capture` | 把 Slack 中的事故记录为结构化的行 |
+| `/om-slack-scan` | 深度扫描 Slack 频道和私信以收集证据 |
+| `/om-peer-scan` | 为评估准备深度扫描同事的 GitHub PR |
 | `/om-review-brief` | 生成评估简报（经理版或同事版） |
-| `/om-self-review` | 撰写绩效评估自评——项目、能力、原则 |
-| `/om-review-peer` | 撰写同事评审——项目、原则、绩效总结 |
-| `/om-correct` | 扫除已更正的事实——在单一来源处应用更正，将重述替换为链接，保留带日期的历史记录 |
-| `/om-vault-audit` | 审计索引、链接、孤立笔记、过时内容 |
-| `/om-vault-upgrade` | 从现有仓库导入内容——版本检测、分类、迁移 |
-| `/om-project-archive` | 将已完成的项目从 active/ 移至 archive/，更新索引 |
-| `/om-tidy` | 自维护 — 依据卫生标志归档已完成笔记、归组松散集群、拆分过大笔记。从不删除、从不提交 |
+| `/om-self-review` | 写评估季的自我评估：项目、能力项、原则 |
+| `/om-review-peer` | 写同事评估：项目、原则、绩效总结 |
+| `/om-tidy` | 自我维护：处理每个卫生标记。完成、分组、拆分。从不删除 |
+| `/om-correct` | 清扫一条被更正的事实：在唯一来源处应用，把复述改为链接，保留带日期的记录 |
+| `/om-vault-audit` | 审计属性、链接、孤立行、视图和在钩子之外编辑的行 |
+| `/om-prep-1on1` | 准备即将到来的 1:1：人物上下文、未结事项、议程建议 |
+| `/om-meeting` | 按主题准备任意会议：包含未结事项和考虑事项的简报 |
+| `/om-intake` | 处理会议笔记收件箱：对收件箱条目分类并分到正确的行 |
+| `/om-project-archive` | 把已完成的项目标记为完成，使它离开进行中的视图 |
 
 ---
 
-## 🤖 子代理
+## 🤖 子智能体
 
-在隔离的上下文窗口中运行的专业代理。它们处理繁重的操作，不会污染你的主对话。
+在独立上下文窗口中运行的专用智能体。它们处理繁重的操作，而不会塞满你的主对话。
 
-| 代理 | 用途 | 调用方式 |
-|------|------|---------|
-| `brag-spotter` | 发现未记录的成就和能力差距 | `/om-wrap-up`, `/om-weekly` |
-| `context-loader` | 加载仓库中关于某人、项目或概念的所有上下文 | 直接调用 |
-| `cross-linker` | 查找缺失的 wikilinks、孤立笔记、断开的反向链接 | `/om-vault-audit` |
-| `people-profiler` | 从 Slack 个人资料批量创建/更新人员笔记 | `/om-incident-capture` |
-| `review-prep` | 汇总某个评估周期的所有绩效证据 | `/om-review-brief` |
-| `slack-archaeologist` | 完整的 Slack 重建——每条消息、线程、个人资料 | `/om-incident-capture` |
-| `vault-librarian` | 深度仓库维护——孤立笔记、断开链接、过时笔记 | `/om-vault-audit` |
-| `review-fact-checker` | 对照仓库来源验证评审草稿中的每一项声明 | `/om-self-review`, `/om-review-peer` |
-| `vault-migrator` | 分类、转换和迁移源仓库中的内容 | `/om-vault-upgrade` |
+| 智能体 | 用途 | 调用方 |
+|-------|---------|------------|
+| `brag-spotter` | 找出未记录的成果和能力差距 | `/om-wrap-up`、`/om-weekly` |
+| `context-loader` | 加载关于某个人、项目或概念的全部 Notion 上下文 | 直接 |
+| `correction-sweep` | 找出复述被更正事实的每个页面并分类。从不编辑 | `/om-correct` |
+| `cross-linker` | 找出缺失的关系和提及、孤立行和单向链接 | `/om-vault-audit` |
+| `people-profiler` | 根据 Slack 资料批量创建或更新 `People` 行 | `/om-incident-capture` |
+| `review-prep` | 汇总评估周期内的全部绩效证据 | `/om-review-brief` |
+| `slack-archaeologist` | 完整重建 Slack：每条消息、线程和资料 | `/om-incident-capture` |
+| `vault-librarian` | 深度维护工作区：孤立行、失效链接、空属性、陈旧的行 | `/om-vault-audit` |
+| `review-fact-checker` | 用 Notion 来源核对评估草稿中的每个说法 | `/om-self-review`、`/om-review-peer` |
+| `vault-migrator` | 对源 vault 的内容分类并迁移。导入工具会接管它 | 导入工具上线前没有 |
 
 > [!NOTE]
-> 子代理定义在 `.claude/agents/` 中。你可以添加自己的代理以适应特定领域的工作流。
+> 子智能体定义在 `.claude/agents/` 中。你可以为特定领域的工作流添加自己的子智能体。
 
 ---
 
 ## 📊 绩效图谱
 
-这个仓库同时也是一个绩效追踪系统：
+工作区也是一个绩效记录系统：
 
-1. **能力项笔记** 在 `perf/competencies/` 中定义你所在组织的能力框架——每个能力项一个笔记
-2. **工作笔记** 在其 `## Related` 部分链接到能力项，并标注所展示的能力
-3. **反向链接自动积累**——绩效评估准备变成了查看每个能力项笔记上的反向链接面板
-4. **Brag Doc** 按季度汇总成就，并链接到证据笔记
-5. **`/om-peer-scan`** 深度扫描同事的 GitHub PR，并将结构化证据写入 `perf/evidence/`
-6. **`/om-review-brief`** 通过汇总所有内容生成完整的评估简报：成就记录、决策、事件、能力证据和 1:1 反馈
+1. **`Competencies` 行**定义组织的能力框架，每个能力项一行
+2. **工作行**设置 `Competencies` 关系，并在正文写下展示了什么
+3. **证据自动积累**：反向关系 `Evidence` 和 `Evidence count` 汇总会随之填充，Competency Map 视图按它们排序
+4. **`Perf docs` 中的季度 brag** 收集每季度的成果，并设置 `Work evidence`
+5. **`/om-peer-scan`** 深度扫描同事的 GitHub PR，并写入一条 `Type` 为 PR evidence 的 `Perf docs` 行
+6. **`/om-review-brief`** 根据季度 brag、决策、事故、能力证据和 1:1 反馈生成完整的评估简报
 
 > [!TIP]
-> 入门方法：使用模板创建能力项笔记，然后在日常工作中将工作笔记链接到它们。图谱会处理剩下的一切。
+> 入门方法：用模板创建能力项行，然后在工作中把工作行链接到它们。其余的交给图谱。
 
 ---
 
-## 📋 Bases
+## 🧪 与 Obsidian 版本的一致性
 
-`bases/` 文件夹包含查询笔记 frontmatter 属性的数据库视图。它们会随着笔记的变化自动更新。
+提交 `fae7be4` 是最后一个 Obsidian 版本，也是每个钩子的基准。`.claude/scripts/parity/` 中的一致性测试框架在 Markdown 测试 vault 上运行该提交的钩子，在 Notion 中相同的笔记上运行移植后的钩子，然后比较发现、笔记和计数：
 
-| Base | 显示内容 |
-|------|---------|
-| Work Dashboard | 按季度筛选、按状态分组的活跃项目 — 附 Stale Actives 视图（14 天以上未动的活跃笔记） |
-| Recently Touched | 按真实修改时间排序的全部笔记 — 「最近在做什么」的正确答案（活笔记的文件名日期不可信） |
-| Incidents | 按严重程度和日期排序的所有事件 |
-| People Directory | `org/people/` 中所有人员的角色和团队 |
-| 1:1 History | 可按人员和日期排序的所有 1:1 笔记 |
-| Review Evidence | 按人员和周期分组的 PR 扫描和证据 |
-| Competency Map | 带有反向链接证据计数的能力项 |
-| Templates | 快速访问所有模板 |
+```bash
+cd .claude/scripts
+node --experimental-strip-types parity/run-parity.ts                       # the reference against itself
+node --experimental-strip-types parity/run-parity.ts --notion --hook validate-write
+node --experimental-strip-types parity/run-mutations.ts --notion --hook validate-write
+```
 
-`Home.md` 嵌入这些视图，使其成为仓库的仪表板。
+`--notion` 需要第二个用于测试数据的根页面，用 `notion-setup.ts --root-title "obsidian-mind parity fixtures" --map notion-map.fixtures.json` 创建，并用 `parity/write-notion-fixture.ts` 填充。`npm test` 会在替身运行时上离线执行同样的比较。在线测试只在设置了 `NOTION_LIVE=1` 并有映射文件时运行，其他情况下跳过。每项检查和每个已知差异的记录见 [`NOTION-PORT-DESIGN.md`](NOTION-PORT-DESIGN.md) 的 (d) 部分。
+
+---
+
+## 📥 导入现有 vault
+
+把 Obsidian 模板的 vault 迁移到工作区的导入工具，已作为 [`NOTION-PORT-DESIGN.md`](NOTION-PORT-DESIGN.md) (e) 部分的第 11 项列入计划。它还不在仓库中。在它上线之前，`vault-migrator` 没有对应的命令，你可以手动迁移笔记或用 `/om-dump`。
+
+---
+
+## ⚠️ 已知限制
+
+下面每条限制都来自所链接的拉取请求中的测量。
+
+- **守卫假定智能体是配合的。** 故意隐藏 `notion` 或 `mcporter` 字样的命令，或包含调用的脚本文件，可以通过守卫。`Hook stamp` 审计会在事后标记这类写入。运行超过 5 秒超时的守卫会让调用继续执行。（[#6](https://github.com/willtn/notion-mind/pull/6)）
+- **同时包含 `mcporter` 和 `notion` 的文本是会被拒绝的命令。** 把提交信息或 PR 正文写到文件中，再用 `git commit -F` 或 `gh pr create --body-file`。（[#6](https://github.com/willtn/notion-mind/pull/6)）
+- **Notion 无法区分客户端。** 来自其他 MCP 客户端的写入看起来和经过钩子的写入一样，只有 `Hook stamp` 视图能显示它。见设计记录 (f) 部分的选择 5。
+- **select 在写入时不接受新选项。** `Quarter`、`Project`、`Cycle` 和级别 select 开始时是空的。第一次带新选项的写入会失败，修复钩子添加该选项，智能体再次运行命令。（[#5](https://github.com/willtn/notion-mind/pull/5)、[#8](https://github.com/willtn/notion-mind/pull/8)）
+- **空属性和不存在的属性是同一种状态。** 缺失字段检查（VW-08）在属性为空时触发。（[#8](https://github.com/willtn/notion-mind/pull/8)）
+- **页面提及按标题计算。** 大小和链接检查把带名称的提及读作 `[[Title]]`。没有标题的提及会多出约 60 字节。关系不增加文本。（[#8](https://github.com/willtn/notion-mind/pull/8)）
+- **写入钩子不设置 `Quarter`。** 与基准一样，缺少 `Quarter` 仍然是一项发现。（[#8](https://github.com/willtn/notion-mind/pull/8)）
+- **请求上限是每 60 秒 180 次。** 客户端会等待并重试。长时间等待可能让某行没有 `Hook stamp`，钩子会说明这一点。（[#8](https://github.com/willtn/notion-mind/pull/8)）
+- **Stop 钩子每轮都会花时间。** 它并行读取卫生视图，超时为 15 秒。数据库之外的页面没有 `Bytes`，所以大小检查无法标记它。（[#11](https://github.com/willtn/notion-mind/pull/11)）
+- **最近变更是页面标题，而不是提交标题。** SessionStart 读取 `Changed`，所以 Home 或 North Star 的变更不会出现在该部分。未完成任务部分最多获取 10 行。（[#12](https://github.com/willtn/notion-mind/pull/12)）
+- **已完成的笔记不会留在进行中的文件夹。** `Status` 是状态的唯一位置，所以该卫生检查（HY-01）没有 Notion 形式。见设计记录 (f) 部分的选择 2。
+- **没有别名，也没有每日笔记。** 内容模型没有别名属性和每日笔记类型，所以 `cross-linker`、`/om-standup` 和 `/om-weekly` 去掉了这些步骤。（[#9](https://github.com/willtn/notion-mind/pull/9)）
+- **Notion 不返回公式文本。** 修改模型中的公式后，用 `--reapply-formulas` 运行初始化脚本。（[#5](https://github.com/willtn/notion-mind/pull/5)）
+- **首次创建根页面时如果回复丢失，就不会留下它的台账行。** 初始化脚本仍然会收敛。（[#5](https://github.com/willtn/notion-mind/pull/5)）
+- **会话记录备份保留在本地**，位于 `.claude/state/session-logs/`。（[#10](https://github.com/willtn/notion-mind/pull/10)）
 
 ---
 
 ## 📁 仓库结构
 
 ```
-Home.md                 仓库入口——嵌入的 Base 视图、快捷链接
-CLAUDE.md               操作手册——Agent 每次会话都会读取
-AGENTS.md               多 Agent 指南——Codex、Cursor、Windsurf 等
-GEMINI.md               多 Agent 指南——Gemini CLI
-vault-manifest.json     模板元数据——版本、结构、schema
-.shardmindignore        从 `shardmind install` 中排除的文件（CONTRIBUTING、翻译、营销素材）
-CHANGELOG.md            版本历史
-CONTRIBUTING.md         模板开发清单
-README.md               产品文档
-LICENSE                 MIT 许可证
-
-bases/                  动态数据库视图（Work Dashboard、Incidents、People 等）
-
-work/
-  active/               当前项目（同时 1-3 个文件）
-  archive/YYYY/         已完成的工作，按年份组织
-  incidents/            事件文档（主笔记 + RCA + 深度分析）
-  1-1/                  1:1 会议笔记——命名格式 <Person> YYYY-MM-DD.md
-  Index.md              所有工作的内容地图
-
-org/
-  people/               每人一个笔记——角色、团队、关系、关键时刻
-  teams/                每个团队一个笔记——成员、职责范围、互动
-  People & Context.md   组织知识的内容地图
-
-perf/
-  Brag Doc.md           成就持续记录，链接到证据
-  brag/                 季度成就笔记（每季度一个）
-  competencies/         每个能力项一个笔记（链接目标）
-  evidence/             PR 深度扫描、用于评审的数据摘录
-  <cycle>/              评审周期简报和产出物
-
-brain/
-  North Star.md         目标和关注领域——每次会话读取
-  Memories.md           记忆主题索引
-  Key Decisions.md      重要决策及其推理过程
-  Patterns.md           工作中观察到的重复模式
-  Gotchas.md            出过问题的事情及其原因
-  Skills.md             自定义工作流和斜杠命令
-
-reference/              代码库知识、架构图、流程文档
-thinking/               草稿用暂存区——提炼成果后删除
-templates/              带有 YAML frontmatter 的 Obsidian 模板
-
-.claude/
-  commands/             18 个斜杠命令
-  agents/               9 个子代理
-  scripts/              钩子脚本 + charcount.ts 工具
-  skills/               Obsidian + QMD 技能，obsidian-mind mod
-  settings.json         5 个钩子配置
-
-.scripts/                仓库级工具 — QMD 引导脚本（新克隆时运行一次）
-
-.shardmind/             ShardMind 旁挂目录——仅在通过 `shardmind install` 安装时使用
-  shard.yaml            清单文件（名称、版本、模块、钩子）
-  shard-schema.yaml     向导值 + 模块门控
-  hooks/                bootstrap（git 初始化 + QMD）、personalize（North Star）、post-update
+obsidian-mind/
+├── AGENTS.md                      # The operating manual, read every session
+├── vault-manifest.json            # Root marker of the hooks, and hook settings
+├── notion-map.example.json        # Shape of notion-map.json (the real one is not committed)
+├── NOTION-PORT-DESIGN.md          # The design record of the Notion port
+├── brain/Skills.md                # The command catalog
+└── .claude/
+    ├── commands/                  # Slash commands
+    ├── agents/                    # Subagents
+    ├── rules/                     # Rules that Claude Code loads beside AGENTS.md
+    ├── skills/                    # defuddle, mermaid-visualizer, and the obsidian-mind mod
+    ├── settings.json              # Hook configuration
+    └── scripts/
+        ├── session-start.ts, classify-message.ts, guard-notion-write.ts,
+        │   validate-write.ts, pre-compact.ts, stop-checklist.ts   # The hooks
+        ├── notion-setup.ts        # Builds the workspace and writes notion-map.json
+        ├── scaffold/              # Source text of the scaffold pages and the templates
+        ├── lib/                   # The Notion client, the model, the checks
+        ├── parity/                # The parity harness
+        └── tests/                 # npm test
 ```
-
-> [!NOTE]
-> `.shardmind/` 是**附加功能，并非必需。** 克隆并打开的仓库从不读取它；只有 `shardmind` CLI 使用它。删除它，仓库仍可正常工作。v6 布局契约见 [shardmind/docs/SHARD-LAYOUT.md](https://github.com/breferrari/shardmind/blob/main/docs/SHARD-LAYOUT.md)。
-
----
-
-## 📝 模板
-
-带有 YAML frontmatter 的模板，每个都包含用于渐进式展示的 `description` 字段：
-
-- **Work Note（工作笔记）** — date、description、project、status、quarter、tags
-- **Decision Record（决策记录）** — date、description、status（proposed/accepted/deprecated）、owner、context
-- **Thinking Note（思考笔记）** — date、description、context、tags（暂存区——提炼后删除）
-- **Competency Note（能力项笔记）** — date、description、current-level、target-level、熟练度表格
-- **1:1 Note（1:1 笔记）** — date、person、关键要点、行动项、引用
-- **Incident Note（事件笔记）** — date、ticket、severity、role、时间线、根因、影响
-
----
-
-## 🔧 包含内容
-
-### 🧩 Obsidian Skills
-
-[kepano/obsidian-skills](https://github.com/kepano/obsidian-skills) 预装在 `.claude/skills/` 中：
-
-- **obsidian-markdown** — Obsidian 风格的 Markdown（wikilinks、嵌入、callout、属性）
-- **obsidian-cli** — 仓库操作的 CLI 命令
-- **obsidian-bases** — 数据库风格的 `.base` 文件
-- **json-canvas** — 可视化 `.canvas` 文件创建
-- **defuddle** — 网页到 Markdown 的提取
-
-### 🔍 QMD Skill
-
-`.claude/skills/qmd/` 中的自定义技能，教会 Claude 主动使用 [QMD](https://github.com/tobi/qmd) 语义搜索——在读取文件之前、在创建笔记之前（检查重复）以及在创建笔记之后（查找应该链接到它的相关内容）。
 
 ---
 
 ## 🎨 自定义
 
-这是一个起点。根据你的工作方式来调整它：
+这只是一个起点。按你的工作方式调整：
 
 | 内容 | 位置 |
-|------|------|
-| 你的目标 | `brain/North Star.md` — 为每次会话定下基调 |
-| 你的组织 | `org/` — 添加你的经理、团队、重要协作者 |
-| 你的能力框架 | `perf/competencies/` — 匹配你所在组织的能力框架 |
-| 你的工具 | `.claude/commands/` — 根据你的 GitHub 组织、Slack 工作区进行编辑 |
-| 你的规范 | `CLAUDE.md` — 操作手册，随着使用不断完善 |
-| 你的领域 | 添加文件夹、在 `.claude/agents/` 中添加子代理，或在 `.claude/scripts/` 中添加分类规则 |
+|------|-------|
+| 你的目标 | North Star 页面：每个会话的基础 |
+| 你的组织 | `People`、`Teams` 和 People & Context 页面 |
+| 你的能力项 | `Competencies`：与你所在组织的框架对齐 |
+| 你的工具 | `.claude/commands/`：按你的 GitHub 组织和 Slack 工作区编辑 |
+| 你的约定 | `AGENTS.md`：操作手册，边用边完善（Claude Code 专用的补充放在 `.claude/rules/`） |
+| 你的模型 | `.claude/scripts/lib/notion-model.ts`：数据库、属性、视图。修改后重新运行初始化脚本 |
 
 > [!IMPORTANT]
-> `CLAUDE.md` 是操作手册。当你改变规范时，请同步更新它——Agent 每次会话都会读取它。
+> `AGENTS.md` 是操作手册。修改约定时请更新它。智能体每个会话都会读取它。
 
 ---
 
-## 🔄 升级
-
-### 让 Agent 帮你更新
-
-最简单的方法 — 直接告诉你的 Agent：
-
-```
-把这个 vault 更新到最新的 obsidian-mind https://github.com/breferrari/obsidian-mind
-```
-
-Agent 会拉取最新更改、解决冲突并更新基础设施文件。Claude Code、Codex CLI 和 Gemini CLI 均可使用。
-
-### 更新已有克隆
-
-如果你直接克隆了仓库：
+## 🔄 更新
 
 ```bash
-cd your-vault
-git pull origin main
+git pull
+node --experimental-strip-types .claude/scripts/notion-setup.ts
 ```
 
-新文件（`AGENTS.md`、`GEMINI.md`、`.codex/`、`.gemini/`）会自动出现，钩子脚本也会就地更新。
+pull 会更新钩子、命令和规则。初始化脚本只添加新版模型需要的部分，不创建其他东西。你的笔记留在 Notion 中，不会被改动。
 
-### 更新 Fork
+---
 
-如果你 Fork 了仓库：
+## 🩺 故障排除
 
-```bash
-git remote add upstream https://github.com/breferrari/obsidian-mind.git
-git fetch upstream
-git merge upstream/main
-```
+**Claude Code 忽略了约定。** Claude Code 会读取 `CLAUDE.md` 来代替 `AGENTS.md`，并且不声不响地跳过 `AGENTS.md`。仓库根目录有 `CLAUDE.md` 时，卫生标记会显示 `CLAUDE.md present beside AGENTS.md`。把你添加的内容移到 `.claude/rules/local.md` 或 `AGENTS.md`，然后删除 `CLAUDE.md`。仓库上层文件夹中的 `CLAUDE.md` 有同样的效果，而这个标记看不到它。
 
-解决你自定义过的文件的冲突（通常是 `CLAUDE.md`、`brain/` 笔记）。基础设施文件（`.claude/scripts/`、`.codex/`、`.gemini/`）应该可以干净合并。
+**Notion 命令被拒绝。** 阅读原因，它会列出允许的形式。最常见的是读取命令里有管道或重定向，或提交信息同时包含 `mcporter` 和 `notion`。见 [`.claude/rules/notion-calls.md`](.claude/rules/notion-calls.md)。
 
-### 将已有克隆收编到 ShardMind（v5.x → v6）
+**某个部分显示 `(not read: …)`。** SessionStart 或 Stop 无法读取工作区的那一部分。检查 `mcporter auth notion`，然后运行 `node --experimental-strip-types .claude/scripts/notion-setup.ts --check`。
 
-已经克隆了 obsidian-mind，又想要向导、可选模块和三方合并升级，且不希望丢失自定义内容？`shardmind adopt` 会将你已有的仓库整合为受管的 v6 安装——保留你的每一字节编辑，仅添加 `.shardmind/` 旁挂目录和 `shard-values.yaml`：
-
-```bash
-npm install -g shardmind
-shardmind adopt github:breferrari/obsidian-mind
-```
-
-2-way diff UI 会引导你查看本地变更，按文件确认要保留的内容，然后写入引擎元数据。结果：你已有的内容完好保留的 v6 受管仓库，从此可以使用 `shardmind update`。无需重新克隆。
-
-### 从旧仓库（或任何其他仓库）迁移
-
-使用 v5 之前的 obsidian-mind，或要从完全不同的 Obsidian 仓库迁移？`/om-vault-upgrade` 命令可以将你的内容迁移到最新模板：
-
-```bash
-# 1. 克隆最新版 obsidian-mind
-git clone https://github.com/breferrari/obsidian-mind.git ~/new-vault
-
-# 2. 用你的 Agent 打开
-cd ~/new-vault && claude   # 或 codex、gemini
-
-# 3. 运行升级命令，指向你的旧仓库
-/om-vault-upgrade ~/my-old-vault
-```
-
-Agent 将会：
-1. **检测** 你的仓库版本（v1–v3.x，或识别为非 obsidian-mind 仓库）
-2. **盘点** 每个文件——分类为用户内容、脚手架、基础设施或未分类
-3. **展示迁移计划**——你可以确切看到哪些内容将被复制、转换和跳过
-4. **经你批准后执行**——转换 frontmatter、修复 wikilinks、重建索引
-5. **验证**——检查孤立笔记、断开链接、缺失的 frontmatter
-
-你的旧仓库**永远不会被修改**。使用 `--dry-run` 可以预览计划而不执行。
-
-> [!NOTE]
-> 适用于任何 Obsidian 仓库，不仅限于 obsidian-mind。对于非 obsidian-mind 仓库，Agent 会读取每个笔记并进行语义分类——将工作笔记、人员、事件、1:1 和决策路由到正确的文件夹。
+**初始化脚本因工作区而停止。** `--workspace-id` 和映射文件都会指定一个工作区。登录的是另一个工作区时，初始化脚本会停止。登录正确的工作区，或把旧的 `notion-map.json` 移走。
 
 ---
 
 ## 🗺️ 路线图
 
-**欢迎提交 Issue 和 Bug 报告。** 代码贡献采用指派制：在 Issue 下留言申请，被指派后再提交 PR。针对未指派给你的 Issue 的 PR 会不经审查直接关闭。详见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+**欢迎提交 issue 和 bug 报告。** 代码贡献采用指派制：在 issue 下评论申请，被指派后再开 PR。针对未指派给你的 issue 的 PR 会不经审查直接关闭。见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ---
 
 ## 🙏 设计灵感
 
-- [kepano/obsidian-skills](https://github.com/kepano/obsidian-skills) — 官方 Obsidian 代理技能
-- [James Bedford](https://x.com/jameesy) — 仓库结构理念，AI 生成内容的分离
-- [arscontexta](https://github.com/agenticnotetaking/arscontexta) — 通过 description 字段实现渐进式展示，会话钩子
+- [kepano/obsidian-skills](https://github.com/kepano/obsidian-skills)：Obsidian 版本的智能体技能
+- [James Bedford](https://x.com/jameesy)：vault 结构理念，分离 AI 生成的内容
+- [arscontexta](https://github.com/agenticnotetaking/arscontexta)：通过 description 字段实现渐进式披露，会话钩子
 
 ---
 
 ## 👤 作者
 
-由 **[Brenno Ferrari](https://brennoferrari.com)** 创建 — 柏林高级 iOS 工程师，使用 Claude Code 构建开发者工具。
+由 **[Brenno Ferrari](https://brennoferrari.com)** 创建，柏林的高级 iOS 工程师，用 Claude Code 构建开发者工具。
 
 ---
 

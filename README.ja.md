@@ -1,61 +1,52 @@
 🌐 [English](README.md) | **日本語** | [中文](README.zh-CN.md) | [한국어](README.ko.md)
 
-> [!NOTE]
-> この翻訳はAIの支援を受けて作成されました。不自然な表現や誤訳がありましたら、ぜひIssueやPull Requestでお知らせください。コミュニティからの修正を歓迎します。
-
 <p align="center">
   <img src="obsidian-mind-logo.png" alt="Obsidian Mind" width="120">
 </p>
 
 <h1 align="center">Obsidian Mind</h1>
 
-[![Claude Code](https://img.shields.io/badge/claude%20code-full%20support-D97706)](https://docs.anthropic.com/en/docs/claude-code)
-[![Codex CLI](https://img.shields.io/badge/codex%20cli-hooks%20%2B%20commands-10A37F)](https://github.com/openai/codex)
-[![Gemini CLI](https://img.shields.io/badge/gemini%20cli-hooks%20%2B%20commands-4285F4)](https://github.com/google-gemini/gemini-cli)
-[![Obsidian](https://img.shields.io/badge/obsidian-1.12%2B-7C3AED)](https://obsidian.md)
-[![Obsidian CLI](https://img.shields.io/badge/obsidian--cli-integrated-E6E6E6)](https://github.com/kepano/obsidian-cli)
-[![Obsidian Skills](https://img.shields.io/badge/obsidian--skills-integrated-8B5CF6)](https://github.com/kepano/obsidian-skills)
-[![QMD](https://img.shields.io/badge/qmd-semantic%20search-FF6B6B)](https://github.com/tobi/qmd)
-[![Node](https://img.shields.io/badge/node-22%2B-339933)](https://nodejs.org)
+[![Claude Code](https://img.shields.io/badge/claude%20code-writes%20%2B%20hooks-D97706)](https://docs.anthropic.com/en/docs/claude-code)
+[![Notion](https://img.shields.io/badge/notion-the%20only%20note%20store-000000)](https://www.notion.com)
+[![mcporter](https://img.shields.io/badge/mcporter-notion%20mcp-4B5563)](https://github.com/openclaw/mcporter)
+[![Node](https://img.shields.io/badge/node-22.6%2B-339933)](https://nodejs.org)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-> **Claude Codeにすべてを記憶させるObsidianボールト。** セッションを開始して、日々のことを話すだけ — ノート、リンク、インデックス、パフォーマンス管理はClaudeが自動で処理します。すべての会話が前回の続きとして積み重なっていきます。
+> **AI コーディングエージェントに永続的な記憶を与える Notion ワークスペース。** Claude Code は、すべての書き込みを検査するフックを通じて書き込みます。どのクライアントも Notion MCP を通じて読み取れます。セッションを始めて一日の出来事を話すだけで、ノート、リンク、ビュー、パフォーマンス記録はエージェントが処理します。会話のたびに知識が積み重なります。
+
+このリポジトリは Obsidian ボールトのテンプレートとして始まりました。名前はそのままです。ノートは移動しました。現在、1 つの Notion ワークスペースが唯一のノートの保存先で、リポジトリにはフック、コマンド、サブエージェント、セットアップだけがあります。
 
 ---
 
 ## 🔴 課題
 
-AIコーディングエージェントは強力ですが、忘れてしまいます。毎回のセッションがゼロからの出発 — あなたの目標、チーム、パターン、実績に関するコンテキストがありません。同じことを何度も説明し直し、3回前の会話で下した決定が失われます。知識が蓄積されないのです。
+AI コーディングエージェントは強力ですが、忘れます。毎回のセッションはゼロから始まり、目標、チーム、パターン、成果の文脈がありません。同じことを何度も説明し、3 回前の会話で決めたことを失います。知識が積み重なりません。
 
 ## 🟢 解決策
 
 エージェントに脳を与えましょう。
 
 ```
-あなた: "セッション開始"
-エージェント: *North Starを読み、アクティブなプロジェクトを確認し、最近の記憶をスキャン*
-エージェント: "Project Alphaに取り組んでいますね。BEコントラクトでブロック中です。
-              前回のセッションでコーディネーターを分割することに決めましたね。
-              明日マネージャーとの1on1があります — レビューブリーフは準備完了です。"
+You: "start session"
+Agent: *reads North Star, checks active projects, scans recent changes*
+Agent: "You're working on Project Alpha, blocked on the BE contract.
+        Last session you decided to split the coordinator. Your 1:1
+        with your manager is tomorrow. The review brief is ready."
 ```
 
-`shardmind install` または `git clone` でインストール — どちらも同じボールトです。
+脳は Notion ワークスペースです。スマートフォン、Notion アプリ、または Notion MCP に対応した任意の AI クライアントから読めます。書き込むのはこのリポジトリの Claude Code セッションだけなので、保存されるすべてのノートが同じ検査を通ります。
 
 ---
 
 ## ⚡ 実際の動作
 
-<p align="center">
-  <img src="obsidian-mind-demo.gif" alt="Obsidian Mind デモ — standup と dump コマンド" width="800">
-</p>
-
 **朝のキックオフ:**
 
 ```bash
 /om-standup
-# → North Star、アクティブプロジェクト、未完了タスク、最近のgit変更を読み込み
-# → "アクティブなプロジェクトが2つあります。認証リファクタリングはAPIコントラクト待ちです。
-#    14時にSarahとの1on1があります — 前回、オブザーバビリティについて指摘がありました。"
+# → loads North Star, active projects, open tasks, rows changed in the last 48 hours
+# → "You have 2 active projects. The auth refactor is blocked on API contract.
+#    Your 1:1 with Sarah is at 2pm. Last time she flagged observability."
 ```
 
 **ミーティング後のブレインダンプ:**
@@ -63,159 +54,145 @@ AIコーディングエージェントは強力ですが、忘れてしまいま
 ```bash
 /om-dump Just had a 1:1 with Sarah. She's happy with the auth work but wants
 us to add error monitoring before release. Also, Tom mentioned the cache
-migration is deferred to Q2 — we decided to focus on the API contract first.
+migration is deferred to Q2, and we decided to focus on the API contract first.
 Decision: defer Redis migration. Win: Sarah praised the auth architecture.
 ```
 
 ```
-→ org/people/Sarah Chen.md をミーティングの内容で更新
-→ work/1-1/Sarah 2026-03-26.md を作成（要点まとめ付き）
-→ Decision Record を作成: 「RedisマイグレーションをQ2に延期」
-→ perf/Brag Doc.md に追加: 「マネージャーから認証アーキテクチャを評価された」
-→ work/active/Auth Refactor.md にエラーモニタリングタスクを追加
+→ Updated the People row "Sarah Chen" with meeting context
+→ Created the Work row "Sarah 2026-03-26" (Type 1:1) with key takeaways
+→ Created the Work row "Defer Redis migration to Q2" (Type Decision)
+→ Added to the Q1 brag quarter in Perf docs: "Auth architecture praised by manager"
+→ Updated the Work row "Auth Refactor" with an error monitoring task
 ```
 
 **インシデント対応:**
 
 ```bash
 /om-incident-capture https://slack.com/archives/C0INCIDENT/p123456
-# → slack-archaeologist がすべてのメッセージ、スレッド、プロフィールを読み取り
-# → people-profiler が関係者のノートを作成
-# → 完全なタイムライン、根本原因分析、Brag Docへのエントリー
+# → slack-archaeologist reads every message, thread, and profile
+# → people-profiler creates People rows for new people involved
+# → Full timeline, root cause analysis, brag entry
 ```
 
 **一日の終わり:**
 
 ```
-あなた: "wrap up"
-# → すべてのノートにリンクがあるか確認
-# → インデックスを更新
-# → brag-spotter が記録されていない実績を発見
-# → 改善点を提案
+You: "wrap up"
+# → verifies that every new row has a link
+# → brag-spotter finds uncaptured wins
+# → suggests improvements
 ```
 
 ---
 
 ## 🚀 クイックスタート
 
-### 📦 ShardMindでインストール（推奨）
+### 📋 要件
 
-```bash
-npm install -g shardmind
-mkdir my-vault && cd my-vault
-shardmind install github:breferrari/obsidian-mind
-```
+- **Claude Code**: 書き込む唯一のクライアントです。mod には 2.1.287 以降が必要です。
+- **Node.js 22.6 以降**: フックは `--experimental-strip-types` で TypeScript を実行します。ビルド手順も実行時の npm 依存もありません。
+- **[mcporter](https://github.com/openclaw/mcporter)**: フックとエージェントはこれを通じて Notion に接続します。
+- **Notion ワークスペース**: Notion MCP でログインできるもの。
 
-`shardmind install` はカレントディレクトリに書き込むため、先に新しいフォルダを作成して移動してください。ウィザードがあなたの名前、組織、ボールトの目的、含めるエージェント、QMDを有効化するかどうかを収集します。続いてShardMindがgitを初期化し、必要に応じてQMDをブートストラップし、あなたの回答に基づいて`brain/North Star.md`をパーソナライズします。その後：
+### 📦 インストール
 
-1. インストールされたフォルダを**Obsidianボールト**として開く
-2. 設定 → 一般で**Obsidian CLI**を有効化（Obsidian 1.12以上が必要）
-3. ボールトディレクトリでエージェントを実行：**`claude`**、**`codex`**、または**`gemini`**。Codex はフォルダーが信頼され、各フックが承認されるまでボールトのフックを実行しません：[他のエージェントでの利用](#-他のエージェントでの利用)を参照。
-4. 仕事について話し始める
+1. リポジトリをクローンします:
 
-[ShardMind](https://github.com/breferrari/shardmind)はObsidianボールトテンプレートのパッケージマネージャーです。インストール時に`.shardmind/`サイドカーが追加され、ウィザード、オプションのモジュール（不要なものはスキップ可能）、3-wayマージのアップグレードを実現します。すべての値がデフォルトの場合、インストール結果は`git clone`とバイト等価 — クローン体験はそのまま保たれます。インストール済みボールトから`.shardmind/`と`shard-values.yaml`を削除しても動作し続けます：ShardMindは追加機能であり、必須ではありません。
+   ```bash
+   git clone https://github.com/willtn/notion-mind.git obsidian-mind
+   cd obsidian-mind
+   ```
 
-### または直接クローン
+2. Notion MCP サーバーを `mcporter` に追加してログインします:
 
-```bash
-git clone https://github.com/breferrari/obsidian-mind.git
-```
+   ```bash
+   mcporter config add notion https://mcp.notion.com/mcp
+   mcporter auth notion
+   ```
 
-または**GitHubテンプレート**として使用。ウィザードをスキップし、素のテンプレートを取得します。その後、上記の4ステップを実行し、加えて**`brain/North Star.md`**に目標を記入してください（ShardMindウィザードを使えば自動で行われます）。
+3. ワークスペースを構築します。セットアップはプライベートのルートページ「obsidian-mind」を作り、データベース、ビュー、ページ、テンプレートを作成して `notion-map.json` を書き出します:
 
-### 🔍 推奨：QMDセマンティック検索
+   ```bash
+   node --experimental-strip-types .claude/scripts/notion-setup.ts
+   ```
 
-ボールト全体のセマンティック検索（ノートのタイトルが「Redis Migration ADR」でも「キャッシュについて何を決めた？」で見つかる）：
+   セットアップは各オブジェクトを名前で探し、足りないものだけを作ります。そのため 2 回目の実行では何も作りません。`--check` は何も作らず、マップファイルの各オブジェクトを取得します。
 
-```bash
-npm install -g @tobilu/qmd
-node --experimental-strip-types .scripts/qmd-bootstrap.ts
-```
+4. リポジトリで Claude Code を開き、信頼の確認を承認します。フックと mod は `.claude/` から読み込まれます。
 
-ブートストラップは冪等で、再実行しても安全です。`vault-manifest.json` の `qmd_index` と `qmd_context` フィールドを読み取り、名前付きインデックスを登録してエンベディングを生成します（インデックス名は `qmd_index` が設定されていればその値、未設定ならボールトのフォルダ名をスラッグ化した値）。SessionStart フック、`.mcp.json` のラッパー、CLI コマンドはすべて同じマニフェストフィールドを参照するため、同一マシン上の他のボールトと QMD データが混ざりません。CLI 実行時は常に `--index <名前>` を渡してください:
+5. North Star を記入し、人とコンピテンシーを追加して、`/om-standup` を実行します。
 
-```bash
-qmd --index obsidian-mind query "キャッシュについて何を決めた？"
-qmd --index obsidian-mind update   # 一括編集後
-qmd --index obsidian-mind embed    # 多数の新規ノート後
-```
-
-**MCPによるネイティブなエージェントツール。** `.mcp.json`に[Model Context Protocol](https://modelcontextprotocol.io)サーバーとして登録されています — QMDがインストールされていれば、`mcp__qmd__query`、`mcp__qmd__get`、`mcp__qmd__multi_get`がReadやEditと並んでエージェントのツールメニューに表示されます。サブエージェント、スラッシュコマンド、メイン会話はすべて同じ型付きコントラクトを呼び出します。後から別のMCP対応ツール（データベース、チケット管理、カレンダー）を追加しても、同じ方法でプラグインできます。
-
-#### 内部の仕組み
-
-QMDは**3つの小さなモデルをローカルで**実行します。設定するAPIキーは不要で、クエリごとの費用もかからず、オフラインでも動作します:
-
-| モデル | サイズ | 役割 |
-|---|---|---|
-| `embeddinggemma-300M` | ~328MB | ノートとクエリをベクトルに変換 |
-| `qmd-query-expansion-1.7B` | ~1.28GB | クエリをより良い検索語に書き換え |
-| `Qwen3-Reranker-0.6B` | ~640MB | 候補を実際の関連性で並べ替え |
-
-初回使用時にダウンロードされ、キャッシュされます。GPUが見つかればオフロードし（ディスクリートGPUではCUDA、Apple SiliconではMetal）、なければCPUにフォールバックします。`qmd doctor`で自分の環境を確認できます。
-
-3つのCLIコマンドは、安い順にこのスタックへ対応します: `qmd search`は**モデルを一切使わない**BM25キーワード検索、`qmd vsearch`はベクトルのみ、`qmd query`は完全なハイブリッドです。大きなダウンロードを避けたい場合、`search`だけでも十分実用的です。
-
-#### MCPサーバーにとっての意味
-
-`om`サーバーは字句クエリとベクトルクエリの両方を送るため、キーワードが一致しなくても質問に答えるノートを見つけられます。実務上の要点:
-
-- **重いのは書き込みではなく読み取りです。** クエリは検索前にローカルで埋め込まれるため、クエリ付きの`recall`は数秒かかり、クエリなしの`recall`はほぼ即時です。ノートに対する`search`は高速で、コストがかかるのはベクトル処理の部分です。
-- **メモリの書き込みはモデルを待ちません。** インデックス更新は同期的なので新しいメモリはすぐ取得可能になり、ベクトル生成はバックグラウンドで行われます。ベクトルは**順位**にのみ影響し、見つかるかどうかには影響しないためです。
-- **インデックスが無くても動きます。** QMDが無い場合、サーバーは字句マッチにフォールバックします。順位は悪くなりますが、何も失われません。
-
----
-
-## 📋 要件
-
-- [Obsidian](https://obsidian.md) 1.12以上（CLIサポートのため）
-- [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
-- [Node 22+ LTS](https://nodejs.org)（フックスクリプト用 — Claude Code / Codex / Gemini CLI と一緒に通常インストール済み）
-- Git（バージョン履歴用）
-- [QMD](https://github.com/tobi/qmd)（オプション、セマンティック検索用）
-
-> **Node フラグについて。** フックスクリプトは Node の `--experimental-strip-types` フラグで TypeScript を直接実行します。このフラグは Node 22.6+（2024年8月）で安定し、Node 23.6+ ではデフォルトの動作になりました。実験的扱いではあるものの 22 LTS と 24 LTS で挙動は変わっていません。将来の Node リリースでフラグが廃止・改名された場合、`.claude/settings.json`、`.codex/hooks.json`、`.gemini/settings.json` のフックコマンドを1行修正する必要があります。
+> [!NOTE]
+> `notion-map.json` にはワークスペースの ID が入っています。このファイルは `.gitignore` にあります。`notion-map.example.json` はプレースホルダーでその形を示します。
 
 ---
 
 ## ⚙️ 仕組み
 
-**手続き的コードが環境を所有し、エージェントがコンテンツを所有します。** `.claude/scripts/`のフックが分類、検証、インデックス作成、ライフサイクル注入を処理します — 決定論的で、テスト可能で、どのエージェントでも同じように動作します。ノートを書き、配置し、リンクし、ブリーフを作成する — それらは判断であり、エージェントに委ねられます。両者は小さなハンドオフで出会い（フックがコンテキストを注入し、エージェントがボールトを読む）、どちらも相手の仕事をする必要はありません。
+**手続き的なコードが環境を担当し、エージェントがコンテンツを担当します。** `.claude/scripts/` のフックは、分類、検証、派生プロパティ、ライフサイクルの注入を扱います。これらは決定的で、テストされています。ノートを書く、整理する、リンクする、ブリーフを下書きする、といった判断はエージェントに残ります。
 
-**フォルダは目的別にグループ化。リンクは意味別にグループ化。** ノートは1つのフォルダ（その居場所）に存在しますが、多くのノート（そのコンテキスト）にリンクします。エージェントがこのグラフを維持し、作業ノートを人物、意思決定、コンピテンシーに自動的にリンクします。レビューシーズンが来たとき、各コンピテンシーノートのバックリンクがそのままエビデンスの軌跡になっています。リンクのないノートはバグです。
+**データベースは目的でまとめ、リンクは意味でまとめます。** ノートは 1 つのデータベースにありますが、多くのノートにリンクします。エージェントはこのグラフを維持し、リレーションプロパティで作業行を人、決定、コンピテンシーに結びます。評価の時期には、各コンピテンシーの `Evidence` リレーションがすでに証拠の記録になっています。リンクのないノートはバグです。
 
-**ボールトファーストのメモリ**がセッション間・マシン間でコンテキストを保持します。永続的な知識はすべて`brain/`のトピックノート（git管理、Obsidianで閲覧可能、リンク付き）に保存されます。Claude Codeの`MEMORY.md`（`~/.claude/`）はボールト内の場所を指す自動読み込みインデックスであり、ストレージそのものではありません。これにより、記憶はマシン変更後も生き残り、グラフの一部として機能します。
+**ワークスペースファーストの記憶**は、セッションとマシンをまたいで文脈を保ちます。永続的な知識はすべて `Knowledge` の brain topic 行にあります。`~/.claude/` にある Claude Code の `MEMORY.md` は Notion ページを指す索引で、保存先ではありません。
 
-**セッションには設計されたライフサイクルがあります。** `SessionStart`フックが自動的にNorth Starの目標、アクティブプロジェクト、最近の変更、未完了タスク、ボールト全体のファイル一覧、ボールト衛生フラグを注入します — Claudeは白紙からではなく、コンテキストを持ってセッションを開始します。終了時に「wrap up」と言えば、Claudeが`/om-wrap-up`を実行 — ノートの検証、インデックスの更新、記録漏れの実績の発見を行います。`CLAUDE.md`がその間のすべてを統制します：ファイルの配置場所、リンクの仕方、ノートの分割タイミング、意思決定やインシデントの扱い方。
+**セッションには設計されたライフサイクルがあります。** `SessionStart` フックが North Star の目標、アクティブなプロジェクト、最近の変更、未完了のタスク、ワークスペースの一覧を注入するので、エージェントは毎回文脈を持って始めます。最後に「wrap up」と言うと、エージェントが `/om-wrap-up` を実行します。その間のすべては `AGENTS.md` が決めます。どこに保存するか、どうリンクするか、いつノートを分割するか、決定やインシデントをどう扱うか、です。
+
+### 📖 読み取りの経路
+
+どのクライアントも Notion MCP でワークスペースを読めます。Claude Code、Claude アプリ、その他の MCP クライアントです。読み取りにフックは不要です。リモートのクライアントはリポジトリのファイルを読めないので、セットアップはルートの下に「Reader map」ページも書き出します。このページは `notion-map.json` にある各データベース、ビュー、ページを一覧にします。
+
+フックが有効な Claude Code セッションでは、読み取りは `Bash` コマンドです:
+
+```bash
+mcporter call notion.notion-search --args '{"query":"auth refactor","query_type":"internal"}' --output json
+```
+
+### ✍️ 書き込みの経路
+
+書き込むのは、このリポジトリのフックを読み込んだ Claude Code セッションだけです。書き込みは 2 段階です:
+
+1. エージェントが `Write` ツールで JSON 引数を `.claude/state/outbox/<name>.json` に書きます。
+2. `mcporter call notion.<tool> --args "$(cat .claude/state/outbox/<name>.json)"` を実行します。
+
+この呼び出しを 3 つのフックが見ます:
+
+- **ガード** (`PreToolUse`) は、Notion コマンドを書き込み、読み取り、スキーマ、ログインの形式だけで通し、それ以外の形式は理由を付けて拒否します。フックは引数を読める書き込みしか検査できないので、ガードはすべての書き込みを読める形にします。ガードが実行できないときはコマンドが拒否されるので、ガードは安全側に失敗します。
+- **書き込み検査** (`PostToolUse`) は outbox ファイルを読みます。空の必須プロパティ、リンクのないノート、ハードラップされた文章を警告します。25 KB を超えたノート (削るのではなく分割) とトピックのクラスターを指摘します。その後、行の派生プロパティ (`Bytes`、`Open tasks`、`Open loops`、`Has content`、`Changed`、`Hook stamp`) を設定し、outbox ファイルを削除します。
+- **修復** (`PostToolUseFailure`) は、書き込みが失敗した後に足りない select の選択肢をデータベースに追加し、同じコマンドをもう一度実行するようエージェントに伝えます。
+
+派生プロパティにより、ハイジーンスキャンはページごとの取得ではなくビューのクエリで実行できます。`Changed` はノートの経過時間です。プロパティを書くと Notion 自身の `Last edited` が動くので、経過時間のルールはそれを読みません。`Hook stamp` はフック経由の書き込みを示します。ビュー「Hygiene: edited outside hooks」は、後で他のクライアントが変更した行を一覧にし、`/om-vault-audit` がそれを読みます。
+
+呼び出しの全形式は [`.claude/rules/notion-calls.md`](.claude/rules/notion-calls.md) にあります。
 
 ### 🔗 フック
 
-5つのライフサイクルフックが自動的にルーティングを処理します：
-
 | フック | タイミング | 内容 |
 |------|------|------|
-| 🚀 SessionStart | 起動/再開時 | QMD再インデックス＋セルフヒール、North Starフォーカス・アクティブプロジェクト・最近の変更・タスク・ファイル一覧・ボールト衛生フラグを注入 — 全体はClaude Codeのフック出力上限に収まるバイトバジェットで抑えられ、最終行は注入サイズメーター |
-| 💬 UserPromptSubmit | 全メッセージ | コンテンツを分類（意思決定、インシデント、実績、1on1、アーキテクチャ、人物、プロジェクト更新）してルーティングヒントを注入。前のターンのStopレポートもエージェントに渡す |
-| ✍️ PostToolUse | `.md`書き込み後 | フロントマター＋ウィキリンクの検証、誤配置メモリファイルのブロック、肥大ノート（削るのではなく分割）と書き込み時トピッククラスタのフラグ |
-| 💾 PreCompact | コンテキスト圧縮前 | セッション記録を`thinking/session-logs/`にバックアップ |
-| 🏁 Stop | 各応答の終了時 | チェックリスト＋具体的なドリフト検出（SessionStartと同じ衛生スキャン）。セッションごとに1回、内容が変わった時のみ再表示。あなたにはセクションごとに1行の短い要約、エージェントには次のメッセージと一緒に完全なレポートが届き、対応するかはエージェントが判断。対応は`om-tidy`へ |
+| 🚀 SessionStart | 起動、再開、`/clear`、コンパクション時 | ワークスペースを読み、North Star、brain topics、最近の変更、未完了のタスク、アクティブな作業、一覧、ハイジーンの指摘を、Claude Code のフック出力上限に収まるバイト予算内で注入します。最後にサイズメーターを出します |
+| 💬 UserPromptSubmit | 毎メッセージ | 内容 (決定、インシデント、成果、1:1、アーキテクチャ、人物、プロジェクト更新) を分類し、正しいデータベースを示すルーティングヒントを注入します。前のターンの Stop レポートもエージェントに渡します |
+| 🛡️ PreToolUse | 各 `Bash` コマンドの前 | ガード: 書き込み検査が読める形式の Notion コマンドだけを通します |
+| ✍️ PostToolUse | Notion への書き込みの後、`Write` または `Edit` の後 | 書き込み検査と派生プロパティ。`Write` または `Edit` では、置き場所の誤ったメモリファイルを指摘します |
+| 🩹 PostToolUseFailure | Notion への書き込みが失敗した後 | 足りない select の選択肢を追加し、同じコマンドの再実行を求めます |
+| 💾 PreCompact | コンテキストのコンパクション前 | セッションのトランスクリプトを、ノートの保存先の外にある `.claude/state/session-logs/` にバックアップします |
+| 🏁 Stop | 毎回の応答の後 | チェックリストと、保存済みハイジーンビューからの指摘を、セッションごとに 1 回、変化したときにだけ再表示します。あなたには短い要約が見え、エージェントは次のメッセージで完全なレポートを受け取ります |
 
 > [!TIP]
-> ただ話すだけ。フックがルーティングを処理します。
+> 話すだけで大丈夫です。ルーティングはフックが処理します。
 
 ### 🧩 Claude Code の mod
 
-Claude Code 2.1.287 以降では、ボールトは mod も同梱しています。`.claude/skills/obsidian-mind/` にある、Claude Code の内部で動くプラグインです。ボールト自身のフックスクリプトを実行し、その出力がセッションに届く経路だけを変えます。
+Claude Code 2.1.287 以降では、リポジトリは mod も提供します。`.claude/skills/obsidian-mind/` は、コードが Claude Code の中で動くプラグインです。同じフックスクリプトを実行し、出力がセッションに届く方法だけを変えます:
 
-- **セッションコンテキストは、`CLAUDE.md` と同じく instruction ファイルとして届きます。** コンパクションや `/clear` の後もそのまま全体が読み直され（フック出力ではポインタに縮みます）、汎用サブエージェントにも届き（フック出力は届きません）、Claude Code のフック出力の 10,000 文字制限で切られません。予算は `vault-manifest.json` の `eager_layer_instruction_budget_bytes` です。オープンタスクのように縮まないセクションは、それを超えることがあります。`/memory` には `.claude/session-context.md` として表示されます。
-- **Stop レポートは回答の下の 1 行になります。** 指摘が変わると、Claude の返答の下に、mod の名前で始まる行 `obsidian-mind: vault check: …` が表示されます。Claude Code は Stop で応答したプラグインの名前を `+` で連結するため、他のプラグインも応答すると `obsidian-mind+<プラグイン>: vault check: …` のようになります。Claude は完全なレポートを次のメッセージと一緒に、表示されない形で受け取ります。緊急とマークされた指摘は、代わりにすぐ Claude に届きます（あなたのメッセージ 1 通につき 1 回まで。2 件目はレポートの中で待ちます）。テンプレート自身のレポートにはそれはありません。
+- **セッションの文脈は指示ファイルとして届きます**。`AGENTS.md` と同じ扱いです。コンパクションや `/clear` の後に Claude Code が全体を読み直し、汎用サブエージェントにも届き、10,000 文字のフック上限で切られません。予算は `vault-manifest.json` の `eager_layer_instruction_budget_bytes` です。`/memory` では `.claude/session-context.md` として表示されます。
+- **Stop レポートは回答の下の 1 行になります。** 指摘が変わると、Claude の返答の下に mod の名前で始まる行が出ます: `obsidian-mind: vault check: …`。別のプラグインも Stop で応答すると、Claude Code は名前を `+` でつなぎます。Claude は次のメッセージで完全なレポートを、あなたには見えない形で受け取ります。緊急の指摘は、送ったメッセージごとに 1 回、すぐに Claude の注意を引きます。
 
-mod は処理するイベントごとに、対応するフックに待機を伝えます。mod が読み込まれない場所では、フックはこれまでどおり動きます。Codex と Gemini、古い Claude Code、ボールトのサブフォルダで始めたセッション（ボールトのルートで起動するか、そこへ `/cd` して `/clear`）、信頼していないフォルダです。mod は、ボールトに対する Claude Code の信頼確認を承認した後にだけ読み込まれます。
+mod は扱う各イベントについて、対応するフックに待機を指示します。mod が読み込まれない環境では、フックは従来どおり動きます。古い Claude Code、サブフォルダで始めたセッション (リポジトリのルートから起動するか、`/cd` で移動して `/clear`)、信頼していないフォルダです。
 
-mod はサンドボックス化されておらず、あなたの権限で動くコードです。フォルダを信頼する前に内容を確認してください。`claude plugin validate .claude/skills/obsidian-mind` が、フックするイベントと行う呼び出しをすべて一覧にします（ボールト自身のスクリプトを実行し、コンテキストファイルを書き、各セッションにどのレポートを見せたかを自分のストアに記録し、緊急の指摘があればプロンプトを送るだけです）。無効にするには、`.claude/settings.local.json` に `"enabledPlugins": { "obsidian-mind@skills-dir": false }` を追加します。
+mod はあなたの権限で動くサンドボックスなしのコードなので、フォルダを信頼する前に内容を確認してください。`claude plugin validate .claude/skills/obsidian-mind` は、フックするすべてのイベントと、行うすべての呼び出しを一覧にします。無効にするには、`.claude/settings.local.json` に `"enabledPlugins": { "obsidian-mind@skills-dir": false }` を追加します。
 
 <!-- mod-validate:start -->
-この版の mod で、その出力のうち確認すべき 2 行は次のとおりです：
+このバージョンの mod について、出力で重要な 2 行:
 
 ```text
   ❯ ./register.ts hooks: classic.SessionStart, prompt.context, classic.Stop, turn.complete, prompt.submit, turn.start
@@ -225,385 +202,251 @@ mod はサンドボックス化されておらず、あなたの権限で動く�
 
 ### ⚡ トークン効率
 
-obsidian-mindはボールト全体をコンテキストに読み込み**ません**。階層型ローディングでトークンコストを抑えます：
+obsidian-mind はワークスペースを丸ごとコンテキストに入れ**ません**:
 
 | 階層 | 内容 | タイミング | コスト |
-|------|------|------------|--------|
-| **常時** | `CLAUDE.md` + SessionStartコンテキスト（North Star抜粋、git概要、タスク、ボールトファイル一覧） | セッション開始時 | マニフェストのバジェットが上限（それ自体もClaude Codeの10,000文字のフック出力上限の内側に抑えられる）。実サイズは毎セッション末尾のメーターが表示 |
-| **オンデマンド** | QMDセマンティック検索結果 | エージェントが特定のコンテキストを必要とした時 | 対象のみ |
-| **トリガー** | 分類ルーティングヒント | 毎メッセージ | ~100トークン |
-| **トリガー** | PostToolUse検証 | `.md`書き込み後 | ~200トークン |
-| **まれ** | ファイル全体の読み込み | 明示的に必要な場合のみ | 可変 |
+|------|------|------|------|
+| **常時** | `AGENTS.md`、`.claude/rules/`、SessionStart の文脈 (North Star の抜粋、最近の変更、タスク、一覧) | セッション開始 | `vault-manifest.json` の予算で上限があり、10,000 文字のフック出力上限の内側です。メーターが毎回実際のサイズを報告します |
+| **必要時** | `notion-search` の結果と、一致したページ | エージェントが特定の文脈を必要とするとき | 対象を絞る |
+| **トリガー** | 分類のルーティングヒント | 毎メッセージ | 約 100 トークン |
+| **トリガー** | 書き込み検査の指摘 | Notion への書き込みの後 | 約 200 トークン |
 
-SessionStartは**軽量なコンテキスト**を読み込みます — 主要ファイルからの短い抜粋、ファイル名、git概要のみで、ノート全体は読み込みません。エージェントはQMDで意味検索してからファイルを読むため、関連する情報のみを取得します。分類フックはメッセージごとに軽量なNode呼び出し1回です。検証フックはMarkdown書き込み時のみ発火し、除外パスはスキップします。 ボールトが成長しても注入層を正直に保つ5つの仕組み: **ソース認識注入**（resume/compact時は揮発セクションのみ再注入 — 静的な大部分はすでに会話内にある）、全注入の最終行に付く**注入サイズメーター**、メーターが計測する値を実際に強制する**注入バジェット**（上限を超えると失っても影響の小さいセクションからポインタに縮退し、縮退したものはメーターに必ず名前が出る — 黙って失われる方が肥大化より悪いため）、書き込みごとの**フック起動は1プロセスのみ**（QMDリフレッシュは検証フックに同乗）、**一覧の折りたたみ**（ノート数のしきい値を超えたフォルダは1行のカウント表示に畳まれるので、誰も設定し忘れたフォルダ経由でボールトが上限を超えて育つことはない）。バジェットとしきい値はどちらも `vault-manifest.json` で調整できます。ただしバジェットは設定値にかかわらずClaude Codeの10,000文字のフック出力上限の内側に抑えられます。上限を超えると、セッションには2,000文字のプレビューしか届かないためです。
-
-### 🌐 他のエージェントでの利用
-
-obsidian-mindはClaude Code、Codex CLI、Gemini CLIで動作します。`CLAUDE.md`のボールト規約、`.claude/scripts/`のフックスクリプト、`.claude/commands/`のコマンドはすべてエージェント非依存です — 純粋なMarkdown、TypeScript、シェルでSDK依存はありません。
-
-**Claude Code** — フルサポート。フック、コマンド、サブエージェント、メモリシステムがすべてそのまま動作します。
-
-**Codex CLI** — `AGENTS.md`をネイティブに読み込みます。`.codex/hooks.json`のフック設定がClaude Codeと同じフックスクリプトを接続 — セッションコンテキスト、メッセージ分類、書き込み検証が自動的に動作します。
-
-Codex がプロジェクトのフックを実行するには、2 つの信頼が必要です（Codex CLI 0.160.0 で確認、2026-10-13 時点、[#345](https://github.com/breferrari/obsidian-mind/issues/345)）。
-- **ボールトのフォルダーが信頼されていること。** Codex は `~/.codex/config.toml` の `[projects.'<path>']` に記録します。Windows ではキーが `\\?\` 付きのパスになります（例: `[projects.'\\?\C:\path\to\vault']`）。
-- **各フックが承認されていること。** Codex は各承認を `[hooks.state]` の `trusted_hash` として保存します。対話型の `codex` セッションで承認するとこれが書き込まれるはずです（推測：#345 の確認では、1 回の非対話実行用のフラグ `--dangerously-bypass-hook-trust` で代用しました）。
-
-両方が揃うまで Codex はフックを一切実行せず、セッションにボールトのコンテキストは届きません。
-
-**Gemini CLI** — `GEMINI.md`をネイティブに読み込みます。`.gemini/settings.json`のフック設定がGeminiのイベント名を共有フックスクリプトにマッピングします。
-
-**その他のエージェント**（Cursor、Windsurf、GitHub Copilot、JetBrains AI）— `AGENTS.md`でボールト規約を読み取ります。フックサポートはエージェントにより異なります。
-
-> [!NOTE]
-> フック、コマンド、サブエージェントプロンプト、ボールトメモリ（`brain/`）はすべてエージェント非依存です。`~/.claude/`の自動メモリローダーのみがClaude Code専用です。詳細は`AGENTS.md`をご覧ください。
+SessionStart はページ全体ではなく、タイトル、件数、短い抜粋を読み込みます。予算を超えると、最も安価なセクションがポインターになり、メーターが落としたものを 1 つずつ示します。行数のしきい値を超えた一覧のグループは、件数 1 行にたたまれます。
 
 ---
 
-## 🧠 どのリポジトリからでもボールトにアクセス
+## 🗂️ ワークスペース
 
-ボールトは通常、その中で作業しているときにしか役立ちません。**`om` MCPサーバー**がそれを変えます。*他のあらゆるリポジトリ*のコーディングセッションが、ノートを検索し、読み、グラフをたどり、学んだことをボールトに記録できるようになります。
+セットアップは、7 つのデータベースを持つプライベートのルートページ「obsidian-mind」を 1 つ作ります:
 
-```json
-{
-  "mcpServers": {
-    "om": {
-      "command": "node",
-      "args": ["/path/to/your-vault/.claude/scripts/om-mcp.mjs"]
-    }
-  }
-}
-```
+| データベース | 内容 |
+|----------|-------|
+| `Work` | 作業ノート、決定、インシデント、1:1 ノート、受信箱の項目、思考ノート。`Type` で区別します。`Status` がアクティブとアーカイブのフォルダを置き換え、`Project` が作業の流れをまとめます |
+| `People` | 人ごとに 1 行。`Team` 付き |
+| `Teams` | チームごとに 1 行。`Members` 付き |
+| `Competencies` | コンピテンシーごとに 1 行。作業行からの `Evidence` と `Evidence count` ロールアップ付き |
+| `Perf docs` | PR の証拠、評価ブリーフ、評価の成果物、四半期ごとの brag |
+| `Knowledge` | brain topics (Key Decisions、Patterns、Gotchas)、リファレンスノート、ドメインノート、イベントログのサテライト、アーカイブノート |
+| `Templates` | テンプレートごとに 1 行 |
 
-これは**利用側プロジェクト**の`.mcp.json`に記述します。次に、そのプロジェクト自身の`CLAUDE.md`にボールトを指し示す短いセクションを追加してください。
+ページ: **Home** (リンクされたビューと North Star の Current Focus を持つダッシュボード)、**North Star**、**People & Context**、**Recently Touched** (`Changed` で並べた各データベースのビュー)、**Reader map**。
 
-> [!IMPORTANT]
-> **両方の手順が必須で、2つ目は事務作業ではありません。** 実測: サーバーを接続してもリポジトリ側の指示がない場合、セッションはボールトを**一度も**呼び出さず、ボールトが明確に却下したと記録していた設計をそのまま実装しました。指示があった場合は、実装を拒否しノートを引用しました。
->
-> MCPの`instructions`フィールドにおける**禁止事項**は呼び出し側セッションへ確実に伝播します。一方`「ボールトを参照せよ」`という肯定的な指示は助言的で、より近い情報源があれば無視されます。サーバーはセッションを止められますが、セッションに探しに行かせられるのはそのプロジェクト自身の規約だけです。
+**リレーションがウィキリンクを置き換えます。** ビュー、ロールアップ、ハイジーン検査がリンクを読む場所で使います: `Work.Decisions`、`Work.Competencies`、`Work.Person`、`Work.Team`、`Work.Feeds into`、`Perf docs.Work evidence`、`Parent`。それ以外のリンクは本文のページメンションです。
 
-**セッションが得られるもの:** `search`（セマンティック＋キーワード）、`expand`（ノートのリンクと被リンク）、`recall`（そのリポジトリにスコープされた恒久的な教訓）、`remember`（教訓の記録）、`record_work`（作業内容の記録）、`reason`（複数ノートにまたがる判断）、`health`（配線は正常か）。加えて、ノートを読み取り可能なリソースとして提供します。
+**保存済みビューが Bases と手作業の索引を置き換えます。** 例: Active Work、Stale Actives、Completed、Incidents、1:1 History、Competency Map、Review Evidence、Brain index。フックはハイジーンビュー (oversized、open loops、inbox pressure、loose active) をビューモードで読みます。ビューモードにはプランの上限がありません。
 
-**思考するのは`reason`だけです。** 他が検索するのに対し、これは2つ目のClaudeセッションでボールトを読み、ノートをまたぐ判断を要する問いに答えます — *これから行おうとしていることは、これら6つのノートが決めた内容と整合しているか？* 内部で先に検索を行うため、事前に検索する必要はありません。あなた自身のCLIデフォルトモデルで動くので、ボールトは今あなたが作業しているのと同じ水準で答えます。そして一切の上限はありません — これはあなたのマシン上で、あなたの認証のもとで動くClaudeです。呼び出しごとにコスト・ターン数・モデル・実経過時間が記録されます。回答は`confidence: inferred`が付き、それ単体でメモリとして記録されることはありません — 残す価値があるかはあなたのセッションが決めます。
-
-**リポジトリはフォルダ名で識別されます。** これは通常正しく、稀に誤ります: `api`という名前のリポジトリが2つあると同一の識別子を共有し、互いのメモリを受け取ってしまいます。リポジトリのルートに`.om-project`ファイルを置き、別の名前を書けば分離できます。`health`がどのリポジトリとして認識しているか、その名前がどこから来たかを教えてくれます。
-
-**認識論的契約を伴うリポジトリ横断メモリ。** あるリポジトリで学んだ教訓は、スコープ指定されたリポジトリにのみ届きます。到達範囲は読み取り時に推測されるのではなく*書き込み時に宣言*されるため、兄弟プロジェクトが他方の制約を継承することはありません。記録されるすべてに`confidence: verified | inferred | unverified`、変動しやすい事実の日付、そしてサーバー側で導出される来歴が付随します — セッションが自分とは異なるプロジェクトを名乗ることはできません。訂正は上書きではなく置き換えとして記録されるため、ストアは矛盾を蓄積するのではなく、成長するほど信頼性が**高まります**。
-
-**何が提供されるか。** あなたのボールト、あなたのノート、あなたのセッションです。デフォルトは、ボールトがすでに自分のコンテンツとして宣言しているもの（`user_content_roots`）を、書いたままの粒度で使います（`work/`全体ではなく`work/active/`）。`vault-manifest.json`の`mcp_exposed_roots`を設定するのは、**あなたが共有する権限を持たない**素材 — 雇用主の機密情報やクライアントのデータ — をこのボールトが抱えている場合だけです。`private`タグの付いたノートは提供されず、メモリは独自のスコープを持つため通常のノートとしては提供されません。ひとつだけ両者をまたぐケースがあります。キャプチャの`promoted:`マーカーがアンカーを持つ場合、`recall`は`brain/`のそのブロックを提供するため、他リポジトリは最初に書かれたキャプチャではなく修正済みの版を受け取ります。これも同じポリシーに従うので、`private`や非公開のノートはここでも拒否されます。すべての読み取りは呼び出し元リポジトリとともに記録されます。
-
-> [!NOTE]
-> ボールトの内容を公開PRに出さないようにするのは、公開範囲リストではなく**契約**の仕事です。セッションはいずれにせよボールトを直接読めます。呼び出し側セッションに注入される禁止事項こそが、実測で効果を持つ部分です。
+**テンプレート**は `Templates` の行です: Work Note、Decision Record、Thinking Note、Competency Note、Review Template。
 
 ---
 
 ## 📅 日常ワークフロー
 
-**朝**: `/om-standup`を実行。エージェントがNorth Star、アクティブプロジェクト、未完了タスク、最近の変更を読み込みます。構造化されたサマリーと優先度の提案が表示されます。
+**朝**: `/om-standup` を実行します。エージェントが North Star、アクティブなプロジェクト、未完了のタスク、最近の変更を読み込みます。構造化された要約と優先順位の提案が得られます。
 
-**日中**: 自然に話しましょう。下した決定、発生したインシデント、終わったばかりの1on1、覚えておきたい実績を伝えてください。分類フックがエージェントに各情報を正しく整理するよう促します。まとめてダンプしたい場合は`/om-dump`を使い、すべてを一度に語ってください。
+**日中**: 自然に話します。下した決定、起きたインシデント、終えた 1:1、記録したい成果に触れてください。分類フックが、各情報を正しいデータベースに保存するようエージェントを促します。大きなブレインダンプには `/om-dump` を使い、すべてを一度に話します。
 
-**終業時**: 「wrap up」と言えば、エージェントが`/om-wrap-up`を呼び出します — ノートの検証、インデックスの更新、リンクの確認、記録漏れの実績の発見を行います。
+**一日の終わり**: 「wrap up」と言うと、エージェントが `/om-wrap-up` を呼び出します。行を確認し、リンクを検査し、記録されていない成果を見つけます。
 
-**週次**: `/om-weekly`を実行してセッション横断の振り返り — North Starとの整合性確認、パターンの発見、記録漏れの実績、翌週の優先事項。`/om-vault-audit`を実行して孤立ノート、壊れたリンク、古くなったコンテンツを検出します。
+**毎週**: `/om-weekly` でセッション横断の統合を行います。North Star との整合、パターン、記録されていない成果、来週の優先順位です。`/om-vault-audit` で、孤立した行、空のプロパティ、フックの外で編集された行を見つけます。
 
-**レビューシーズン**: `/om-review-brief manager`を実行すれば、エビデンスがすべてリンクされた構造化レビュー準備ドキュメントが生成されます。
+**評価の時期**: `/om-review-brief manager` を実行すると、証拠がすでにリンクされた評価準備ドキュメントが得られます。
 
 ---
 
 ## 🛠️ コマンド
 
-`.claude/commands/`で定義されています。任意のClaude Codeセッションで実行できます。
+`.claude/commands/` で定義されています。Claude Code で実行します。
 
-| コマンド | 機能 |
-|---------|------|
-| `/om-standup` | 朝のキックオフ — コンテキスト読み込み、前日の振り返り、タスクの表示、優先度の提案 |
-| `/om-dump` | フリーフォームキャプチャ — 何でも自然に話せば、適切なノートに振り分け |
-| `/om-wrap-up` | セッション全体のレビュー — ノート、インデックス、リンクの検証、改善点の提案 |
-| `/om-humanize` | 文体の調整 — Claudeが書いたテキストをあなたが書いたように修正 |
-| `/om-weekly` | 週次振り返り — セッション横断のパターン、North Starとの整合性、記録漏れの実績 |
-| `/om-prep-1on1` | 1on1の準備 — 相手のコンテキスト、未解決事項、提案アジェンダを読み込み |
-| `/om-meeting` | トピック別ミーティング準備 — 未解決事項、ブロッカー、考慮すべきポイントを整理 |
-| `/om-intake` | ミーティングノート受信箱を処理 — `work/meetings/`のファイルを分類して適切なノートに振り分け |
-| `/om-capture-1on1` | 1on1ミーティングのトランスクリプトを構造化ボールトノートとしてキャプチャ |
-| `/om-incident-capture` | Slack/チャンネルからインシデントを構造化ノートとしてキャプチャ |
-| `/om-slack-scan` | Slackチャンネル/DMをエビデンス収集のためにディープスキャン |
-| `/om-peer-scan` | レビュー準備のために同僚のGitHub PRをディープスキャン |
-| `/om-review-brief` | レビューブリーフを生成（マネージャー版またはピア版） |
-| `/om-self-review` | レビューシーズン用の自己評価を作成 — プロジェクト、コンピテンシー、原則 |
-| `/om-review-peer` | ピアレビューを作成 — プロジェクト、原則、パフォーマンスサマリー |
-| `/om-correct` | 修正した事実を一括反映 — 単一の情報源に適用し、他ノートの記述はリンクに置換、日付付きの記録は保全 |
-| `/om-vault-audit` | インデックス、リンク、孤立ノート、古いコンテキストを監査 |
-| `/om-vault-upgrade` | 既存ボールトからコンテンツをインポート — バージョン検出、分類、移行 |
-| `/om-project-archive` | 完了プロジェクトをactive/からarchive/に移動し、インデックスを更新 |
-| `/om-tidy` | セルフメンテナンス — 衛生フラグに基づき、完了ノートのアーカイブ、クラスタのフォルダ化、肥大ノートの分割を実行。削除もコミットもしない |
+| コマンド | 内容 |
+|---------|-------------|
+| `/om-standup` | 朝のキックオフ: 文脈を読み込み、昨日を振り返り、タスクを示し、優先順位を提案します |
+| `/om-dump` | 自由形式の記録: 何でも自然に話すと、各情報を正しい行に振り分けます |
+| `/om-wrap-up` | セッションの総括: 行、リンク、プロパティを確認し、改善を提案します |
+| `/om-humanize` | 声に合わせた編集: Claude が下書きした文章をあなたが書いたように整えます |
+| `/om-weekly` | 週次の統合: セッション横断のパターン、North Star との整合、記録されていない成果 |
+| `/om-capture-1on1` | 1:1 の書き起こしを構造化された `Work` 行に記録します |
+| `/om-incident-capture` | Slack のインシデントを構造化された行に記録します |
+| `/om-slack-scan` | Slack のチャンネルと DM から証拠を深くスキャンします |
+| `/om-peer-scan` | 評価準備のために同僚の GitHub PR を深くスキャンします |
+| `/om-review-brief` | 評価ブリーフ (マネージャー版または同僚版) を生成します |
+| `/om-self-review` | 評価期の自己評価を書きます: プロジェクト、コンピテンシー、原則 |
+| `/om-review-peer` | 同僚評価を書きます: プロジェクト、原則、パフォーマンスの要約 |
+| `/om-tidy` | 自己メンテナンス: すべてのハイジーン指摘に対応します。完了、グループ化、分割。削除はしません |
+| `/om-correct` | 訂正された事実を一掃します: 単一の出典に適用し、言い換えをリンクにし、日付付きの記録は残します |
+| `/om-vault-audit` | プロパティ、リンク、孤立、ビュー、フックの外で編集された行を監査します |
+| `/om-prep-1on1` | 1:1 の準備: 人物の文脈、未解決の項目、議題の提案 |
+| `/om-meeting` | トピック別の会議準備: 未解決の項目と検討事項を含むブリーフィング |
+| `/om-intake` | 会議メモの受信箱を処理します: 受信箱の項目を分類し、正しい行に振り分けます |
+| `/om-project-archive` | 完了したプロジェクトを完了にし、アクティブなビューから外します |
 
 ---
 
 ## 🤖 サブエージェント
 
-分離されたコンテキストウィンドウで実行される専門エージェント。メインの会話を汚さずに重い処理を担当します。
+独立したコンテキストウィンドウで動く専門エージェントです。重い処理を、メインの会話を埋めずに扱います。
 
 | エージェント | 目的 | 呼び出し元 |
-|------------|------|------------|
-| `brag-spotter` | 記録漏れの実績やコンピテンシーギャップを発見 | `/om-wrap-up`, `/om-weekly` |
-| `context-loader` | 人物、プロジェクト、コンセプトに関するボールトコンテキストをすべて読み込み | 直接呼び出し |
-| `cross-linker` | 不足しているウィキリンク、孤立ノート、壊れたバックリンクを発見 | `/om-vault-audit` |
-| `people-profiler` | Slackプロフィールから人物ノートを一括作成/更新 | `/om-incident-capture` |
-| `review-prep` | レビュー期間のパフォーマンスエビデンスをすべて集約 | `/om-review-brief` |
-| `slack-archaeologist` | Slackの完全な復元 — すべてのメッセージ、スレッド、プロフィール | `/om-incident-capture` |
-| `vault-librarian` | ボールトの徹底メンテナンス — 孤立ノート、壊れたリンク、古いノート | `/om-vault-audit` |
-| `review-fact-checker` | レビュー原稿のすべての主張をボールトのソースと照合して検証 | `/om-self-review`, `/om-review-peer` |
-| `vault-migrator` | ソースボールトからコンテンツを分類、変換、移行 | `/om-vault-upgrade` |
+|-------|---------|------------|
+| `brag-spotter` | 記録されていない成果とコンピテンシーのギャップを見つけます | `/om-wrap-up`、`/om-weekly` |
+| `context-loader` | 人、プロジェクト、概念についての Notion の文脈をすべて読み込みます | 直接 |
+| `correction-sweep` | 訂正された事実を言い直しているページをすべて見つけて分類します。編集はしません | `/om-correct` |
+| `cross-linker` | 足りないリレーションとメンション、孤立、一方向のリンクを見つけます | `/om-vault-audit` |
+| `people-profiler` | Slack のプロフィールから `People` 行をまとめて作成・更新します | `/om-incident-capture` |
+| `review-prep` | 評価期間のパフォーマンスの証拠をすべて集めます | `/om-review-brief` |
+| `slack-archaeologist` | Slack の完全な再構成: すべてのメッセージ、スレッド、プロフィール | `/om-incident-capture` |
+| `vault-librarian` | ワークスペースの深いメンテナンス: 孤立、壊れたリンク、空のプロパティ、古い行 | `/om-vault-audit` |
+| `review-fact-checker` | 評価の下書きのすべての主張を Notion の出典と照合します | `/om-self-review`、`/om-review-peer` |
+| `vault-migrator` | 元のボールトの内容を分類して移行します。インポートツールが引き継ぎます | インポートツールが入るまでなし |
 
 > [!NOTE]
-> サブエージェントは`.claude/agents/`で定義されています。ドメイン固有のワークフロー用に独自のエージェントを追加できます。
+> サブエージェントは `.claude/agents/` で定義されています。分野ごとのワークフロー用に自分のものを追加できます。
 
 ---
 
 ## 📊 パフォーマンスグラフ
 
-ボールトはパフォーマンス追跡システムとしても機能します：
+ワークスペースはパフォーマンス記録のシステムも兼ねます:
 
-1. **コンピテンシーノート**（`perf/competencies/`）が組織のコンピテンシーフレームワークを定義 — コンピテンシーごとに1つのノート
-2. **作業ノート**が`## Related`セクションでコンピテンシーにリンクし、何を実証したかを注記
-3. **バックリンクが自動的に蓄積** — レビュー準備は各コンピテンシーノートのバックリンクパネルを読むだけ
-4. **Brag Doc**が四半期ごとの実績をエビデンスノートへのリンク付きで集約
-5. **`/om-peer-scan`**が同僚のGitHub PRをディープスキャンし、構造化されたエビデンスを`perf/evidence/`に記録
-6. **`/om-review-brief`**がすべてを集約して完全なレビューブリーフを生成：Bragエントリー、意思決定、インシデント、コンピテンシーエビデンス、1on1フィードバック
+1. **`Competencies` の行**が組織のコンピテンシーの枠組みを定義します。コンピテンシーごとに 1 行です
+2. **作業行**は `Competencies` リレーションを設定し、示したことを本文に書きます
+3. **証拠は自動的に積み重なります**: 逆リレーション `Evidence` と `Evidence count` ロールアップが埋まり、Competency Map ビューがそれで並べます
+4. **`Perf docs` の brag quarter** が四半期ごとの成果を `Work evidence` 付きで集めます
+5. **`/om-peer-scan`** は同僚の GitHub PR を深くスキャンし、`Type` が PR evidence の `Perf docs` 行を書きます
+6. **`/om-review-brief`** は brag quarter、決定、インシデント、コンピテンシーの証拠、1:1 のフィードバックから評価ブリーフを生成します
 
 > [!TIP]
-> 始め方：テンプレートからコンピテンシーノートを作成し、作業を進めながら作業ノートをリンクしていくだけ。あとはグラフが処理します。
+> 始め方: テンプレートからコンピテンシーの行を作り、作業行をそれにリンクしていきます。残りはグラフが行います。
 
 ---
 
-## 📋 Bases
+## 🧪 Obsidian 版とのパリティ
 
-`bases/`フォルダには、ノートのフロントマタープロパティを検索するデータベースビューが格納されています。ノートが変更されると自動的に更新されます。
+コミット `fae7be4` は最後の Obsidian 版で、各フックの基準です。`.claude/scripts/parity/` のパリティハーネスは、そのコミットのフックを Markdown のフィクスチャボールトで、移植したフックを Notion の同じノートで実行し、指摘、ノート、件数を比較します:
 
-| Base | 表示内容 |
-|------|---------|
-| Work Dashboard | 四半期でフィルタリングされ、ステータスでグループ化されたアクティブプロジェクト — 14日以上更新のないアクティブノートを示す Stale Actives ビュー付き |
-| Recently Touched | 実際の更新時刻順の全ノート — 「最近何に取り組んだか」への正しい答え（生きたノートではファイル名の日付は当てにならない） |
-| Incidents | 重要度と日付で並べ替えられた全インシデント |
-| People Directory | `org/people/`の全員（役割、チーム付き） |
-| 1:1 History | 人物と日付でソート可能な全1on1ノート |
-| Review Evidence | 人物とサイクルでグループ化されたPRスキャンとエビデンス |
-| Competency Map | バックリンクからのエビデンス数付きコンピテンシー一覧 |
-| Templates | 全テンプレートへのクイックアクセス |
-
-`Home.md`がこれらのビューを埋め込んでおり、ボールトのダッシュボードとして機能します。
-
----
-
-## 📁 ボールト構造
-
-```
-Home.md                 ボールトのエントリーポイント — 埋め込みBaseビュー、クイックリンク
-CLAUDE.md               運用マニュアル — エージェントが毎セッション読み込み
-AGENTS.md               マルチエージェントガイド — Codex、Cursor、Windsurf等
-GEMINI.md               マルチエージェントガイド — Gemini CLI
-vault-manifest.json     テンプレートメタデータ — バージョン、構造、スキーマ
-.shardmindignore        `shardmind install` から除外されるファイル（CONTRIBUTING、翻訳、マーケティング素材）
-CHANGELOG.md            バージョン履歴
-CONTRIBUTING.md         テンプレート開発チェックリスト
-README.md               プロダクトドキュメント
-LICENSE                 MITライセンス
-
-bases/                  動的データベースビュー（Work Dashboard、Incidents、Peopleなど）
-
-work/
-  active/               現在のプロジェクト（常時1〜3ファイル）
-  archive/YYYY/         完了した作業（年別に整理）
-  incidents/            インシデントドキュメント（メインノート + RCA + ディープダイブ）
-  1-1/                  1on1ミーティングノート — <人名> YYYY-MM-DD.md
-  Index.md              全作業のMap of Content
-
-org/
-  people/               人物ごとに1ノート — 役割、チーム、関係性、重要な出来事
-  teams/                チームごとに1ノート — メンバー、スコープ、関わり
-  People & Context.md   組織知識のMOC
-
-perf/
-  Brag Doc.md           実績の継続記録（エビデンスへのリンク付き）
-  brag/                 四半期ごとのBragノート（各四半期1つ）
-  competencies/         コンピテンシーごとに1ノート（リンクターゲット）
-  evidence/             PRディープスキャン、レビュー用データ抽出
-  <cycle>/              レビューサイクルのブリーフとアーティファクト
-
-brain/
-  North Star.md         目標とフォーカスエリア — 毎セッション読み込み
-  Memories.md           記憶トピックのインデックス
-  Key Decisions.md      重要な意思決定とその理由
-  Patterns.md           作業全体で観察された繰り返しパターン
-  Gotchas.md            うまくいかなかったことその理由
-  Skills.md             カスタムワークフローとスラッシュコマンド
-
-reference/              コードベースの知識、アーキテクチャマップ、フロードキュメント
-thinking/               ドラフト用スクラッチパッド — 知見を昇格させたら削除
-templates/              YAMLフロントマター付きObsidianテンプレート
-
-.claude/
-  commands/             18個のスラッシュコマンド
-  agents/               9個のサブエージェント
-  scripts/              フックスクリプト + charcount.tsユーティリティ
-  skills/               Obsidian + QMDスキル、obsidian-mind mod
-  settings.json         5つのフック設定
-
-.scripts/                ボールトレベルのツール — QMDブートストラップ（新規クローン時に一度実行）
-
-.shardmind/             ShardMindサイドカー — `shardmind install`でインストールした場合のみ使用
-  shard.yaml            マニフェスト（名前、バージョン、モジュール、フック）
-  shard-schema.yaml     ウィザードの値 + モジュールゲーティング
-  hooks/                bootstrap（git初期化 + QMD）、personalize（North Star）、post-update
+```bash
+cd .claude/scripts
+node --experimental-strip-types parity/run-parity.ts                       # the reference against itself
+node --experimental-strip-types parity/run-parity.ts --notion --hook validate-write
+node --experimental-strip-types parity/run-mutations.ts --notion --hook validate-write
 ```
 
-> [!NOTE]
-> `.shardmind/`は**追加機能であり、必須ではありません。** クローンして開くボールトはこれを読み込みません。`shardmind` CLIだけが読み込みます。削除してもボールトは動作し続けます。v6レイアウト契約は[shardmind/docs/SHARD-LAYOUT.md](https://github.com/breferrari/shardmind/blob/main/docs/SHARD-LAYOUT.md)を参照してください。
+`--notion` にはフィクスチャ用の 2 つ目のルートが必要です。`notion-setup.ts --root-title "obsidian-mind parity fixtures" --map notion-map.fixtures.json` で作り、`parity/write-notion-fixture.ts` で埋めます。`npm test` は同じ比較を代替ランタイムでオフライン実行します。ライブのテストは `NOTION_LIVE=1` とマップファイルがあるときだけ実行され、それ以外はスキップされます。各検査と既知の差分の記録は [`NOTION-PORT-DESIGN.md`](NOTION-PORT-DESIGN.md) のパート (d) です。
 
 ---
 
-## 📝 テンプレート
+## 📥 既存のボールトのインポート
 
-YAMLフロントマター付きテンプレート。段階的開示のための`description`フィールドを含みます：
-
-- **Work Note** — date、description、project、status、quarter、tags
-- **Decision Record** — date、description、status（proposed/accepted/deprecated）、owner、context
-- **Thinking Note** — date、description、context、tags（スクラッチパッド — 昇格後に削除）
-- **Competency Note** — date、description、current-level、target-level、proficiency table
-- **1:1 Note** — date、person、key takeaways、action items、quotes
-- **Incident Note** — date、ticket、severity、role、timeline、root cause、impact
+Obsidian テンプレートのボールトをワークスペースに移すインポートツールは、[`NOTION-PORT-DESIGN.md`](NOTION-PORT-DESIGN.md) のパート (e) の項目 11 として計画されています。まだリポジトリにはありません。それまでは `vault-migrator` にコマンドはなく、ノートは手作業か `/om-dump` で移します。
 
 ---
 
-## 🔧 同梱内容
+## ⚠️ 既知の制限
 
-### 🧩 Obsidianスキル
+以下の各制限は、リンク先のプルリクエストでの測定に基づきます。
 
-[kepano/obsidian-skills](https://github.com/kepano/obsidian-skills)が`.claude/skills/`にプリインストール済み：
+- **ガードは協力的なエージェントを前提にします。** `notion` や `mcporter` という語を意図的に隠したコマンドや、呼び出しを持つスクリプトファイルはガードを通ります。そのような書き込みは `Hook stamp` の監査が後から指摘します。5 秒のタイムアウトを超えたガードは呼び出しを通します。([#6](https://github.com/willtn/notion-mind/pull/6))
+- **`mcporter` と `notion` の両方を含むテキストは拒否されるコマンドです。** コミットメッセージや PR の本文はファイルに書き、`git commit -F` か `gh pr create --body-file` を使います。([#6](https://github.com/willtn/notion-mind/pull/6))
+- **Notion はクライアントを区別できません。** 他の MCP クライアントからの書き込みは、フック経由の書き込みと同じに見えます。`Hook stamp` のビューだけがそれを示します。設計記録のパート (f) の選択 5 を参照してください。
+- **select は書き込み時に新しい選択肢を受け付けません。** `Quarter`、`Project`、`Cycle`、レベルの select は空で始まります。新しい選択肢を含む最初の書き込みは失敗し、修復フックがそれを追加し、エージェントがコマンドを再実行します。([#5](https://github.com/willtn/notion-mind/pull/5)、[#8](https://github.com/willtn/notion-mind/pull/8))
+- **空のプロパティと存在しないプロパティは同じ状態です。** 欠けたフィールドの検査 (VW-08) は空のプロパティで発火します。([#8](https://github.com/willtn/notion-mind/pull/8))
+- **ページメンションはタイトルとして数えます。** サイズとリンクの検査は、名前付きのメンションを `[[Title]]` として読みます。タイトルのないメンションは約 60 バイト増えます。リレーションはテキストを増やしません。([#8](https://github.com/willtn/notion-mind/pull/8))
+- **書き込みフックは `Quarter` を設定しません。** 基準と同じく、`Quarter` の欠落は指摘のままです。([#8](https://github.com/willtn/notion-mind/pull/8))
+- **リクエスト上限は 60 秒あたり 180 回です。** クライアントは待って再試行します。長い待ちでは行に `Hook stamp` が付かないことがあり、フックがそれを伝えます。([#8](https://github.com/willtn/notion-mind/pull/8))
+- **Stop フックは毎ターン時間がかかります。** ハイジーンビューを並行して読み、タイムアウトは 15 秒です。データベースの外のページには `Bytes` がないので、サイズ検査はそれを指摘できません。([#11](https://github.com/willtn/notion-mind/pull/11))
+- **最近の変更はコミットの件名ではなくページのタイトルです。** SessionStart は `Changed` を読むので、Home や North Star の変更はそのセクションに出ません。未完了のタスクのセクションは最大 10 行を取得します。([#12](https://github.com/willtn/notion-mind/pull/12))
+- **完了したノートがアクティブなフォルダに残ることはありません。** 状態の置き場所は `Status` だけなので、そのハイジーン検査 (HY-01) には Notion の形がありません。設計記録のパート (f) の選択 2 を参照してください。
+- **エイリアスとデイリーノートはありません。** コンテンツモデルにエイリアスのプロパティとデイリーノートの型がないので、`cross-linker`、`/om-standup`、`/om-weekly` からその手順がなくなりました。([#9](https://github.com/willtn/notion-mind/pull/9))
+- **Notion は数式のテキストを返しません。** モデルの数式を変えた後は、`--reapply-formulas` を付けてセットアップを実行します。([#5](https://github.com/willtn/notion-mind/pull/5))
+- **ルートの最初の作成で応答が失われると、そのレジャー行が残りません。** セットアップはそれでも収束します。([#5](https://github.com/willtn/notion-mind/pull/5))
+- **トランスクリプトのバックアップはローカルに残ります**。場所は `.claude/state/session-logs/` です。([#10](https://github.com/willtn/notion-mind/pull/10))
 
-- **obsidian-markdown** — Obsidianフレーバーのmarkdown（ウィキリンク、埋め込み、コールアウト、プロパティ）
-- **obsidian-cli** — ボールト操作用CLIコマンド
-- **obsidian-bases** — データベーススタイルの`.base`ファイル
-- **json-canvas** — ビジュアル`.canvas`ファイル作成
-- **defuddle** — WebページからMarkdownへの変換
+---
 
-### 🔍 QMDスキル
+## 📁 リポジトリの構成
 
-`.claude/skills/qmd/`にあるカスタムスキル。Claudeに[QMD](https://github.com/tobi/qmd)セマンティック検索を積極的に活用するよう教えます — ファイルを読む前、ノートを作成する前（重複チェック）、ノートを作成した後（リンクすべき関連コンテンツの発見）に使用します。
+```
+obsidian-mind/
+├── AGENTS.md                      # The operating manual, read every session
+├── vault-manifest.json            # Root marker of the hooks, and hook settings
+├── notion-map.example.json        # Shape of notion-map.json (the real one is not committed)
+├── NOTION-PORT-DESIGN.md          # The design record of the Notion port
+├── brain/Skills.md                # The command catalog
+└── .claude/
+    ├── commands/                  # Slash commands
+    ├── agents/                    # Subagents
+    ├── rules/                     # Rules that Claude Code loads beside AGENTS.md
+    ├── skills/                    # defuddle, mermaid-visualizer, and the obsidian-mind mod
+    ├── settings.json              # Hook configuration
+    └── scripts/
+        ├── session-start.ts, classify-message.ts, guard-notion-write.ts,
+        │   validate-write.ts, pre-compact.ts, stop-checklist.ts   # The hooks
+        ├── notion-setup.ts        # Builds the workspace and writes notion-map.json
+        ├── scaffold/              # Source text of the scaffold pages and the templates
+        ├── lib/                   # The Notion client, the model, the checks
+        ├── parity/                # The parity harness
+        └── tests/                 # npm test
+```
 
 ---
 
 ## 🎨 カスタマイズ
 
-これは出発点です。あなたの働き方に合わせて適応させてください：
+これは出発点です。あなたの働き方に合わせてください:
 
 | 対象 | 場所 |
-|------|------|
-| あなたの目標 | `brain/North Star.md` — すべてのセッションの基盤 |
-| あなたの組織 | `org/` — マネージャー、チーム、主要なコラボレーターを追加 |
-| あなたのコンピテンシー | `perf/competencies/` — 組織のフレームワークに合わせる |
-| あなたのツール | `.claude/commands/` — GitHub org、Slackワークスペースに合わせて編集 |
-| あなたの規約 | `CLAUDE.md` — 運用マニュアル、使いながら進化させる |
-| あなたのドメイン | フォルダの追加、`.claude/agents/`へのサブエージェント追加、`.claude/scripts/`への分類ルール追加 |
+|------|-------|
+| 目標 | North Star ページ: すべてのセッションの土台です |
+| 組織 | `People`、`Teams`、People & Context ページ |
+| コンピテンシー | `Competencies`: 組織の枠組みに合わせます |
+| ツール | `.claude/commands/`: GitHub の組織と Slack のワークスペースに合わせて編集します |
+| 規約 | `AGENTS.md`: 運用マニュアル。使いながら育てます (Claude Code 向けの追加は `.claude/rules/`) |
+| モデル | `.claude/scripts/lib/notion-model.ts`: データベース、プロパティ、ビュー。変更後はセットアップを再実行します |
 
 > [!IMPORTANT]
-> `CLAUDE.md`は運用マニュアルです。規約を変更したら更新してください — エージェントは毎セッション読み込みます。
+> `AGENTS.md` は運用マニュアルです。規約を変えたら更新してください。エージェントは毎セッションそれを読みます。
 
 ---
 
-## 🔄 アップグレード
-
-### エージェントに頼む
-
-一番簡単な方法 — エージェントに伝えるだけ：
-
-```
-このボールトを最新のobsidian-mindに更新して https://github.com/breferrari/obsidian-mind
-```
-
-エージェントが最新の変更を取得し、コンフリクトを解消し、インフラファイルを更新します。Claude Code、Codex CLI、Gemini CLIで動作します。
-
-### 既存クローンの更新
-
-リポジトリを直接クローンした場合：
+## 🔄 更新
 
 ```bash
-cd your-vault
-git pull origin main
+git pull
+node --experimental-strip-types .claude/scripts/notion-setup.ts
 ```
 
-新しいファイル（`AGENTS.md`、`GEMINI.md`、`.codex/`、`.gemini/`）が自動的に追加され、フックスクリプトも更新されます。
+pull でフック、コマンド、ルールが更新されます。セットアップは新しいバージョンのモデルに必要なものだけを追加し、それ以外は作りません。ノートは Notion に残り、変更されません。
 
-### フォークの更新
+---
 
-リポジトリをフォークした場合：
+## 🩺 トラブルシューティング
 
-```bash
-git remote add upstream https://github.com/breferrari/obsidian-mind.git
-git fetch upstream
-git merge upstream/main
-```
+**Claude Code が規約を無視する。** Claude Code は `AGENTS.md` の代わりに `CLAUDE.md` を読み、`AGENTS.md` を黙って飛ばします。リポジトリのルートに `CLAUDE.md` があると、ハイジーンの指摘に `CLAUDE.md present beside AGENTS.md` と出ます。追加した内容を `.claude/rules/local.md` か `AGENTS.md` に移し、`CLAUDE.md` を削除してください。リポジトリより上のフォルダにある `CLAUDE.md` も同じ結果になり、この指摘では見えません。
 
-カスタマイズしたファイル（通常は`CLAUDE.md`、`brain/`ノート）のコンフリクトを解消してください。インフラファイル（`.claude/scripts/`、`.codex/`、`.gemini/`）はクリーンにマージされます。
+**Notion コマンドが拒否される。** 理由を読んでください。許可された形式が示されます。多くの場合、読み取りにパイプやリダイレクトがあるか、コミットメッセージが `mcporter` と `notion` の両方を含んでいます。[`.claude/rules/notion-calls.md`](.claude/rules/notion-calls.md) を参照してください。
 
-### 既存のクローンをShardMindに取り込む（v5.x → v6）
+**セクションに `(not read: …)` と出る。** SessionStart か Stop がワークスペースのその部分を読めませんでした。`mcporter auth notion` を確認し、次に `node --experimental-strip-types .claude/scripts/notion-setup.ts --check` を実行してください。
 
-すでにobsidian-mindをクローンしていて、カスタマイズを失わずにウィザード、オプションのモジュール、3-wayマージのアップグレードが欲しい？`shardmind adopt`が既存のボールトを管理されたv6インストールへと整合させます — あなたの編集を1バイトも失わず、`.shardmind/`サイドカーと`shard-values.yaml`を追加するだけです：
-
-```bash
-npm install -g shardmind
-shardmind adopt github:breferrari/obsidian-mind
-```
-
-2-way diffのUIがローカルの変更箇所を案内し、ファイルごとに何を残すか確認した上で、エンジンのメタデータを書き込みます。結果：既存のコンテンツが無傷のままのv6管理ボールトが手に入り、以降は`shardmind update`が使えます。再クローン不要。
-
-### 古いボールトからの移行（またはその他のボールト）
-
-v5以前のobsidian-mindを使っている、または全く別のObsidianボールトから移行したい？`/om-vault-upgrade`コマンドがコンテンツを最新テンプレートに移行します：
-
-```bash
-# 1. 最新のobsidian-mindをクローン
-git clone https://github.com/breferrari/obsidian-mind.git ~/new-vault
-
-# 2. エージェントで開く
-cd ~/new-vault && claude   # または codex、gemini
-
-# 3. 古いボールトを指定してアップグレードを実行
-/om-vault-upgrade ~/my-old-vault
-```
-
-エージェントが以下を行います：
-1. **検出** — ボールトのバージョンを特定（v1〜v3.x、またはobsidian-mind以外のボールトとして識別）
-2. **棚卸し** — すべてのファイルを分類（ユーザーコンテンツ、スキャフォールド、インフラ、未分類）
-3. **移行プランの提示** — コピー、変換、スキップされるものを正確に確認できます
-4. **承認後に実行** — フロントマターの変換、ウィキリンクの修正、インデックスの再構築
-5. **検証** — 孤立ノート、壊れたリンク、不足しているフロントマターをチェック
-
-古いボールトは**一切変更されません**。`--dry-run`を使えば、実行せずにプランだけをプレビューできます。
-
-> [!NOTE]
-> obsidian-mindだけでなく、あらゆるObsidianボールトで動作します。obsidian-mind以外のボールトの場合、エージェントは各ノートを読んで意味的に分類し、作業ノート、人物、インシデント、1on1、意思決定を適切なフォルダに振り分けます。
+**セットアップがワークスペースで止まる。** `--workspace-id` とマップファイルはどちらもワークスペースを指定します。ログインが別のワークスペースだと、セットアップは止まります。正しいワークスペースにログインするか、古い `notion-map.json` を移動してください。
 
 ---
 
 ## 🗺️ ロードマップ
 
-**Issue とバグ報告を歓迎します。** コードのコントリビューションはアサイン制です。Issue にコメントして担当を申し出て、アサインされてから PR を開いてください。あなたにアサインされていない Issue への PR はレビューせずにクローズします。詳しくは [CONTRIBUTING.md](CONTRIBUTING.md) を参照してください。
+**Issue とバグ報告を歓迎します。** コードの貢献は割り当て制です。Issue にコメントして担当を依頼し、割り当てられてから PR を開いてください。割り当てられていない Issue の PR はレビューなしで閉じられます。[CONTRIBUTING.md](CONTRIBUTING.md) を参照してください。
 
 ---
 
-## 🙏 設計上の影響を受けたもの
+## 🙏 影響を受けた設計
 
-- [kepano/obsidian-skills](https://github.com/kepano/obsidian-skills) — 公式Obsidianエージェントスキル
-- [James Bedford](https://x.com/jameesy) — ボールト構造の哲学、AI生成コンテンツの分離
-- [arscontexta](https://github.com/agenticnotetaking/arscontexta) — descriptionフィールドによる段階的開示、セッションフック
+- [kepano/obsidian-skills](https://github.com/kepano/obsidian-skills): Obsidian 版のエージェントスキル
+- [James Bedford](https://x.com/jameesy): ボールト構造の考え方、AI が生成したコンテンツの分離
+- [arscontexta](https://github.com/agenticnotetaking/arscontexta): description フィールドによる段階的な開示、セッションフック
 
 ---
 
 ## 👤 作者
 
-**[Brenno Ferrari](https://brennoferrari.com)** が作成 — ベルリン在住のシニアiOSエンジニア、Claude Codeで開発者ツールを構築中。
+**[Brenno Ferrari](https://brennoferrari.com)** が作成しました。ベルリンのシニア iOS エンジニアで、Claude Code で開発者ツールを作っています。
 
 ---
 
