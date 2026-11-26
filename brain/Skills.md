@@ -1,6 +1,6 @@
 ---
 date: 2026-04-07
-description: "Workspace workflows and slash commands — reusable patterns for review prep, project tracking, and workspace maintenance"
+description: "Workspace workflows and slash commands: reusable patterns for review prep, project tracking, and workspace maintenance"
 tags:
   - brain
   - index
