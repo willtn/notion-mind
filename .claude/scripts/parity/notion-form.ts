@@ -421,7 +421,8 @@ export function hookFormOf(
 					if (page === undefined) throw new Error(`${note.title} is not a page of the fixture.`);
 					return { id: page.id, url: page.url, properties: { title: note.title } };
 				});
-				const outbox = join(".claude", "state", "outbox", `${written[0]?.id}.json`);
+				// The command is shell text, so the path has `/` on each OS. A shell reads `\` as an escape.
+				const outbox = `.claude/state/outbox/${written[0]?.id}.json`;
 				write(join(projectDir, outbox), JSON.stringify(createArguments(notes, map, context)));
 				return {
 					tool_name: "Bash",
