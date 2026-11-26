@@ -197,15 +197,16 @@ describe("hook config — the checklist runs where its message is shown", () => 
  */
 describe("hook config — Claude commands find the vault root from a subfolder (#263)", () => {
 	const commands = eachNodeHookCommand(loadConfig(".claude/settings.json"));
-	const scriptOf = (command: string) => /\/\.claude\/scripts\/([a-z-]+\.ts)"$/.exec(command)?.[1] ?? "";
+	// The guard command has one more part after the script: what it prints when node fails.
+	const scriptOf = (command: string) => /\/\.claude\/scripts\/([a-z-]+\.ts)"(?: \|\| printf .+)?$/.exec(command)?.[1] ?? "";
 
-	test("every command walks up with the same text: one rule, five copies that cannot drift", () => {
+	test("every command walks up with the same text: one rule, six copies that cannot drift", () => {
 		// JSON cannot share a snippet, so each command carries the walk-up. Each
 		// copy is also run below, but only this keeps one copy from quietly
 		// losing a branch (the fallback, say) that the run cases happen not to reach.
 		const walkOf = (command: string) => command.slice(0, command.indexOf("/.claude/scripts/"));
 		const walks = new Set(commands.map(({ command }) => walkOf(command)));
-		assert.equal(commands.length, 5);
+		assert.equal(commands.length, 6);
 		assert.equal(walks.size, 1, `the walk-up differs between commands:\n${[...walks].join("\n")}`);
 		assert.match([...walks][0]!, /vault-manifest\.json/);
 	});
@@ -327,4 +328,58 @@ describe("hook config — write validation fires on each agent's own file tools 
 			}
 		});
 	}
+});
+
+describe("hook config — the Notion write guard runs before each Bash call", () => {
+	// Claude Code reaches Notion through `mcporter`, so a Notion write is a Bash
+	// call. A matcher that misses Bash lets each write through with no check.
+	test("Claude Code: a PreToolUse entry with a timeout runs guard-notion-write on Bash", () => {
+		const entries = entriesRunning(".claude/settings.json", "PreToolUse", "guard-notion-write.ts");
+		assert.ok(firesOn(entries, "Bash", regex), "no PreToolUse matcher fires on Bash");
+		const hooks = entries.flatMap((entry) => entry.hooks ?? []) as ReadonlyArray<{ readonly timeout?: number }>;
+		assert.deepEqual(hooks.map((hook) => hook.timeout), [5]);
+	});
+
+	// Claude Code runs the call when a PreToolUse hook exits with an error. The
+	// script denies on each error that it can catch. The command covers the
+	// rest: a node that does not start, and a script that does not load.
+	describe("the command denies when node fails", { skip: process.platform === "win32" && "the run needs /bin/sh" }, () => {
+		const command = (loadConfig(".claude/settings.json").hooks?.["PreToolUse"] ?? []).flatMap((entry) => entry.hooks ?? []).find((hook) => hook.command?.includes("guard-notion-write.ts"))?.command ?? "";
+		const payload = JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: "npm test" }, cwd: repoRoot });
+		const run = (projectDir: string, env: NodeJS.ProcessEnv = {}) => spawnSync("/bin/sh", ["-c", command], { encoding: "utf-8", input: payload, env: { ...process.env, CLAUDE_PROJECT_DIR: projectDir, ...env } });
+		const decisionOf = (stdout: string): unknown => (JSON.parse(stdout) as { hookSpecificOutput: Record<string, unknown> }).hookSpecificOutput["permissionDecision"];
+
+		let vault = "";
+		before(() => {
+			vault = mkdtempSync(join(tmpdir(), "hook-config-guard-"));
+			writeFileSync(join(vault, "vault-manifest.json"), "{}");
+		});
+		after(() => rmSync(vault, { recursive: true, force: true }));
+
+		test("the script of this repository runs, and the command adds no output", () => {
+			const got = run(repoRoot);
+			assert.deepEqual({ status: got.status, stdout: got.stdout }, { status: 0, stdout: "" }, got.stderr);
+		});
+
+		test("a script that is absent gives a denial and a zero exit", () => {
+			const got = run(vault);
+			assert.equal(got.status, 0, got.stderr);
+			assert.equal(decisionOf(got.stdout), "deny");
+			assert.match(got.stderr, /Cannot find module/);
+		});
+
+		test("a script that exits with an error gives a denial and a zero exit", () => {
+			mkdirSync(join(vault, ".claude", "scripts"), { recursive: true });
+			writeFileSync(join(vault, ".claude", "scripts", "guard-notion-write.ts"), "process.exit(1);\n");
+			const got = run(vault);
+			assert.equal(got.status, 0, got.stderr);
+			assert.equal(decisionOf(got.stdout), "deny");
+		});
+
+		test("a node that is not on PATH gives a denial and a zero exit", () => {
+			const got = run(repoRoot, { PATH: vault });
+			assert.equal(got.status, 0, got.stderr);
+			assert.equal(decisionOf(got.stdout), "deny");
+		});
+	});
 });
