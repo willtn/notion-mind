@@ -140,7 +140,11 @@ const OPEN_TASKS_LIMIT = 10;
  * so in its section.
  */
 const NOTION_BUDGET_MS = 20_000;
-/** The calls in flight at one time. A full context makes about 30 calls in two rounds (measured on the fixture root). */
+/**
+ * The calls in flight at one time. A full context on the fixture root makes
+ * 28 calls in two rounds, 21 then 7. In live samples, 8 was slower than 16,
+ * and 32 was not faster.
+ */
 const NOTION_CONCURRENCY = 16;
 
 async function readSources(): Promise<SessionSources> {
