@@ -50,6 +50,7 @@ export interface ImportResult {
 }
 
 interface LiveRow extends PageRef {
+	readonly database: DatabaseKey;
 	readonly title: string;
 	readonly path: string;
 	readonly digest: string;
@@ -60,6 +61,13 @@ const CREATE_BATCH = 100;
 const KEY_TRIES = 4;
 
 const text = (value: unknown): string => (typeof value === "string" ? value : "");
+/**
+ * A text value as it was written. Notion makes a link of a token that looks
+ * like a domain, so `reference/Runbook.md` comes back as
+ * `reference/[Runbook.md](http://Runbook.md)` (measured on each key of the
+ * first live import).
+ */
+export const plainText = (value: string): string => value.replace(/\[([^\]\n]+)\]\((?:https?:\/\/|mailto:)\1\/?\)/g, "$1");
 const setValues = (values: Values): Values => Object.fromEntries(Object.entries(values).filter(([, value]) => value !== null && value !== false));
 /** Notion did not accept this one page. Each other failure stops the run, and a rejected page does not stop the pages after it. */
 const isRejectedPage = (error: unknown): error is NotionError => error instanceof NotionError && error.code === "tool_error";
@@ -114,7 +122,7 @@ export async function runImport(client: NotionClient, vault: Vault, map: NotionM
 			const page = parseRows(await client.call("notion-query-data-sources", { data: { mode: "view", view_url: view, page_size: 100, ...(cursor === undefined ? {} : { start_cursor: cursor }) } }));
 			for (const row of page.rows) {
 				const url = text(row["url"]);
-				rows.push({ id: notionId(url), url, title: text(row["Name"]), path: text(row[SOURCE_PATH_PROPERTY]), digest: text(row[DIGEST_PROPERTY]) });
+				rows.push({ id: notionId(url), url, database, title: plainText(text(row["Name"])), path: plainText(text(row[SOURCE_PATH_PROPERTY])), digest: text(row[DIGEST_PROPERTY]) });
 			}
 			cursor = page.nextCursor;
 		} while (cursor !== undefined);
@@ -144,6 +152,15 @@ export async function runImport(client: NotionClient, vault: Vault, map: NotionM
 		else if (destination.kind === "row") missing.set(destination.database, [...(missing.get(destination.database) ?? []), page]);
 		if (found !== undefined && setupPage === undefined) reconcile("row", found.id, note.path);
 	}
+	const planned = new Set(draft.pages.map((page) => page.note.path));
+	const orphanKeys = [...byId.values()].filter((row) => row.path !== "" && !planned.has(row.path));
+	const clash = [...missing].flatMap(([database, pages]) => pages.flatMap((page) => orphanKeys.filter((row) => row.database === database && row.title === page.title).map((row) => ({ page, row }))));
+	if (clash.length > 0) {
+		const [{ page, row }] = clash as [(typeof clash)[number]];
+		throw new Error(
+			`${clash.length} notes have no row with their source path, and a row with their title has a source path that the vault does not hold. For example, "${page.note.path}" and the row "${row.title}" with "${row.path}". A new row would be a second row of one note. Set the source path of the old row, or move it to Trash, then run the import again. The run made no row.`,
+		);
+	}
 
 	for (const [database, pages] of missing) {
 		for (let i = 0; i < pages.length; i += CREATE_BATCH) {
@@ -165,13 +182,18 @@ export async function runImport(client: NotionClient, vault: Vault, map: NotionM
 		}
 		const wanted = pages.map((page) => page.note.path);
 		let absent = wanted;
+		let stored: readonly LiveRow[] = [];
 		for (let attempt = 0; attempt < KEY_TRIES && absent.length > 0; attempt++) {
 			if (attempt > 0) await sleep(2000);
-			const keys = new Set((await queryRows(database)).map((row) => row.path));
+			stored = await queryRows(database);
+			const keys = new Set(stored.map((row) => row.path));
 			absent = wanted.filter((path) => !keys.has(path));
 		}
 		if (absent.length > 0) {
-			throw new Error(`The view "${ALL_ROWS_VIEW}" of ${map.databases[database].title} does not return the property "${SOURCE_PATH_PROPERTY}" of ${absent.length} new rows, for example "${absent[0]}". Show the property in that view, then run the import again.`);
+			const example = absent[0] ?? "";
+			const read = stored.find((row) => row.id === refs.get(example)?.id);
+			const shown = read === undefined ? "no row with its ID" : `"${read.path}"`;
+			throw new Error(`The view "${ALL_ROWS_VIEW}" of ${map.databases[database].title} does not give back the source path of ${absent.length} new rows as the run wrote it. For example, the run wrote "${example}" and read ${shown}. The next run would not find these rows.`);
 		}
 	}
 
@@ -244,12 +266,12 @@ const UNDERSCORE_ITALIC = /(^|[^\w*\\])_([^_\s][^_\n]*?)_(?![\w])/g;
  * `content` with the forms that Notion stores in place of what a write
  * sends (measured on the pages of the setup): an empty bullet comes back
  * as a `<ul>` block, `_text_` as `<i>text</i>`, and a table row with each
- * cell trimmed and each separator cell as `---`. A line in a code block
- * stays as it is.
+ * cell trimmed and each separator cell as `---`. A link that `plainText`
+ * removes is text on both sides. A line in a code block stays as it is.
  */
 function storedForm(content: string): string {
 	let fence = false;
-	return content
+	return plainText(content)
 		.replace(/<ul>\n<li><\/li>\n<\/ul>/g, "-")
 		.split("\n")
 		.map((line) => {
@@ -324,7 +346,7 @@ function fetchedValue(properties: Readonly<Record<string, unknown>>, name: strin
 		case "relation":
 			return sorted(listOf(raw).map(notionId));
 		default:
-			return typeof raw === "string" && raw !== "" ? raw : null;
+			return typeof raw === "string" && raw !== "" ? plainText(raw) : null;
 	}
 }
 

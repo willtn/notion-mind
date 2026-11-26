@@ -11,11 +11,11 @@ import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DIGEST_PROPERTY, SOURCE_PATH_PROPERTY } from "../lib/import-plan.ts";
-import { runImport, sectionEdit, verifyImport, type ImportResult } from "../lib/import-run.ts";
+import { plainText, runImport, sectionEdit, verifyImport, type ImportResult } from "../lib/import-run.ts";
 import { parseNote, readVault, type Vault } from "../lib/import-source.ts";
 import { NotionError } from "../lib/notion-client.ts";
 import { writeImportVaults } from "../parity/import-vaults.ts";
-import { isWrite, memoryNotion, type MemoryCall } from "./_import-notion.ts";
+import { autolink, isWrite, memoryNotion, type MemoryCall } from "./_import-notion.ts";
 import { rmTemp } from "./_helpers.ts";
 
 const CHANGED = new Date("2026-01-05T10:00:30.000Z");
@@ -69,7 +69,7 @@ describe("runImport", () => {
 		const result = await run(notion);
 		assert.deepEqual(counts(result), { created: ROWS - 1, updated: 3, unchanged: 0, failed: 0 });
 		const retry = notion.row("Retry Rules");
-		assert.equal(retry.properties[SOURCE_PATH_PROPERTY], "work/active/Billing/Retry Rules.md");
+		assert.equal(retry.properties[SOURCE_PATH_PROPERTY], "work/active/Billing/Retry [Rules.md](http://Rules.md)", "the stored form of a text property (measured)");
 		assert.equal(retry.properties["Status"], "active");
 		assert.equal(retry.properties["Project"], "Billing");
 		assert.equal(retry.properties["Quarter"], "Q1-2026");
@@ -199,6 +199,25 @@ describe("runImport", () => {
 		assert.deepEqual(writes(notion.calls, before), []);
 	});
 
+	test("a source path that Notion gives back in a form that the run does not know stops the run, and the next run makes no second row", async () => {
+		const notion = memoryNotion({ storeText: (value) => (value.endsWith(".md") ? `${value} ` : value) });
+		await assert.rejects(run(notion), /does not give back the source path of \d+ new rows as the run wrote it\. For example, the run wrote "[^"]+" and read "[^"]+ "/);
+		const rows = notion.rowsOf("work").length;
+		const before = notion.calls.length;
+		await assert.rejects(run(notion), /notes have no row with their source path, and a row with their title has a source path that the vault does not hold/);
+		assert.equal(notion.rowsOf("work").length, rows);
+		assert.deepEqual(writes(notion.calls, before), []);
+	});
+
+	test("a note that moved to a new path stops the run when its old row has its title", async () => {
+		const notion = memoryNotion();
+		await run(notion);
+		const { "reference/Runbook.md": runbook, ...rest } = FILES;
+		const before = notion.calls.length;
+		await assert.rejects(run(notion, { ...rest, "reference/ops/Runbook.md": runbook ?? "" }), /For example, "reference\/ops\/Runbook\.md" and the row "Runbook" with "reference\/Runbook\.md"/);
+		assert.deepEqual(writes(notion.calls, before), []);
+	});
+
 	test("a run stops before its first write on a map of another root, on another workspace, and on two rows with one source path", async () => {
 		const notion = memoryNotion();
 		await assert.rejects(runImport(notion.client, vaultOf(FILES), notion.map, { rootTitle: "obsidian-mind", log: () => {} }), /names the root "obsidian-mind import test"/);
@@ -246,6 +265,22 @@ describe("the fixture vaults of the proof, in memory", () => {
 			}
 		});
 	}
+});
+
+describe("plainText", () => {
+	test("gives back each key of the first live import as the run wrote it", () => {
+		const measured: [string, string][] = [
+			["reference/Runbook Part [3.md](http://3.md)", "reference/Runbook Part 3.md"],
+			["reference/[Runbook.md](http://Runbook.md)", "reference/Runbook.md"],
+			["Loose [Draft.md](http://Draft.md)", "Loose Draft.md"],
+		];
+		for (const [stored, written] of measured) assert.equal(plainText(stored), written);
+		assert.equal(plainText(autolink("work/1-1/Ada Park 2026-01-10.md")), "work/1-1/Ada Park 2026-01-10.md");
+	});
+
+	test("keeps a link whose text is not its address", () => {
+		assert.equal(plainText("See [the guide](http://example.com) and [a.md](http://b.md)."), "See [the guide](http://example.com) and [a.md](http://b.md).");
+	});
 });
 
 describe("sectionEdit", () => {

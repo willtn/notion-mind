@@ -5,8 +5,10 @@
  * stores a written body in the measured ways of the live runs: a mention
  * gets the title of its page, bold, italic, and code become tags, the
  * lines of one paragraph join with `<br />`, an empty bullet becomes a
- * `<ul>` block, and a table row gets trimmed cells. `failAfter` makes a
- * write fail at a chosen point, as a crash or a lost connection does.
+ * `<ul>` block, and a table row gets trimmed cells. A text property makes a
+ * link of a token such as `Runbook.md`, as Notion does with a domain.
+ * `failAfter` makes a write fail at a chosen point, as a crash or a lost
+ * connection does.
  */
 
 import assert from "node:assert/strict";
@@ -34,7 +36,11 @@ const REFERENCE = /(<synced-block-reference url="[^"]+">)\n?([\s\S]*?)\n?(<\/syn
 
 export const isWrite = (call: MemoryCall): boolean => WRITE_TOOLS.includes(call.tool);
 
-export function memoryNotion(options: { readonly rootTitle?: string; readonly pageSize?: number } = {}) {
+/** The measured form of a text property: `reference/Runbook.md` is stored as `reference/[Runbook.md](http://Runbook.md)`. */
+export const autolink = (value: string): string => value.replace(/(^|[\s/])([A-Za-z0-9][\w-]*\.md)(?=$|\s)/g, "$1[$2](http://$2)");
+
+export function memoryNotion(options: { readonly rootTitle?: string; readonly pageSize?: number; readonly storeText?: (value: string) => string } = {}) {
+	const storeText = options.storeText ?? autolink;
 	let serial = 0;
 	const nextId = (): string => `00000000-0000-4000-8000-${(++serial).toString(16).padStart(12, "0")}`;
 	const urlOf = (id: string): string => `https://app.notion.com/p/${id.replace(/-/g, "")}`;
@@ -144,6 +150,7 @@ export function memoryNotion(options: { readonly rootTitle?: string; readonly pa
 				throw new NotionError("tool_error", `Invalid select value for property "${name}": "${items.join(", ")}"`);
 			}
 			if (value === null) delete page.properties[name];
+			else if (column?.type === "text" && typeof value === "string") page.properties[name] = storeText(value);
 			else page.properties[name] = Array.isArray(value) ? JSON.stringify(value.map((item: string) => (pages.has(item) ? urlOf(item) : item))) : value;
 		}
 		// An empty date and a box that is not set read the same as a property with no value.
