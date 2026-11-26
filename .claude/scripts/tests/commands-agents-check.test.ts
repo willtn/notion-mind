@@ -11,7 +11,6 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-	EXEMPT_FILES,
 	formProblems,
 	linkProblems,
 	liveProblems,
@@ -83,6 +82,11 @@ describe("static groups", () => {
 		assert.deepEqual(groupsOf("```sh\nmcporter call notion.notion-fetch --args '{\"id\":\"a/b\"}' --output json\n```"), []);
 	});
 
+	test("group G allows the import tool and no other script of the folder", () => {
+		assert.deepEqual(groupsOf("Run .claude/scripts/notion-import.ts --dry-run."), []);
+		assert.deepEqual(groupsOf("Run .claude/scripts/notion-import.tsx and .claude/scripts/notion-import-old.ts."), ["G"]);
+	});
+
 	test("the name obsidian-mind is allowed", () => {
 		assert.deepEqual(groupsOf("The root page is named obsidian-mind."), []);
 	});
@@ -98,17 +102,17 @@ describe("static groups", () => {
 });
 
 describe("target files", () => {
-	test("the exempt files are left out and other markdown files are read", () => {
+	test("each markdown file of the commands and the subagents is read, vault-migrator included", () => {
 		const root = mkdtempSync(join(tmpdir(), "check-targets-"));
 		try {
 			for (const dir of [".claude/commands", ".claude/agents"]) mkdirSync(join(root, dir), { recursive: true });
 			writeFileSync(join(root, ".claude/commands/om-a.md"), "a");
 			writeFileSync(join(root, ".claude/agents/helper.md"), "b");
 			writeFileSync(join(root, ".claude/agents/notes.txt"), "c");
-			for (const name of EXEMPT_FILES) writeFileSync(join(root, ".claude/agents", name), "d");
+			writeFileSync(join(root, ".claude/agents/vault-migrator.md"), "d");
 			assert.deepEqual(
 				targetFiles(root).map((f) => f.path),
-				[".claude/commands/om-a.md", ".claude/agents/helper.md"],
+				[".claude/commands/om-a.md", ".claude/agents/helper.md", ".claude/agents/vault-migrator.md"],
 			);
 		} finally {
 			rmSync(root, { recursive: true, force: true });
@@ -258,7 +262,7 @@ describe("this repository", () => {
 
 	test("the commands and the subagents are found", () => {
 		assert.equal(files.filter((f) => f.path.startsWith(".claude/commands/")).length, 19);
-		assert.equal(files.filter((f) => f.path.startsWith(".claude/agents/")).length, 9);
+		assert.equal(files.filter((f) => f.path.startsWith(".claude/agents/")).length, 10);
 	});
 
 	test("the static check has no hit", () => {

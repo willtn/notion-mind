@@ -41,9 +41,6 @@ export interface Finding {
 export const COMMANDS_DIR = ".claude/commands";
 export const AGENTS_DIR = ".claude/agents";
 
-/** `vault-migrator` moves into the import tool (PR 11), so this port leaves it as it is. */
-export const EXEMPT_FILES: readonly string[] = ["vault-migrator.md"];
-
 export interface StaticGroup {
 	readonly name: string;
 	readonly proves: string;
@@ -64,7 +61,7 @@ export const STATIC_GROUPS: readonly StaticGroup[] = [
 	{ name: "D", proves: "the om server and cross-repository memory", pattern: /om-mcp|mcp__o[m]|\brecall\b|promoted:|mcp_never_expose|\bom server\b|\bmemories\b/ },
 	{ name: "E", proves: "the Obsidian CLI and the Obsidian skills (the name obsidian-mind stays)", pattern: /\bobsidian\b(?!-mind)|obsidian-(cli|markdown)/i },
 	{ name: "F", proves: "git commands and the working tree", pattern: /\bgit(\s+-[cC]\s+\S+)*\s+(mv|log|diff|status|add|commit)\b|--no-merges|working tree/ },
-	{ name: "G", proves: "local scripts and ShardMind", pattern: /\.claude\/scripts|charcount\.ts|tidy-fix|generate-memory-index|upgrade-plan|session-start\.ts|\bshardmind\b|MEMORY\.md/i },
+	{ name: "G", proves: "local scripts other than the import tool, and ShardMind", pattern: /\.claude\/scripts(?!\/notion-import\.ts\b)|charcount\.ts|tidy-fix|generate-memory-index|upgrade-plan|session-start\.ts|\bshardmind\b|MEMORY\.md/i },
 	{ name: "H", proves: "other agent products", pattern: /gem[i]ni|cod[e]x|antigravit[y]|\.gem[i]ni/i },
 	{ name: "I", proves: "agent skill lines for the local search tool and Obsidian", pattern: /^\s+-\s+(q[m]d|obsidian-[a-z-]+)\s*$/ },
 	{ name: "J", proves: "an absolute path in a code fence", pattern: /(^|[\s"'`(=])\/[A-Za-z0-9_.~-]+\/[A-Za-z0-9_.~-]/, inFence: true },
@@ -74,7 +71,7 @@ export function targetFiles(root: string): SourceFile[] {
 	const files: SourceFile[] = [];
 	for (const dir of [COMMANDS_DIR, AGENTS_DIR]) {
 		for (const name of readdirSync(join(root, dir)).sort()) {
-			if (!name.endsWith(".md") || EXEMPT_FILES.includes(name)) continue;
+			if (!name.endsWith(".md")) continue;
 			const path = `${dir}/${name}`;
 			files.push({ path, text: readFileSync(join(root, path), "utf8") });
 		}
