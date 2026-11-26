@@ -113,13 +113,32 @@ export const SCAFFOLD_SOURCES = {
 export type ScaffoldSource = keyof typeof SCAFFOLD_SOURCES;
 
 const yesNo = (test: string): string => `if(${test}, "yes", "no")`;
-const olderThan = (days: number): string => yesNo(`dateBetween(now(), prop("Changed"), "days") > ${days}`);
+/**
+ * "yes" from the day that the age reaches `days`. The original hooks count a
+ * note with `floor(age in days) >= days`, and `dateBetween` also gives whole
+ * days that are complete (measured: 14 days and 23 hours give 14).
+ */
+const atLeastDaysOld = (days: number): string => yesNo(`dateBetween(now(), prop("Changed"), "days") >= ${days}`);
 
 const WORK_TYPES = ["Work note", "Decision", "Incident", "1:1", "Inbox item", "Thinking"] as const;
+/**
+ * The types of the notes that the vault kept in `work/active/`. An incident
+ * can also have the status "active", but it was in `work/incidents/`, so the
+ * views that replace the top level of `work/active/` do not return it.
+ */
+const LOOSE_ACTIVE_TYPES = ["Work note", "Decision"] as const;
 const PERF_TYPES = ["PR evidence", "Review brief", "Review artifact", "Brag quarter"] as const;
 const KNOWLEDGE_TYPES = ["Brain topic", "Reference", "Domain note", "Event-log satellite", "Archive note"] as const;
 const STATUSES = ["active", "completed", "archived", "proposed", "accepted", "deprecated", "draft", "inbox"] as const;
 const TAGS = ["work-note", "decision", "incident", "perf", "review", "thinking", "north-star", "competency", "person", "team", "brain", "org", "index", "moc"] as const;
+
+/**
+ * The checkbox that replaces the `verbatim: true` key of the vault. A row
+ * with the box set is a raw capture that keeps its line breaks, so the
+ * hard-wrap check leaves it out. A page outside the databases has no
+ * properties, so it cannot have the mark.
+ */
+export const VERBATIM_PROPERTY = "Verbatim";
 
 /** The properties of every database: the global note fields, then the fields that the hygiene views read. */
 const COMMON_PROPERTIES: Readonly<Record<string, PropertySpec>> = {
@@ -131,7 +150,8 @@ const COMMON_PROPERTIES: Readonly<Record<string, PropertySpec>> = {
 	Changed: { type: "date" },
 	Bytes: { type: "number" },
 	"Hook stamp": { type: "date" },
-	Stale: { type: "formula", expression: olderThan(14) },
+	[VERBATIM_PROPERTY]: { type: "checkbox" },
+	Stale: { type: "formula", expression: atLeastDaysOld(14) },
 	Oversized: { type: "formula", expression: yesNo('prop("Bytes") >= 25000 and not contains(prop("Name"), "Archive")') },
 	// Notion keeps a date and time to the minute (measured). So a stamp can read up to
 	// one minute before the write that set it, and the limit of 2 minutes covers that.
@@ -202,7 +222,7 @@ export const DATABASES: readonly DatabaseSpec[] = [
 			"Feeds into": { type: "relation", target: "work" },
 			Parent: { type: "relation", target: "work", reverse: "Children" },
 			"Days untouched": { type: "formula", expression: 'dateBetween(now(), prop("Changed"), "days")' },
-			"Older than 7 days": { type: "formula", expression: olderThan(7) },
+			"Older than 7 days": { type: "formula", expression: atLeastDaysOld(7) },
 			"Open tasks": { type: "number" },
 			"Open loops": { type: "number" },
 		},
@@ -261,6 +281,7 @@ export const DATABASES: readonly DatabaseSpec[] = [
 				filters: [
 					{ property: "Status", is: "active" },
 					{ property: "Project", empty: true },
+					{ property: "Type", in: LOOSE_ACTIVE_TYPES },
 				],
 			},
 			{
@@ -268,6 +289,7 @@ export const DATABASES: readonly DatabaseSpec[] = [
 				filters: [
 					{ property: "Status", is: "active" },
 					{ property: "Project", empty: true },
+					{ property: "Type", in: LOOSE_ACTIVE_TYPES },
 					{ property: "Open tasks", above: 0 },
 				],
 			},
@@ -451,6 +473,11 @@ export function mergeOptions(live: readonly SelectOption[], wanted: readonly str
 
 const optionList = (options: readonly SelectOption[]): string => options.map((o) => `${quote(o.name)}:${o.color}`).join(", ");
 
+/** The column type of a select or a multi-select that holds the live options and each wanted option. */
+export function selectColumn(type: "select" | "multi_select", live: readonly SelectOption[], wanted: readonly string[]): string {
+	return `${type === "select" ? "SELECT" : "MULTI_SELECT"}(${optionList(mergeOptions(live, wanted))})`;
+}
+
 /** The column type of the Notion schema language. A relation needs the data source ID of its target. */
 export function columnType(spec: PropertySpec, dataSourceOf: (key: DatabaseKey) => string, own: DatabaseKey, live: readonly SelectOption[] = []): string {
 	switch (spec.type) {
@@ -467,9 +494,8 @@ export function columnType(spec: PropertySpec, dataSourceOf: (key: DatabaseKey) 
 		case "last_edited_time":
 			return "LAST_EDITED_TIME";
 		case "select":
-			return `SELECT(${optionList(mergeOptions(live, spec.options))})`;
 		case "multi_select":
-			return `MULTI_SELECT(${optionList(mergeOptions(live, spec.options))})`;
+			return selectColumn(spec.type, live, spec.options);
 		case "formula":
 			return `FORMULA(${quote(spec.expression)})`;
 		case "rollup":

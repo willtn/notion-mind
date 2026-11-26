@@ -11,10 +11,20 @@
 
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { writeFileAtomic } from "./atomic-write.ts";
 import type { DatabaseKey, PageKey } from "./notion-model.ts";
 
 export const NOTION_MAP_FILE = "notion-map.json";
+
+/** The environment variable that names the map file of a hook process. */
+export const NOTION_MAP_ENV = "NOTION_MAP_FILE";
+
+/** The map file of a project: the path in `NOTION_MAP_FILE`, or `notion-map.json` in the project directory. */
+export function notionMapPath(projectDir: string, env: NodeJS.ProcessEnv = process.env): string {
+	const named = env[NOTION_MAP_ENV];
+	return named === undefined || named === "" ? join(projectDir, NOTION_MAP_FILE) : named;
+}
 
 export interface NotionRef {
 	readonly id: string;
