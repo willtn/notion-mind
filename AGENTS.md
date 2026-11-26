@@ -26,7 +26,7 @@ The repository:
 
 | Path | Purpose |
 |------|---------|
-| `vault-manifest.json` | Root marker of the hook commands, and hook settings (budgets, required properties, open-loop sections) |
+| `vault-manifest.json` | Root marker of the hook commands, and hook settings (budgets, required properties, open-loop types and sections) |
 | `brain/Skills.md` | The command catalog, with usage notes and workflows |
 | `.claude/` | Hooks, commands, subagents, skills, rules, and the mod |
 | `notion-map.json` | The Notion IDs that the setup writes. Not committed |

@@ -19,4 +19,4 @@ Specialized agents in `.claude/agents/` for heavy operations. They run in isolat
 | `slack-archaeologist` | Full Slack reconstruction: every message, thread, and profile | `/om-incident-capture` |
 | `vault-librarian` | Deep workspace maintenance: orphans, broken links, empty properties, stale rows | `/om-vault-audit` |
 | `review-fact-checker` | Verifies every claim in a review draft against Notion sources | `/om-self-review`, `/om-review-peer` |
-| `vault-migrator` | Classifies and migrates content from a source vault. The import tool takes it over | None until the import tool lands |
+| `vault-migrator` | Imports a Markdown vault of the Obsidian template with `notion-import.ts`: a dry run to approve, the import, a second run that must make no page, and a check of each page | Direct |

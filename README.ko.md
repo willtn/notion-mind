@@ -296,7 +296,7 @@ SessionStart는 페이지 전체가 아니라 제목, 개수, 짧은 발췌를 �
 | `slack-archaeologist` | Slack 전체 재구성: 모든 메시지, 스레드, 프로필 | `/om-incident-capture` |
 | `vault-librarian` | 워크스페이스 심층 유지보수: 고아, 깨진 링크, 빈 속성, 오래된 행 | `/om-vault-audit` |
 | `review-fact-checker` | 평가 초안의 모든 주장을 Notion 출처와 대조합니다 | `/om-self-review`, `/om-review-peer` |
-| `vault-migrator` | 원본 볼트의 내용을 분류하고 옮깁니다. 가져오기 도구가 이어받습니다 | 가져오기 도구가 들어올 때까지 없음 |
+| `vault-migrator` | `notion-import.ts`로 Obsidian 템플릿의 Markdown 볼트를 가져옵니다. 승인을 위한 드라이 런, 가져오기, 페이지를 만들지 않아야 하는 두 번째 실행, 각 페이지 검사를 수행합니다 | 직접 |
 
 > [!NOTE]
 > 서브에이전트는 `.claude/agents/`에 정의되어 있습니다. 분야별 워크플로우를 위해 직접 추가할 수 있습니다.
@@ -336,7 +336,15 @@ node --experimental-strip-types parity/run-mutations.ts --notion --hook validate
 
 ## 📥 기존 볼트 가져오기
 
-Obsidian 템플릿의 볼트를 워크스페이스로 옮기는 가져오기 도구는 [`NOTION-PORT-DESIGN.md`](NOTION-PORT-DESIGN.md) 파트 (e)의 항목 11로 계획되어 있습니다. 아직 저장소에 없습니다. 그때까지 `vault-migrator`에는 명령이 없고, 노트는 손으로 옮기거나 `/om-dump`로 옮깁니다.
+`notion-import.ts`는 Obsidian 템플릿의 Markdown 볼트를 워크스페이스로 옮깁니다 ([#14](https://github.com/willtn/notion-mind/pull/14)). 가져오기에는 맵 파일이 필요하므로 먼저 설정을 실행하세요. 그다음 저장소 루트에서 다음 명령을 실행합니다.
+
+```bash
+node --experimental-strip-types .claude/scripts/notion-import.ts --vault ../my-vault --dry-run
+node --experimental-strip-types .claude/scripts/notion-import.ts --vault ../my-vault
+node --experimental-strip-types .claude/scripts/notion-import.ts --vault ../my-vault --verify
+```
+
+드라이 런은 Notion을 호출하지 않습니다. 각 노트의 위치, 가져오기가 제외하는 각 파일, 형식을 잃는 각 구문을 출력합니다. 가져오기는 볼트를 읽기만 하고 변경하지 않습니다. 각 노트는 자신의 경로를 `Source path` 속성에 가진 행이 됩니다. 그래서 두 번째 실행은 페이지를 만들지 않고, 변경된 노트만 씁니다. `--verify`는 각 페이지를 가져와 계획과 비교합니다. `vault-migrator` 서브에이전트가 이 단계들을 실행하고, 드라이 런 뒤에 승인을 요청합니다.
 
 ---
 
@@ -381,6 +389,7 @@ obsidian-mind/
         ├── session-start.ts, classify-message.ts, guard-notion-write.ts,
         │   validate-write.ts, pre-compact.ts, stop-checklist.ts   # The hooks
         ├── notion-setup.ts        # Builds the workspace and writes notion-map.json
+        ├── notion-import.ts       # Moves a Markdown vault of the Obsidian template into the workspace
         ├── scaffold/              # Source text of the scaffold pages and the templates
         ├── lib/                   # The Notion client, the model, the checks
         ├── parity/                # The parity harness

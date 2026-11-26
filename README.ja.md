@@ -296,7 +296,7 @@ SessionStart はページ全体ではなく、タイトル、件数、短い抜�
 | `slack-archaeologist` | Slack の完全な再構成: すべてのメッセージ、スレッド、プロフィール | `/om-incident-capture` |
 | `vault-librarian` | ワークスペースの深いメンテナンス: 孤立、壊れたリンク、空のプロパティ、古い行 | `/om-vault-audit` |
 | `review-fact-checker` | 評価の下書きのすべての主張を Notion の出典と照合します | `/om-self-review`、`/om-review-peer` |
-| `vault-migrator` | 元のボールトの内容を分類して移行します。インポートツールが引き継ぎます | インポートツールが入るまでなし |
+| `vault-migrator` | `notion-import.ts` で Obsidian テンプレートの Markdown ボールトをインポートします。承認用のドライラン、インポート、ページを作らないはずの 2 回目の実行、各ページの検査を行います | 直接 |
 
 > [!NOTE]
 > サブエージェントは `.claude/agents/` で定義されています。分野ごとのワークフロー用に自分のものを追加できます。
@@ -336,7 +336,15 @@ node --experimental-strip-types parity/run-mutations.ts --notion --hook validate
 
 ## 📥 既存のボールトのインポート
 
-Obsidian テンプレートのボールトをワークスペースに移すインポートツールは、[`NOTION-PORT-DESIGN.md`](NOTION-PORT-DESIGN.md) のパート (e) の項目 11 として計画されています。まだリポジトリにはありません。それまでは `vault-migrator` にコマンドはなく、ノートは手作業か `/om-dump` で移します。
+`notion-import.ts` は、Obsidian テンプレートの Markdown ボールトをワークスペースに移します ([#14](https://github.com/willtn/notion-mind/pull/14))。インポートにはマップファイルが必要なので、先にセットアップを実行してください。次に、リポジトリのルートで以下のコマンドを実行します。
+
+```bash
+node --experimental-strip-types .claude/scripts/notion-import.ts --vault ../my-vault --dry-run
+node --experimental-strip-types .claude/scripts/notion-import.ts --vault ../my-vault
+node --experimental-strip-types .claude/scripts/notion-import.ts --vault ../my-vault --verify
+```
+
+ドライランは Notion を呼び出しません。各ノートの行き先、インポートが除外する各ファイル、形式が失われる各構文を出力します。インポートはボールトを読むだけで、変更しません。各ノートは、そのパスをプロパティ `Source path` に持つ行になります。そのため、2 回目の実行はページを作らず、変更されたノートだけを書き込みます。`--verify` は各ページを取得して計画と比較します。`vault-migrator` サブエージェントがこれらの手順を実行し、ドライランの後にあなたの承認を求めます。
 
 ---
 
@@ -381,6 +389,7 @@ obsidian-mind/
         ├── session-start.ts, classify-message.ts, guard-notion-write.ts,
         │   validate-write.ts, pre-compact.ts, stop-checklist.ts   # The hooks
         ├── notion-setup.ts        # Builds the workspace and writes notion-map.json
+        ├── notion-import.ts       # Moves a Markdown vault of the Obsidian template into the workspace
         ├── scaffold/              # Source text of the scaffold pages and the templates
         ├── lib/                   # The Notion client, the model, the checks
         ├── parity/                # The parity harness

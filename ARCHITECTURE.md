@@ -96,7 +96,7 @@ A remote client cannot read a repository file, so the setup also writes the "Rea
 `vault-manifest.json` stays for two jobs:
 
 - **The root marker.** Each hook command in `.claude/settings.json` walks up from `CLAUDE_PROJECT_DIR` to the nearest folder that holds it (`lib/project-dir.ts`).
-- **Hook settings.** `open_loop_sections`, the budgets `eager_layer_budget_bytes` and `eager_layer_instruction_budget_bytes`, `listing_collapse_threshold`, and `frontmatter_required`, which the write check reads as the required properties of each note type. `template`, `version`, and `released` serve the release tooling.
+- **Hook settings.** `open_loop_types` and `open_loop_sections`, the budgets `eager_layer_budget_bytes` and `eager_layer_instruction_budget_bytes`, `listing_collapse_threshold`, and `frontmatter_required`, which the write check reads as the required properties of each note type. `template`, `version`, and `released` serve the release tooling.
 
 ## The Notion Client
 
@@ -168,7 +168,7 @@ A select takes no new option on a write. The write fails with a validation error
 | SessionStart | `session-start.ts` | 30 s | About 28 reads in two rounds: views and page fetches at the same time |
 | UserPromptSubmit | `classify-message.ts` | 15 s | None |
 | PreToolUse (`Bash`) | `guard-notion-write.ts` | 5 s | None |
-| PostToolUse (`Write\|Edit\|Bash`) | `validate-write.ts` | 15 s | For a write: at most one view query and one update for each row |
+| PostToolUse (`Write\|Edit\|Bash`) | `validate-write.ts` | 15 s | For a write: one page fetch and at most one update for each row, and at most one view read |
 | PostToolUseFailure (`Bash`) | `validate-write.ts` | 15 s | One schema update when an option is missing |
 | PreCompact | `pre-compact.ts` | 30 s | None. The transcript goes to `.claude/state/session-logs/` |
 | Stop | `stop-checklist.ts` | 15 s | The hygiene views, at the same time |
@@ -204,7 +204,9 @@ The wording may differ only to name Notion objects. Each form maps its object na
 
 ## The Import Tool
 
-Item 11 of part (e) of the record plans an import tool that moves a vault of the Obsidian template into the model, keys each page on its source path so a second run adds nothing, and lists the constructs that lose form. It is not in the repository yet. `vault-migrator` waits for it.
+`.claude/scripts/notion-import.ts` moves a Markdown vault of the Obsidian template into the model (item 11 of part (e) of the record, [#14](https://github.com/willtn/notion-mind/pull/14)). `lib/import-source.ts` reads the vault and never writes to it. `lib/import-place.ts` gives each note its database and its `Type` from its folder and its tags. `lib/import-plan.ts` makes the plan, `lib/import-body.ts` converts each body to Notion-flavored Markdown, and `lib/import-run.ts` writes only what differs.
+
+Each row holds the path of its note in the property `Source path`, and the run finds a row by that value. So a second run makes no page. `--dry-run` makes no Notion call, and it prints the place of each note, each file that the import leaves out, and each construct that loses form (`lib/import-report.ts`). `--verify` fetches each page and compares the title, the place, each property, the body, and the derived values with the plan. It exits 1 on a difference. The `vault-migrator` subagent drives the tool.
 
 ## Testing and CI
 

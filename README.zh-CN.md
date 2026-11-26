@@ -296,7 +296,7 @@ SessionStart 加载标题、计数和简短摘录，而不是完整页面。超�
 | `slack-archaeologist` | 完整重建 Slack：每条消息、线程和资料 | `/om-incident-capture` |
 | `vault-librarian` | 深度维护工作区：孤立行、失效链接、空属性、陈旧的行 | `/om-vault-audit` |
 | `review-fact-checker` | 用 Notion 来源核对评估草稿中的每个说法 | `/om-self-review`、`/om-review-peer` |
-| `vault-migrator` | 对源 vault 的内容分类并迁移。导入工具会接管它 | 导入工具上线前没有 |
+| `vault-migrator` | 用 `notion-import.ts` 导入 Obsidian 模板的 Markdown vault：供你批准的试运行、导入、不应创建页面的第二次运行，以及对每个页面的检查 | 直接 |
 
 > [!NOTE]
 > 子智能体定义在 `.claude/agents/` 中。你可以为特定领域的工作流添加自己的子智能体。
@@ -336,7 +336,15 @@ node --experimental-strip-types parity/run-mutations.ts --notion --hook validate
 
 ## 📥 导入现有 vault
 
-把 Obsidian 模板的 vault 迁移到工作区的导入工具，已作为 [`NOTION-PORT-DESIGN.md`](NOTION-PORT-DESIGN.md) (e) 部分的第 11 项列入计划。它还不在仓库中。在它上线之前，`vault-migrator` 没有对应的命令，你可以手动迁移笔记或用 `/om-dump`。
+`notion-import.ts` 把 Obsidian 模板的 Markdown vault 迁移到工作区（[#14](https://github.com/willtn/notion-mind/pull/14)）。导入需要映射文件，所以请先运行设置。然后在仓库根目录运行以下命令：
+
+```bash
+node --experimental-strip-types .claude/scripts/notion-import.ts --vault ../my-vault --dry-run
+node --experimental-strip-types .claude/scripts/notion-import.ts --vault ../my-vault
+node --experimental-strip-types .claude/scripts/notion-import.ts --vault ../my-vault --verify
+```
+
+试运行不调用 Notion。它输出每条笔记的位置、导入排除的每个文件，以及会丢失格式的每种结构。导入只读取 vault，从不修改它。每条笔记成为一行，其路径保存在属性 `Source path` 中。因此第二次运行不创建页面，只写入有变更的笔记。`--verify` 获取每个页面并与计划比较。`vault-migrator` 子代理执行这些步骤，并在试运行之后请求你的批准。
 
 ---
 
@@ -381,6 +389,7 @@ obsidian-mind/
         ├── session-start.ts, classify-message.ts, guard-notion-write.ts,
         │   validate-write.ts, pre-compact.ts, stop-checklist.ts   # The hooks
         ├── notion-setup.ts        # Builds the workspace and writes notion-map.json
+        ├── notion-import.ts       # Moves a Markdown vault of the Obsidian template into the workspace
         ├── scaffold/              # Source text of the scaffold pages and the templates
         ├── lib/                   # The Notion client, the model, the checks
         ├── parity/                # The parity harness

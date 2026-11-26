@@ -296,7 +296,7 @@ Specialized agents that run in isolated context windows. They handle heavy opera
 | `slack-archaeologist` | Full Slack reconstruction: every message, thread, and profile | `/om-incident-capture` |
 | `vault-librarian` | Deep workspace maintenance: orphans, broken links, empty properties, stale rows | `/om-vault-audit` |
 | `review-fact-checker` | Verifies every claim in a review draft against Notion sources | `/om-self-review`, `/om-review-peer` |
-| `vault-migrator` | Classifies and migrates content from a source vault. The import tool takes it over | None until the import tool lands |
+| `vault-migrator` | Imports a Markdown vault of the Obsidian template with `notion-import.ts`: a dry run to approve, the import, a second run that must make no page, and a check of each page | Direct |
 
 > [!NOTE]
 > Subagents are defined in `.claude/agents/`. You can add your own for domain-specific workflows.
@@ -336,7 +336,15 @@ node --experimental-strip-types parity/run-mutations.ts --notion --hook validate
 
 ## 📥 Importing an Existing Vault
 
-An import tool that moves a vault of the Obsidian template into the workspace is planned as item 11 of part (e) of [`NOTION-PORT-DESIGN.md`](NOTION-PORT-DESIGN.md). It is not in the repository yet. Until it lands, `vault-migrator` has no command, and you move notes by hand or with `/om-dump`.
+`notion-import.ts` moves a Markdown vault of the Obsidian template into the workspace ([#14](https://github.com/willtn/notion-mind/pull/14)). Run the setup first, because the import needs the map file. Then run these commands from the repository root:
+
+```bash
+node --experimental-strip-types .claude/scripts/notion-import.ts --vault ../my-vault --dry-run
+node --experimental-strip-types .claude/scripts/notion-import.ts --vault ../my-vault
+node --experimental-strip-types .claude/scripts/notion-import.ts --vault ../my-vault --verify
+```
+
+The dry run makes no Notion call. It prints the place of each note, each file that the import leaves out, and each construct that loses form. The import reads the vault and never changes it. Each note becomes a row with its path in the property `Source path`, so a second run makes no page and writes only a note that changed. `--verify` fetches each page and compares it with the plan. The `vault-migrator` subagent runs these steps, and it asks for your approval after the dry run.
 
 ---
 
@@ -381,6 +389,7 @@ obsidian-mind/
         ├── session-start.ts, classify-message.ts, guard-notion-write.ts,
         │   validate-write.ts, pre-compact.ts, stop-checklist.ts   # The hooks
         ├── notion-setup.ts        # Builds the workspace and writes notion-map.json
+        ├── notion-import.ts       # Moves a Markdown vault of the Obsidian template into the workspace
         ├── scaffold/              # Source text of the scaffold pages and the templates
         ├── lib/                   # The Notion client, the model, the checks
         ├── parity/                # The parity harness
