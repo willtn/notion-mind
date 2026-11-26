@@ -89,7 +89,7 @@ The scaffold pages are Home, North Star, People & Context, Recently Touched, the
 
 ## The Map File and the Manifest
 
-`notion-map.json` in the repository root holds every Notion ID that a local reader needs: the workspace, the root page, each database with its `data_source` URL and its view URLs, each scaffold page, and each template row. The setup writes it. Every hook, command, and subagent reads it. `NOTION_MAP_FILE` in the environment names another file, which the parity harness uses for its fixture root. The file is in `.gitignore`, because `origin` is public. `notion-map.example.json` shows its shape with placeholders.
+`notion-map.json` in the repository root holds every Notion ID that a local reader needs: the workspace, the root page, each database with its `data_source` URL and its view URLs, each scaffold page, and each template row. The setup writes it. Three hooks read it in code: `session-start.ts`, `stop-checklist.ts`, and `validate-write.ts` on the Bash write path, through `lib/write-hook.ts`. `guard-notion-write.ts`, `classify-message.ts`, and `pre-compact.ts` do not read it. Each command and subagent tells the model to read it before a Notion call. `NOTION_MAP_FILE` in the environment names another file, which the parity harness uses for its fixture root. The file is in `.gitignore`, because `origin` is public. `notion-map.example.json` shows its shape with placeholders.
 
 A remote client cannot read a repository file, so the setup also writes the "Reader map" page under the root from the same data. The file is the source, and the page is a copy.
 
