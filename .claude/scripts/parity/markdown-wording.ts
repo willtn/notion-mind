@@ -103,7 +103,14 @@ const names: readonly ObjectName[] = [
 	["Vault hygiene", "{hygiene}"],
 	["Vault File Listing", "{listing}"],
 	["brain/North Star.md", "{North Star}"],
+	["the vault under `brain/` topic notes", "{brain topics}"],
+	["`brain/Patterns.md`", "{patterns note}"],
+	["`brain/Gotchas.md`", "{gotchas note}"],
+	["`brain/Key Decisions.md`", "{decisions note}"],
+	["`brain/Memories.md`", "{recent context}"],
+	["new `brain/<Topic>.md` note + index in `brain/Memories.md`", "{new brain topic}"],
 	["brain/", "{brain topics}"],
+	["a reference note in reference/", "{reference notes}"],
 ];
 
 export const MARKDOWN_WORDING = { patterns, names };

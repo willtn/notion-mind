@@ -184,6 +184,12 @@ export const NEUTRAL_NAMES = [
 	"{missing field}",
 	"{no links}",
 	"{verbatim mark}",
+	"{patterns note}",
+	"{gotchas note}",
+	"{decisions note}",
+	"{recent context}",
+	"{new brain topic}",
+	"{reference notes}",
 ] as const;
 
 export type NeutralName = (typeof NEUTRAL_NAMES)[number];

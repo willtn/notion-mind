@@ -9,7 +9,7 @@ import { basename, posix } from "node:path";
 /**
  * Return true if the path is an auto-memory file in ~/.claude/ that should
  * be flagged (#81). Only MEMORY.md (the auto-loaded index) is allowed there
- * — all durable knowledge goes to brain/ topic notes per .claude/rules/memory.md.
+ * — all durable knowledge goes to the brain topic rows of Knowledge per .claude/rules/memory.md.
  *
  * The path is lexically normalized first (separators unified, `.`/`..`
  * segments collapsed) so a path can't dodge the check by spelling the
@@ -19,7 +19,7 @@ import { basename, posix } from "node:path";
  *
  * The predicate requires BOTH `/.claude/` and `/memory/` segments and
  * exempts `MEMORY.md` by basename, so it never fires on vault paths like
- * `brain/Memories.md`, project paths containing the word "memory", or
+ * `notes/Memories.md`, project paths containing the word "memory", or
  * other `.claude/projects/<x>/` subdirs (transcripts, hook output).
  */
 export function isBlockedMemoryPath(filePath: string): boolean {
