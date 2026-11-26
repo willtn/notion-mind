@@ -34,10 +34,17 @@ export interface ViewExpectation {
 	readonly hookLeavesOut: readonly string[];
 }
 
+/** The folders that `findOpenLoops` of the original reads: `open_loop_dirs` of the manifest, or the defaults at `fae7be4`. */
+function watchedFolders(manifest: string | null): readonly string[] {
+	const stated = manifest === null ? undefined : (JSON.parse(manifest) as { readonly open_loop_dirs?: readonly string[] }).open_loop_dirs;
+	return stated ?? ["work/1-1", "work/meetings", "work/incidents"];
+}
+
 /** The rows that each view of a hook must return for the fixture set, by the conditions of part (d). */
 export function expectedViewRows(spec: FixtureSpec): ViewExpectation[] {
 	const manifest = spec.repoFiles.find((file) => file.path === "vault-manifest.json")?.content ?? null;
 	const loops = parseOpenLoopConfig(manifest);
+	const watched = watchedFolders(manifest);
 	const folder = (note: FixtureNote): string => dirname(markdownPath(note));
 	const inDatabase = (note: FixtureNote, database: DatabaseKey): boolean => {
 		const target = targetOf(note);
@@ -60,7 +67,7 @@ export function expectedViewRows(spec: FixtureSpec): ViewExpectation[] {
 		),
 		// The view has no filter for the watched places, because the manifest names them. So the ported hook leaves out a note
 		// that `findOpenLoops` of the original does not read: a note outside the watched folders, and a note with "Archive" in its name.
-		view("work", "Hygiene: open loops", hasOpenLoops, (note) => note.title.includes("Archive") || !loops.dirs.includes(folder(note))),
+		view("work", "Hygiene: open loops", hasOpenLoops, (note) => note.title.includes("Archive") || !watched.includes(folder(note))),
 		view("work", "Hygiene: inbox pressure", (note) => folder(note) === "work/meetings" && note.changedDaysAgo >= INBOX_PRESSURE_DAYS),
 		view("work", "Hygiene: loose active", looseActive),
 		view("work", "Open tasks", (note) => looseActive(note) && /^\s*- \[ \]/m.test(note.body)),

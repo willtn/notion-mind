@@ -1,61 +1,52 @@
 🌐 [English](README.md) | [日本語](README.ja.md) | [中文](README.zh-CN.md) | **한국어**
 
-> [!NOTE]
-> 이 번역은 AI의 도움을 받아 작성되었습니다. 부자연스러운 표현이나 오역을 발견하시면 Issue 또는 Pull Request로 알려주세요. 커뮤니티의 수정과 기여를 환영합니다.
-
 <p align="center">
   <img src="obsidian-mind-logo.png" alt="Obsidian Mind" width="120">
 </p>
 
 <h1 align="center">Obsidian Mind</h1>
 
-[![Claude Code](https://img.shields.io/badge/claude%20code-full%20support-D97706)](https://docs.anthropic.com/en/docs/claude-code)
-[![Codex CLI](https://img.shields.io/badge/codex%20cli-hooks%20%2B%20commands-10A37F)](https://github.com/openai/codex)
-[![Gemini CLI](https://img.shields.io/badge/gemini%20cli-hooks%20%2B%20commands-4285F4)](https://github.com/google-gemini/gemini-cli)
-[![Obsidian](https://img.shields.io/badge/obsidian-1.12%2B-7C3AED)](https://obsidian.md)
-[![Obsidian CLI](https://img.shields.io/badge/obsidian--cli-integrated-E6E6E6)](https://github.com/kepano/obsidian-cli)
-[![Obsidian Skills](https://img.shields.io/badge/obsidian--skills-integrated-8B5CF6)](https://github.com/kepano/obsidian-skills)
-[![QMD](https://img.shields.io/badge/qmd-semantic%20search-FF6B6B)](https://github.com/tobi/qmd)
-[![Node](https://img.shields.io/badge/node-22%2B-339933)](https://nodejs.org)
+[![Claude Code](https://img.shields.io/badge/claude%20code-writes%20%2B%20hooks-D97706)](https://docs.anthropic.com/en/docs/claude-code)
+[![Notion](https://img.shields.io/badge/notion-the%20only%20note%20store-000000)](https://www.notion.com)
+[![mcporter](https://img.shields.io/badge/mcporter-notion%20mcp-4B5563)](https://github.com/openclaw/mcporter)
+[![Node](https://img.shields.io/badge/node-22.6%2B-339933)](https://nodejs.org)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-> **Claude Code가 모든 것을 기억하게 해주는 Obsidian 볼트.** 세션을 시작하고 하루에 대해 이야기하면, Claude가 나머지를 처리합니다 — 노트, 링크, 인덱스, 성과 추적까지. 모든 대화가 이전 대화 위에 쌓입니다.
+> **AI 코딩 에이전트에게 지속적인 기억을 주는 Notion 워크스페이스.** Claude Code는 모든 쓰기를 검사하는 훅을 통해 씁니다. 어떤 클라이언트든 Notion MCP로 읽습니다. 세션을 시작하고 하루 일을 이야기하면 노트, 링크, 뷰, 성과 기록은 에이전트가 처리합니다. 대화할수록 지식이 쌓입니다.
+
+이 저장소는 Obsidian 볼트 템플릿으로 시작했습니다. 이름은 그대로입니다. 노트는 옮겨졌습니다. 이제 하나의 Notion 워크스페이스가 유일한 노트 저장소이고, 저장소에는 훅, 명령, 서브에이전트, 설정만 있습니다.
 
 ---
 
 ## 🔴 문제
 
-Claude Code는 강력하지만 기억하지 못합니다. 매 세션이 제로에서 시작됩니다 — 당신의 목표, 팀, 패턴, 성과에 대한 컨텍스트가 없습니다. 같은 내용을 반복해서 설명해야 합니다. 세 번의 대화 전에 내린 결정이 사라집니다. 지식이 축적되지 않습니다.
+AI 코딩 에이전트는 강력하지만 잊어버립니다. 매 세션이 0에서 시작합니다. 목표, 팀, 패턴, 성과에 대한 맥락이 없습니다. 같은 설명을 반복하고, 세 번 전 대화에서 내린 결정을 잃습니다. 지식이 쌓이지 않습니다.
 
 ## 🟢 해결책
 
-에이전트에게 뇌를 주세요.
+에이전트에게 두뇌를 주세요.
 
 ```
 You: "start session"
-에이전트: *reads North Star, checks active projects, scans recent memories*
-에이전트: "You're working on Project Alpha, blocked on the BE contract.
-         Last session you decided to split the coordinator. Your 1:1
-         with your manager is tomorrow — review brief is ready."
+Agent: *reads North Star, checks active projects, scans recent changes*
+Agent: "You're working on Project Alpha, blocked on the BE contract.
+        Last session you decided to split the coordinator. Your 1:1
+        with your manager is tomorrow. The review brief is ready."
 ```
 
-`shardmind install` 또는 `git clone`으로 설치 — 어느 쪽이든 동일한 볼트입니다.
+두뇌는 Notion 워크스페이스입니다. 휴대폰, Notion 앱, 또는 Notion MCP를 지원하는 어떤 AI 클라이언트에서도 읽을 수 있습니다. 쓰는 것은 이 저장소의 Claude Code 세션뿐이므로, 저장되는 모든 노트가 같은 검사를 거칩니다.
 
 ---
 
 ## ⚡ 실제 동작 예시
 
-<p align="center">
-  <img src="obsidian-mind-demo.gif" alt="Obsidian Mind 데모 — standup 및 dump 명령어" width="800">
-</p>
-
 **아침 킥오프:**
 
 ```bash
 /om-standup
-# → loads North Star, active projects, open tasks, recent git changes
+# → loads North Star, active projects, open tasks, rows changed in the last 48 hours
 # → "You have 2 active projects. The auth refactor is blocked on API contract.
-#    Your 1:1 with Sarah is at 2pm — last time she flagged observability."
+#    Your 1:1 with Sarah is at 2pm. Last time she flagged observability."
 ```
 
 **회의 후 브레인 덤프:**
@@ -63,16 +54,16 @@ You: "start session"
 ```bash
 /om-dump Just had a 1:1 with Sarah. She's happy with the auth work but wants
 us to add error monitoring before release. Also, Tom mentioned the cache
-migration is deferred to Q2 — we decided to focus on the API contract first.
+migration is deferred to Q2, and we decided to focus on the API contract first.
 Decision: defer Redis migration. Win: Sarah praised the auth architecture.
 ```
 
 ```
-→ Updated org/people/Sarah Chen.md with meeting context
-→ Created work/1-1/Sarah 2026-03-26.md with key takeaways
-→ Created Decision Record: "Defer Redis migration to Q2"
-→ Added to perf/Brag Doc.md: "Auth architecture praised by manager"
-→ Updated work/active/Auth Refactor.md with error monitoring task
+→ Updated the People row "Sarah Chen" with meeting context
+→ Created the Work row "Sarah 2026-03-26" (Type 1:1) with key takeaways
+→ Created the Work row "Defer Redis migration to Q2" (Type Decision)
+→ Added to the Q1 brag quarter in Perf docs: "Auth architecture praised by manager"
+→ Updated the Work row "Auth Refactor" with an error monitoring task
 ```
 
 **인시던트 대응:**
@@ -80,16 +71,15 @@ Decision: defer Redis migration. Win: Sarah praised the auth architecture.
 ```bash
 /om-incident-capture https://slack.com/archives/C0INCIDENT/p123456
 # → slack-archaeologist reads every message, thread, and profile
-# → people-profiler creates notes for new people involved
-# → Full timeline, root cause analysis, brag doc entry
+# → people-profiler creates People rows for new people involved
+# → Full timeline, root cause analysis, brag entry
 ```
 
-**하루 마무리:**
+**하루의 끝:**
 
 ```
 You: "wrap up"
-# → verifies all notes have links
-# → updates indexes
+# → verifies that every new row has a link
 # → brag-spotter finds uncaptured wins
 # → suggests improvements
 ```
@@ -98,124 +88,111 @@ You: "wrap up"
 
 ## 🚀 빠른 시작
 
-### 📦 ShardMind로 설치 (권장)
+### 📋 요구 사항
 
-```bash
-npm install -g shardmind
-mkdir my-vault && cd my-vault
-shardmind install github:breferrari/obsidian-mind
-```
+- **Claude Code**: 쓰기를 하는 유일한 클라이언트입니다. mod에는 2.1.287 이상이 필요합니다.
+- **Node.js 22.6 이상**: 훅은 `--experimental-strip-types`로 TypeScript를 실행합니다. 빌드 단계도, 실행 시 npm 의존성도 없습니다.
+- **[mcporter](https://github.com/openclaw/mcporter)**: 훅과 에이전트는 이것을 통해 Notion에 연결합니다.
+- **Notion 워크스페이스**: Notion MCP로 로그인할 수 있는 것.
 
-`shardmind install`은 현재 디렉토리에 기록하므로, 먼저 새 폴더를 만들고 그 안으로 이동하세요. 마법사가 이름, 조직, 볼트 목적, 포함할 에이전트, QMD 활성화 여부를 수집합니다. 이어서 ShardMind가 git을 초기화하고, 필요 시 QMD를 부트스트랩하며, 답변에 따라 `brain/North Star.md`를 개인화합니다. 그런 다음:
+### 📦 설치
 
-1. 설치된 폴더를 **Obsidian 볼트**로 엽니다
-2. 설정 → 일반에서 **Obsidian CLI**를 활성화합니다 (Obsidian 1.12+ 필요)
-3. 볼트 디렉토리에서 에이전트를 실행합니다: **`claude`**, **`codex`**, 또는 **`gemini`**. Codex는 폴더가 신뢰되고 각 훅이 승인되기 전까지 볼트의 훅을 실행하지 않습니다: [다른 에이전트와 사용하기](#-다른-에이전트와-사용하기) 참고.
-4. 업무에 대해 이야기를 시작하세요
+1. 저장소를 클론합니다:
 
-[ShardMind](https://github.com/breferrari/shardmind)는 Obsidian 볼트 템플릿의 패키지 매니저입니다. 설치 시 `.shardmind/` 사이드카가 추가되어 마법사, 선택적 모듈 (사용하지 않는 것은 건너뛰기), 3-way 머지 업그레이드를 제공합니다. 모든 값이 기본값일 때 설치 결과는 `git clone`과 바이트 단위로 동일합니다 — 클론 경험이 그대로 보존됩니다. 설치된 볼트에서 `.shardmind/`와 `shard-values.yaml`을 삭제해도 계속 작동합니다: ShardMind는 추가 기능이며, 필수 요소가 아닙니다.
+   ```bash
+   git clone https://github.com/willtn/notion-mind.git obsidian-mind
+   cd obsidian-mind
+   ```
 
-### 또는 직접 클론
+2. Notion MCP 서버를 `mcporter`에 추가하고 로그인합니다:
 
-```bash
-git clone https://github.com/breferrari/obsidian-mind.git
-```
+   ```bash
+   mcporter config add notion https://mcp.notion.com/mcp
+   mcporter auth notion
+   ```
 
-또는 **GitHub 템플릿**으로 사용하세요. 마법사를 건너뛰고 기본 템플릿을 받습니다. 그런 다음 위의 4단계를 진행하고, 추가로 **`brain/North Star.md`**에 목표를 작성하세요 (ShardMind 마법사를 사용하면 자동으로 처리됩니다).
+3. 워크스페이스를 만듭니다. 설정은 비공개 루트 페이지 "obsidian-mind"를 만들고, 데이터베이스, 뷰, 페이지, 템플릿을 만든 뒤 `notion-map.json`을 씁니다:
 
-### 🔍 권장: QMD 시맨틱 검색
+   ```bash
+   node --experimental-strip-types .claude/scripts/notion-setup.ts
+   ```
 
-볼트 전체의 시맨틱 검색을 위해 (노트 제목이 "Redis Migration ADR"이어도 "캐싱에 대해 뭘 결정했지?"를 찾을 수 있습니다):
+   설정은 각 객체를 이름으로 찾고 없는 것만 만듭니다. 그래서 두 번째 실행은 아무것도 만들지 않습니다. `--check`는 아무것도 만들지 않고 맵 파일의 각 객체를 가져옵니다.
 
-```bash
-npm install -g @tobilu/qmd
-node --experimental-strip-types .scripts/qmd-bootstrap.ts
-```
+4. 저장소에서 Claude Code를 열고 신뢰 확인을 수락합니다. 훅과 mod는 `.claude/`에서 로드됩니다.
 
-부트스트랩은 멱등성이 있어 재실행해도 안전합니다. `vault-manifest.json` 의 `qmd_index` 와 `qmd_context` 필드를 읽어 명명된 인덱스를 등록하고 임베딩을 생성합니다 (인덱스 이름은 `qmd_index` 가 설정되어 있으면 그 값, 설정되어 있지 않으면 볼트 폴더 이름을 슬러그화한 값). SessionStart 훅, `.mcp.json` 래퍼, CLI 명령은 모두 동일한 매니페스트 필드를 참조하므로, 같은 머신의 다른 볼트와 QMD 데이터가 섞이지 않습니다. CLI 명령에는 항상 `--index <이름>` 을 전달하세요:
+5. North Star를 채우고, 사람과 역량을 추가한 뒤 `/om-standup`을 실행합니다.
 
-```bash
-qmd --index obsidian-mind query "캐싱에 대해 뭘 결정했지?"
-qmd --index obsidian-mind update   # 일괄 편집 후
-qmd --index obsidian-mind embed    # 많은 신규 노트 후
-```
-
-**MCP를 통한 네이티브 에이전트 도구.** `.mcp.json`에 [Model Context Protocol](https://modelcontextprotocol.io) 서버로 등록되어 있습니다 — QMD가 설치되어 있으면 `mcp__qmd__query`, `mcp__qmd__get`, `mcp__qmd__multi_get`가 Read와 Edit 옆에 에이전트의 도구 메뉴에 나타납니다. 서브에이전트, 슬래시 명령, 메인 대화 모두 동일한 타입 지정 계약을 호출합니다. 나중에 다른 MCP 호환 도구(데이터베이스, 티켓팅 시스템, 캘린더)를 추가하면 같은 방식으로 플러그인됩니다.
-
-#### 내부 동작 방식
-
-QMD는 **세 개의 작은 모델을 로컬에서** 실행하므로, 설정할 API 키도 없고 쿼리당 비용도 없으며 오프라인에서도 동작합니다:
-
-| 모델 | 크기 | 역할 |
-|---|---|---|
-| `embeddinggemma-300M` | ~328MB | 노트와 쿼리를 벡터로 변환 |
-| `qmd-query-expansion-1.7B` | ~1.28GB | 쿼리를 더 나은 검색어로 재작성 |
-| `Qwen3-Reranker-0.6B` | ~640MB | 후보를 실제 관련성으로 재정렬 |
-
-첫 사용 시 다운로드되어 캐시됩니다. GPU를 찾으면 오프로드하며(외장 GPU는 CUDA, Apple Silicon은 Metal), 없으면 CPU로 폴백합니다. `qmd doctor`로 현재 상태를 확인할 수 있습니다.
-
-세 가지 CLI 명령은 저렴한 순서대로 이 스택에 대응합니다: `qmd search`는 **모델을 전혀 쓰지 않는** BM25 키워드 검색, `qmd vsearch`는 벡터 전용, `qmd query`는 완전한 하이브리드입니다. 큰 다운로드를 피하고 싶다면 `search`만으로도 충분히 유용합니다.
-
-#### MCP 서버에 주는 의미
-
-`om` 서버는 어휘 쿼리와 벡터 쿼리를 함께 보내므로, 키워드가 겹치지 않아도 질문에 답하는 노트를 찾아냅니다. 실무적으로 알아둘 점:
-
-- **비싼 쪽은 쓰기가 아니라 읽기입니다.** 쿼리는 검색 전에 로컬에서 임베딩되므로 쿼리가 있는 `recall`은 수 초가 걸리고, 쿼리 없는 `recall`은 거의 즉시입니다. 노트에 대한 `search`는 빠르며, 비용이 드는 것은 벡터 단계입니다.
-- **메모리 쓰기는 모델을 기다리지 않습니다.** 인덱스 갱신은 동기적이라 새 메모리는 즉시 검색 가능해지고, 벡터 생성은 백그라운드에서 진행됩니다. 벡터는 **순위**에만 영향을 줄 뿐 발견 여부에는 영향이 없기 때문입니다.
-- **인덱스가 없어도 동작합니다.** QMD가 없으면 서버는 어휘 매칭으로 폴백합니다. 순위는 나빠지지만 사라지는 것은 없습니다.
-
----
-
-## 📋 요구 사항
-
-- [Obsidian](https://obsidian.md) 1.12+ (CLI 지원)
-- [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
-- [Node 22+ LTS](https://nodejs.org) (훅 스크립트용 — Claude Code / Codex / Gemini CLI와 함께 이미 설치되어 있을 가능성이 큽니다)
-- Git (버전 히스토리용)
-- [QMD](https://github.com/tobi/qmd) (선택 사항, 시맨틱 검색용)
-
-> **Node 플래그에 관한 참고.** 훅 스크립트는 Node의 `--experimental-strip-types` 플래그로 TypeScript를 직접 실행합니다. 이 플래그는 Node 22.6+ (2024년 8월)부터 안정화되었고, Node 23.6+ 에서는 기본 동작이 되었습니다. 실험적(experimental)으로 표시되어 있지만 22 LTS와 24 LTS 전반에서 동작이 변경된 적은 없습니다. 향후 Node 릴리스에서 플래그가 폐지되거나 이름이 변경되면 `.claude/settings.json`, `.codex/hooks.json`, `.gemini/settings.json`의 훅 명령어를 한 줄만 수정하면 됩니다.
+> [!NOTE]
+> `notion-map.json`에는 워크스페이스의 ID가 들어 있습니다. 이 파일은 `.gitignore`에 있습니다. `notion-map.example.json`은 자리표시자로 그 형태를 보여 줍니다.
 
 ---
 
 ## ⚙️ 작동 원리
 
-**절차적 코드는 환경을 소유하고, 에이전트는 콘텐츠를 소유합니다.** `.claude/scripts/`의 훅이 분류, 검증, 인덱싱, 라이프사이클 주입을 처리합니다 — 결정론적이고, 테스트 가능하며, 모든 에이전트에서 동일하게 실행됩니다. 노트를 작성하고, 분류하고, 링크하고, 브리프를 작성하는 것 — 이는 판단이며 에이전트의 몫으로 남겨집니다. 양쪽은 작은 핸드오프에서 만납니다(훅이 컨텍스트를 주입하고 에이전트가 볼트를 읽음) — 서로의 일을 할 필요가 없습니다.
+**절차적 코드가 환경을 맡고, 에이전트가 콘텐츠를 맡습니다.** `.claude/scripts/`의 훅은 분류, 검증, 파생 속성, 라이프사이클 주입을 처리합니다. 결정적이고 테스트되어 있습니다. 노트를 쓰고, 정리하고, 연결하고, 브리프를 작성하는 판단은 에이전트에게 남습니다.
 
-**폴더는 용도별로 그룹화하고, 링크는 의미별로 그룹화합니다.** 노트는 하나의 폴더(본거지)에 있지만 여러 노트(컨텍스트)에 링크됩니다. 에이전트는 이 그래프를 유지 관리합니다 — 작업 노트를 사람, 의사결정, 역량에 자동으로 연결합니다. 리뷰 시즌이 오면 각 역량 노트의 백링크가 이미 증거 자료가 됩니다. 링크가 없는 노트는 버그입니다.
+**데이터베이스는 목적으로 묶고, 링크는 의미로 묶습니다.** 노트는 하나의 데이터베이스에 있지만 여러 노트에 연결됩니다. 에이전트는 이 그래프를 유지하며, 관계 속성으로 작업 행을 사람, 결정, 역량에 연결합니다. 평가 시즌이 오면 각 역량의 `Evidence` 관계가 이미 증거 기록입니다. 링크 없는 노트는 버그입니다.
 
-**볼트 우선 메모리**는 세션과 기기 간에 컨텍스트를 유지합니다. 모든 지속 지식은 `brain/` 토픽 노트에 있습니다(git 추적, Obsidian 브라우저 가능, 링크됨). Claude Code의 `MEMORY.md`(`~/.claude/`)는 볼트 위치를 가리키는 자동 로드 인덱스일 뿐 — 저장소 자체가 아닙니다. 즉, 메모리가 기기 변경에도 유지되며 그래프의 일부가 됩니다.
+**워크스페이스 우선 기억**은 세션과 기기를 넘어 맥락을 유지합니다. 지속적인 지식은 모두 `Knowledge`의 brain topic 행에 있습니다. `~/.claude/`의 Claude Code `MEMORY.md`는 Notion 페이지를 가리키는 색인이며, 저장소가 아닙니다.
 
-**세션은 설계된 생명주기를 따릅니다.** `SessionStart` 훅이 North Star 목표, 활성 프로젝트, 최근 변경사항, 미완료 작업, 전체 볼트 파일 목록, 볼트 위생 플래그를 자동 주입합니다 — Claude는 빈 상태가 아니라 컨텍스트가 있는 상태로 모든 세션을 시작합니다. 마무리할 때 "wrap up"이라고 말하면 Claude가 `/om-wrap-up`을 실행합니다 — 노트 검증, 인덱스 업데이트, 누락된 성과 발견. `CLAUDE.md`가 그 사이의 모든 것을 관리합니다: 파일 배치 위치, 링크 방법, 노트를 분할해야 할 때, 의사결정과 인시던트 처리 방법.
+**세션에는 설계된 라이프사이클이 있습니다.** `SessionStart` 훅이 North Star 목표, 활성 프로젝트, 최근 변경, 미완료 작업, 워크스페이스 목록을 주입하므로, 에이전트는 매번 맥락을 갖고 시작합니다. 마지막에 "wrap up"이라고 말하면 에이전트가 `/om-wrap-up`을 실행합니다. 그 사이의 모든 것은 `AGENTS.md`가 정합니다. 어디에 저장할지, 어떻게 연결할지, 언제 노트를 나눌지, 결정과 인시던트를 어떻게 다룰지입니다.
+
+### 📖 읽기 경로
+
+어떤 클라이언트든 Notion MCP로 워크스페이스를 읽습니다. Claude Code, Claude 앱, 다른 MCP 클라이언트입니다. 읽기에는 훅이 필요 없습니다. 원격 클라이언트는 저장소 파일을 읽을 수 없으므로, 설정은 루트 아래에 "Reader map" 페이지도 씁니다. 이 페이지는 `notion-map.json`에 있는 각 데이터베이스, 뷰, 페이지를 나열합니다.
+
+훅이 켜진 Claude Code 세션에서 읽기는 `Bash` 명령입니다:
+
+```bash
+mcporter call notion.notion-search --args '{"query":"auth refactor","query_type":"internal"}' --output json
+```
+
+### ✍️ 쓰기 경로
+
+쓰기는 이 저장소의 훅을 로드한 Claude Code 세션만 합니다. 쓰기는 두 단계입니다:
+
+1. 에이전트가 `Write` 도구로 JSON 인수를 `.claude/state/outbox/<name>.json`에 씁니다.
+2. `mcporter call notion.<tool> --args "$(cat .claude/state/outbox/<name>.json)"`을 실행합니다.
+
+세 개의 훅이 이 호출을 봅니다:
+
+- **가드** (`PreToolUse`)는 Notion 명령을 쓰기, 읽기, 스키마, 로그인 형식으로만 통과시키고, 다른 형식은 이유와 함께 거부합니다. 훅은 인수를 읽을 수 있는 쓰기만 검사할 수 있으므로, 가드는 모든 쓰기를 읽을 수 있게 만듭니다. 가드가 실행되지 못하면 명령이 거부되므로, 가드는 안전한 쪽으로 실패합니다.
+- **쓰기 검사** (`PostToolUse`)는 outbox 파일을 읽습니다. 비어 있는 필수 속성, 링크 없는 노트, 하드 랩된 문장을 경고합니다. 25 KB를 넘는 노트(자르지 말고 나누기)와 주제 클러스터를 지적합니다. 그런 다음 행의 파생 속성(`Bytes`, `Open tasks`, `Open loops`, `Has content`, `Changed`, `Hook stamp`)을 설정하고 outbox 파일을 삭제합니다.
+- **복구** (`PostToolUseFailure`)는 쓰기가 실패한 뒤 없는 select 옵션을 데이터베이스에 추가하고, 같은 명령을 다시 실행하라고 에이전트에게 알립니다.
+
+파생 속성 덕분에 위생 스캔은 페이지마다 가져오는 대신 뷰 쿼리로 실행됩니다. `Changed`는 노트의 나이입니다. 속성을 쓰면 Notion 자체의 `Last edited`가 움직이므로, 나이 규칙은 그것을 읽지 않습니다. `Hook stamp`는 훅을 거친 쓰기를 표시합니다. "Hygiene: edited outside hooks" 뷰는 나중에 다른 클라이언트가 바꾼 행을 나열하고, `/om-vault-audit`이 그것을 읽습니다.
+
+호출의 전체 형식은 [`.claude/rules/notion-calls.md`](.claude/rules/notion-calls.md)에 있습니다.
 
 ### 🔗 훅
 
-다섯 개의 생명주기 훅이 라우팅을 자동으로 처리합니다:
-
-| 훅 | 시점 | 동작 |
+| 훅 | 시점 | 내용 |
 |------|------|------|
-| 🚀 SessionStart | 시작/재개 시 | QMD 재인덱싱＋셀프힐, North Star 포커스·활성 작업·최근 변경사항·작업·파일 목록·볼트 위생 플래그 주입 — 전체는 Claude Code의 훅 출력 상한에 맞는 바이트 예산으로 제한되고, 마지막 줄은 주입 크기 미터 |
-| 💬 UserPromptSubmit | 매 메시지마다 | 콘텐츠 분류(의사결정, 인시던트, 성과, 1:1, 아키텍처, 인물, 프로젝트 업데이트) 및 라우팅 힌트 주입. 이전 턴의 Stop 보고서도 에이전트에게 전달 |
-| ✍️ PostToolUse | `.md` 작성 후 | 프론트매터＋위키링크 검증, 잘못 배치된 메모리 파일 차단, 비대 노트(줄이지 말고 분할)와 작성 시점 토픽 클러스터 플래그 |
-| 💾 PreCompact | 컨텍스트 압축 전 | 세션 트랜스크립트를 `thinking/session-logs/`에 백업 |
-| 🏁 Stop | 각 응답 종료 시 | 체크리스트＋구체적인 드리프트 발견 (SessionStart와 동일한 위생 스캔). 세션당 한 번, 내용이 바뀔 때만 다시 표시. 사용자에게는 섹션별 한 줄 요약이, 에이전트에게는 다음 메시지와 함께 전체 보고서가 전달되며 조치 여부는 에이전트가 판단. 조치는 `om-tidy`로 |
+| 🚀 SessionStart | 시작, 재개, `/clear`, 압축 시 | 워크스페이스를 읽고 North Star, brain topics, 최근 변경, 미완료 작업, 활성 작업, 목록, 위생 지적을 Claude Code 훅 출력 한도에 맞는 바이트 예산 안에서 주입합니다. 마지막에 크기 미터를 냅니다 |
+| 💬 UserPromptSubmit | 매 메시지 | 내용(결정, 인시던트, 성과, 1:1, 아키텍처, 사람, 프로젝트 업데이트)을 분류하고 올바른 데이터베이스를 알려 주는 라우팅 힌트를 주입합니다. 이전 턴의 Stop 보고서도 에이전트에게 넘깁니다 |
+| 🛡️ PreToolUse | 각 `Bash` 명령 전 | 가드: 쓰기 검사가 읽을 수 있는 형식의 Notion 명령만 통과시킵니다 |
+| ✍️ PostToolUse | Notion 쓰기 후, `Write` 또는 `Edit` 후 | 쓰기 검사와 파생 속성. `Write` 또는 `Edit`에서는 잘못 놓인 메모리 파일을 지적합니다 |
+| 🩹 PostToolUseFailure | Notion 쓰기가 실패한 후 | 없는 select 옵션을 추가하고 같은 명령의 재실행을 요청합니다 |
+| 💾 PreCompact | 컨텍스트 압축 전 | 세션 기록을 노트 저장소 밖의 `.claude/state/session-logs/`에 백업합니다 |
+| 🏁 Stop | 매 응답 후 | 체크리스트와 저장된 위생 뷰의 지적을 세션당 한 번, 바뀔 때만 다시 보여 줍니다. 사용자는 짧은 요약을 보고, 에이전트는 다음 메시지와 함께 전체 보고서를 받습니다 |
 
 > [!TIP]
-> 그냥 이야기하세요. 훅이 라우팅을 처리합니다.
+> 그냥 말하세요. 라우팅은 훅이 처리합니다.
 
 ### 🧩 Claude Code mod
 
-Claude Code 2.1.287 이상에서는 볼트가 mod도 함께 제공합니다. `.claude/skills/obsidian-mind/`에 있는, Claude Code 안에서 실행되는 플러그인입니다. 볼트 자체의 훅 스크립트를 실행하고, 그 출력이 세션에 전달되는 경로만 바꿉니다.
+Claude Code 2.1.287 이상에서는 저장소가 mod도 제공합니다. `.claude/skills/obsidian-mind/`는 코드가 Claude Code 안에서 실행되는 플러그인입니다. 같은 훅 스크립트를 실행하고, 출력이 세션에 도달하는 방식만 바꿉니다:
 
-- **세션 컨텍스트가 `CLAUDE.md`처럼 instruction 파일로 전달됩니다.** 컴팩션과 `/clear` 후에도 전체가 다시 읽히고(훅 출력은 포인터로 줄어듭니다), 범용 서브에이전트에도 전달되며(훅 출력은 전달되지 않습니다), Claude Code 훅 출력의 10,000자 제한에 잘리지 않습니다. 예산은 `vault-manifest.json`의 `eager_layer_instruction_budget_bytes`이며, 열린 작업처럼 줄어들지 않는 섹션은 이를 넘을 수 있습니다. `/memory`에는 `.claude/session-context.md`로 표시됩니다.
-- **Stop 보고서가 답변 아래의 한 줄이 됩니다.** 발견 사항이 바뀌면 Claude의 답변 아래에 mod 이름으로 시작하는 줄 `obsidian-mind: vault check: …`가 표시됩니다. Claude Code는 Stop에서 응답한 플러그인의 이름을 `+`로 이어 붙이므로, 다른 플러그인도 응답하면 `obsidian-mind+<플러그인>: vault check: …`처럼 표시됩니다. Claude는 전체 보고서를 다음 메시지와 함께 보이지 않게 받습니다. 긴급으로 표시된 발견 사항은 대신 즉시 Claude에게 전달됩니다(보내는 메시지 하나당 한 번까지이며, 두 번째는 보고서 안에서 기다립니다). 템플릿 자체의 보고서에는 그런 항목이 없습니다.
+- **세션 맥락이 지시 파일로 도착합니다**. `AGENTS.md`와 같은 방식입니다. 압축과 `/clear` 뒤에 Claude Code가 전체를 다시 읽고, 범용 서브에이전트에게도 도달하며, 10,000자 훅 한도에 잘리지 않습니다. 예산은 `vault-manifest.json`의 `eager_layer_instruction_budget_bytes`입니다. `/memory`에서는 `.claude/session-context.md`로 보입니다.
+- **Stop 보고서는 답변 아래 한 줄이 됩니다.** 지적이 바뀌면 Claude의 답변 아래에 mod 이름으로 시작하는 줄이 보입니다: `obsidian-mind: vault check: …`. 다른 플러그인도 Stop에서 응답하면 Claude Code는 이름을 `+`로 잇습니다. Claude는 다음 메시지와 함께 전체 보고서를 사용자에게 보이지 않게 받습니다. 긴급으로 표시된 지적은 보낸 메시지마다 한 번씩 즉시 Claude의 주의를 끕니다.
 
-mod는 처리하는 이벤트마다 해당 훅에 대기하라고 알립니다. mod가 로드되지 않는 곳에서는 훅이 이전과 똑같이 동작합니다. Codex와 Gemini, 이전 버전의 Claude Code, 볼트 하위 폴더에서 시작한 세션(볼트 루트에서 실행하거나, 그곳으로 `/cd`한 뒤 `/clear`), 신뢰하지 않은 폴더입니다. mod는 볼트에 대한 Claude Code의 신뢰 확인을 수락한 뒤에만 로드됩니다.
+mod는 처리하는 각 이벤트에 대해 해당 훅에게 대기하라고 알립니다. mod가 로드되지 않는 곳에서는 훅이 이전처럼 실행됩니다. 오래된 Claude Code, 하위 폴더에서 시작한 세션(저장소 루트에서 실행하거나 `/cd`로 이동한 뒤 `/clear`), 신뢰하지 않은 폴더입니다.
 
-mod는 샌드박스 없이 사용자의 권한으로 실행되는 코드이므로, 폴더를 신뢰하기 전에 내용을 확인하세요. `claude plugin validate .claude/skills/obsidian-mind`가 훅하는 모든 이벤트와 수행하는 모든 호출을 나열합니다(볼트 자체의 스크립트를 실행하고, 컨텍스트 파일을 쓰고, 각 세션에 어떤 보고서를 보여 줬는지 자체 저장소에 기록하고, 긴급한 발견 사항이 있으면 프롬프트를 보내는 것이 전부입니다). 끄려면 `.claude/settings.local.json`에 `"enabledPlugins": { "obsidian-mind@skills-dir": false }`를 추가하세요.
+mod는 사용자의 권한으로 실행되는 샌드박스 없는 코드이므로, 폴더를 신뢰하기 전에 하는 일을 확인하세요. `claude plugin validate .claude/skills/obsidian-mind`는 mod가 훅하는 모든 이벤트와 하는 모든 호출을 나열합니다. 끄려면 `.claude/settings.local.json`에 `"enabledPlugins": { "obsidian-mind@skills-dir": false }`를 추가합니다.
 
 <!-- mod-validate:start -->
-이 버전의 mod에서 출력 중 확인할 두 줄은 다음과 같습니다:
+이 버전의 mod에서 출력 중 중요한 두 줄:
 
 ```text
   ❯ ./register.ts hooks: classic.SessionStart, prompt.context, classic.Stop, turn.complete, prompt.submit, turn.start
@@ -223,387 +200,262 @@ mod는 샌드박스 없이 사용자의 권한으로 실행되는 코드이므�
 ```
 <!-- mod-validate:end -->
 
-### ⚡ 토큰 효율성
+### ⚡ 토큰 효율
 
-obsidian-mind는 전체 볼트를 컨텍스트에 로드하지 **않습니다**. 계층형 로딩으로 토큰 비용을 최소화합니다:
+obsidian-mind는 워크스페이스 전체를 컨텍스트에 넣지 **않습니다**:
 
 | 계층 | 내용 | 시점 | 비용 |
 |------|------|------|------|
-| **항상** | `CLAUDE.md` + SessionStart 컨텍스트 (North Star 발췌, git 요약, 작업, 볼트 파일 목록) | 세션 시작 시 | 매니페스트 예산이 상한 (예산 자체도 Claude Code의 10,000자 훅 출력 상한 안으로 제한됨). 실제 크기는 매 세션 마지막 줄의 미터가 보고 |
-| **온디맨드** | QMD 시맨틱 검색 결과 | 에이전트가 특정 컨텍스트 필요 시 | 대상만 |
-| **트리거** | 분류 라우팅 힌트 | 매 메시지 | ~100 토큰 |
-| **트리거** | PostToolUse 검증 | `.md` 작성 후 | ~200 토큰 |
-| **드물게** | 전체 파일 읽기 | 명시적으로 필요한 경우만 | 가변 |
+| **항상** | `AGENTS.md`, `.claude/rules/`, SessionStart 맥락(North Star 발췌, 최근 변경, 작업, 목록) | 세션 시작 | `vault-manifest.json`의 예산으로 제한되며 10,000자 훅 출력 한도 안입니다. 미터가 매 세션 실제 크기를 보고합니다 |
+| **필요 시** | `notion-search` 결과와 일치하는 페이지 | 에이전트에게 특정 맥락이 필요할 때 | 표적 |
+| **트리거** | 분류 라우팅 힌트 | 매 메시지 | 약 100 토큰 |
+| **트리거** | 쓰기 검사 지적 | Notion 쓰기 후 | 약 200 토큰 |
 
-SessionStart는 **가벼운 컨텍스트**를 로드합니다 — 주요 파일의 짧은 발췌, 파일명, git 요약만 로드하며 전체 노트 내용은 읽지 않습니다. 에이전트는 QMD를 통해 의미 기반 검색 후 파일을 읽으므로 관련 정보만 가져옵니다. 분류 훅은 메시지당 가벼운 Node 호출 1회입니다. 검증 훅은 마크다운 쓰기 시에만 실행되며 제외된 경로는 건너뜁니다. 볼트가 커져도 주입 계층을 정직하게 유지하는 다섯 가지 메커니즘: **소스 인식 주입** (resume/compact 시 휘발성 섹션만 재주입 — 정적인 대부분은 이미 대화에 있음), 모든 주입의 마지막 줄에 붙는 **주입 크기 미터**, 미터가 측정한 값을 실제로 강제하는 **주입 예산** (상한을 넘으면 잃어도 되는 섹션부터 포인터로 축소되고, 축소된 섹션 이름은 미터에 반드시 표시됨 — 조용한 손실이 비대화보다 나쁘기 때문), 쓰기당 **훅 프로세스 1회** (QMD 리프레시가 검증 훅에 동승), **목록 접기** (노트 수 임계값을 넘는 폴더는 한 줄 카운트로 접히므로, 아무도 설정하지 않은 폴더를 통해 볼트가 상한을 넘어 자랄 수 없음). 예산과 임계값 모두 `vault-manifest.json` 에서 조정할 수 있으며, 예산은 설정값과 관계없이 Claude Code의 10,000자 훅 출력 상한 안으로 제한됩니다. 상한을 넘으면 세션에는 2,000자 미리보기만 전달되기 때문입니다.
-
-### 🌐 다른 에이전트와 사용하기
-
-obsidian-mind는 Claude Code, Codex CLI, Gemini CLI에서 작동합니다. `CLAUDE.md`의 볼트 규약, `.claude/scripts/`의 훅 스크립트, `.claude/commands/`의 커맨드는 모두 에이전트 비의존적입니다 — 순수 Markdown, TypeScript, 셸이며 SDK 의존성이 없습니다.
-
-**Claude Code** — 완전 지원. 훅, 커맨드, 서브에이전트, 메모리 시스템이 모두 기본으로 작동합니다.
-
-**Codex CLI** — `AGENTS.md`를 네이티브로 읽습니다. `.codex/hooks.json`의 훅 설정이 Claude Code와 동일한 훅 스크립트를 연결합니다 — 세션 컨텍스트, 메시지 분류, 쓰기 검증이 자동으로 작동합니다.
-
-Codex가 프로젝트의 훅을 실행하려면 두 가지 신뢰가 필요합니다(Codex CLI 0.160.0으로 확인, 2026-10-13 기준, [#345](https://github.com/breferrari/obsidian-mind/issues/345)).
-- **볼트 폴더가 신뢰되어 있어야 합니다.** Codex는 이를 `~/.codex/config.toml`의 `[projects.'<path>']`에 기록합니다. Windows에서는 키가 `\\?\` 접두사가 붙은 경로입니다(예: `[projects.'\\?\C:\path\to\vault']`).
-- **각 훅이 승인되어 있어야 합니다.** Codex는 각 승인을 `[hooks.state]` 아래 `trusted_hash`로 저장합니다. 대화형 `codex` 세션에서 승인하면 이것이 기록될 것으로 예상됩니다(추정: #345의 확인에서는 한 번의 비대화형 실행용 플래그 `--dangerously-bypass-hook-trust`로 대신했습니다).
-
-둘 다 갖춰지기 전에는 Codex가 어떤 훅도 실행하지 않으며, 세션에 볼트 컨텍스트가 전달되지 않습니다.
-
-**Gemini CLI** — `GEMINI.md`를 네이티브로 읽습니다. `.gemini/settings.json`의 훅 설정이 Gemini의 이벤트 이름을 공유 훅 스크립트에 매핑합니다.
-
-**기타 에이전트** (Cursor, Windsurf, GitHub Copilot, JetBrains AI) — `AGENTS.md`로 볼트 규약을 읽습니다. 훅 지원은 에이전트마다 다릅니다.
-
-> [!NOTE]
-> 훅, 커맨드, 서브에이전트 프롬프트, 볼트 메모리(`brain/`)는 모두 에이전트 비의존적입니다. `~/.claude/` 자동 메모리 로더만 Claude Code 전용입니다. 자세한 내용은 `AGENTS.md`를 참조하세요.
+SessionStart는 페이지 전체가 아니라 제목, 개수, 짧은 발췌를 로드합니다. 예산을 넘으면 가장 값싼 섹션이 포인터가 되고, 미터가 뺀 섹션을 하나씩 알려 줍니다. 행 개수 기준을 넘는 목록 그룹은 개수 한 줄로 접힙니다.
 
 ---
 
-## 🧠 어떤 저장소에서든 볼트에 접근하기
+## 🗂️ 워크스페이스
 
-볼트는 보통 그 안에서 작업할 때만 도움이 됩니다. **`om` MCP 서버**가 이를 바꿉니다. *다른 어떤 저장소*의 코딩 세션이든 노트를 검색하고, 읽고, 그래프를 따라가고, 배운 것을 볼트에 다시 기록할 수 있습니다.
+설정은 일곱 개의 데이터베이스를 가진 비공개 루트 페이지 "obsidian-mind"를 하나 만듭니다:
 
-```json
-{
-  "mcpServers": {
-    "om": {
-      "command": "node",
-      "args": ["/path/to/your-vault/.claude/scripts/om-mcp.mjs"]
-    }
-  }
-}
-```
+| 데이터베이스 | 내용 |
+|----------|-------|
+| `Work` | 작업 노트, 결정, 인시던트, 1:1 노트, 받은편지함 항목, 생각 노트. `Type`으로 구분합니다. `Status`가 활성 폴더와 보관 폴더를 대신하고, `Project`가 작업 흐름을 묶습니다 |
+| `People` | 사람마다 한 행. `Team` 포함 |
+| `Teams` | 팀마다 한 행. `Members` 포함 |
+| `Competencies` | 역량마다 한 행. 작업 행에서 오는 `Evidence`와 `Evidence count` 롤업 포함 |
+| `Perf docs` | PR 증거, 평가 브리프, 평가 산출물, 분기별 brag |
+| `Knowledge` | brain topics(Key Decisions, Patterns, Gotchas), 참고 노트, 도메인 노트, 이벤트 로그 위성, 보관 노트 |
+| `Templates` | 템플릿마다 한 행 |
 
-이것은 **사용하는 프로젝트**의 `.mcp.json`에 들어갑니다. 그런 다음 해당 프로젝트 자체의 `CLAUDE.md`에 볼트를 가리키는 짧은 섹션을 추가하세요.
+페이지: **Home**(링크된 뷰와 North Star의 Current Focus가 있는 대시보드), **North Star**, **People & Context**, **Recently Touched**(`Changed`로 정렬한 각 데이터베이스의 뷰), **Reader map**.
 
-> [!IMPORTANT]
-> **두 단계 모두 필수이며, 두 번째는 형식적인 절차가 아닙니다.** 측정 결과: 서버가 연결되어 있어도 저장소 측 지침이 없으면 세션은 볼트를 **한 번도** 호출하지 않았고, 볼트가 명시적으로 거부했다고 기록한 설계를 그대로 구현했습니다. 지침이 있을 때는 구현을 거부하고 해당 노트를 인용했습니다.
->
-> MCP `instructions` 필드의 **금지 사항**은 호출하는 세션으로 확실히 전파됩니다. 반면 `"볼트를 참조하라"`는 긍정형 지시는 권고적이며, 더 가까운 정보원이 있으면 건너뜁니다. 서버는 세션을 멈출 수는 있지만, 세션이 찾아보게 만드는 것은 그 프로젝트 자체의 규약뿐입니다.
+**관계가 위키링크를 대신합니다.** 뷰, 롤업, 위생 검사가 링크를 읽는 곳에서 씁니다: `Work.Decisions`, `Work.Competencies`, `Work.Person`, `Work.Team`, `Work.Feeds into`, `Perf docs.Work evidence`, `Parent`. 그 밖의 링크는 본문의 페이지 멘션입니다.
 
-**세션이 얻는 것:** `search`(시맨틱 + 키워드), `expand`(노트의 링크와 백링크), `recall`(해당 저장소로 스코프된 지속적 교훈), `remember`(교훈 기록), `record_work`(작업 내용 기록), `reason`(여러 노트에 걸친 판단), `health`(배선이 정상인지). 여기에 노트를 읽을 수 있는 리소스로 제공합니다.
+**저장된 뷰가 Bases와 손으로 관리하던 색인을 대신합니다.** 예: Active Work, Stale Actives, Completed, Incidents, 1:1 History, Competency Map, Review Evidence, Brain index. 훅은 위생 뷰(oversized, open loops, inbox pressure, loose active)를 뷰 모드로 읽습니다. 뷰 모드에는 요금제 한도가 없습니다.
 
-**생각하는 것은 `reason` 하나입니다.** 나머지가 검색이라면, 이것은 두 번째 Claude 세션으로 볼트를 읽고 노트를 가로지르는 판단이 필요한 질문에 답합니다 — *지금 하려는 일이 이 여섯 개의 노트가 결정한 바와 일치하는가?* 스스로 먼저 검색을 수행하므로 먼저 검색할 필요가 없습니다. 당신 본인의 CLI 기본 모델로 동작하므로, 볼트는 지금 작업 중인 수준과 같은 수준으로 답합니다. 그리고 어떤 상한도 없습니다 — 당신의 기기에서, 당신의 인증으로 돌아가는 Claude이기 때문입니다. 호출마다 비용·턴 수·모델·실제 소요 시간이 기록됩니다. 답변에는 `confidence: inferred`가 붙고 그 자체로 메모리에 기록되지 않습니다 — 남길 가치가 있는지는 당신의 세션이 정합니다.
-
-**저장소는 폴더 이름으로 식별됩니다.** 대개는 맞지만 가끔 틀립니다: `api`라는 이름의 저장소가 둘이면 하나의 정체성을 공유해 서로의 메모리를 받게 됩니다. 저장소 루트에 `.om-project` 파일을 두고 다른 이름을 적으면 분리됩니다. `health`가 어느 저장소로 인식하는지, 그 이름이 어디서 왔는지 알려줍니다.
-
-**인식론적 계약이 있는 저장소 간 메모리.** 한 저장소에서 배운 교훈은 스코프가 지정된 저장소에만 도달합니다. 도달 범위는 읽을 때 추측되는 것이 아니라 *쓸 때 선언*되므로, 형제 프로젝트가 다른 프로젝트의 제약을 물려받지 않습니다. 기록되는 모든 것에는 `confidence: verified | inferred | unverified`, 변동성 있는 사실의 날짜, 그리고 서버 측에서 도출된 출처가 함께 담깁니다 — 세션이 자신이 아닌 프로젝트를 사칭할 수 없습니다. 수정은 덮어쓰기가 아니라 대체로 기록되므로, 저장소는 모순을 쌓아가는 대신 커질수록 **더** 신뢰할 수 있게 됩니다.
-
-**무엇을 제공하는가.** 당신의 볼트, 당신의 노트, 당신의 세션입니다. 기본값은 볼트가 이미 자신의 콘텐츠로 선언한 것(`user_content_roots`)을, 작성한 그대로의 단위로 사용합니다(`work/` 전체가 아니라 `work/active/`). `vault-manifest.json`의 `mcp_exposed_roots`를 설정하는 것은 이 볼트가 **당신이 공유할 권한이 없는** 자료 — 고용주의 기밀 정보나 고객의 데이터 — 를 담고 있을 때뿐입니다. `private` 태그가 붙은 노트는 제공되지 않으며, 메모리는 자체 스코프를 갖기 때문에 일반 노트로 제공되지 않습니다. 둘 사이를 가로지르는 경우가 하나 있습니다. 캡처의 `promoted:` 마커가 앵커를 담고 있으면 `recall`이 `brain/`의 해당 블록을 제공하므로, 다른 저장소는 처음 작성된 캡처가 아니라 수정된 판을 받습니다. 이 역시 같은 정책의 제약을 받으므로 `private`이거나 비공개인 노트는 여기서도 거부됩니다. 모든 읽기는 호출한 저장소와 함께 기록됩니다.
-
-> [!NOTE]
-> 볼트 자료가 공개 PR에 들어가지 않게 하는 것은 공개 목록이 아니라 **계약**의 일입니다. 세션은 어차피 볼트를 직접 읽을 수 있습니다. 호출하는 세션에 주입되는 금지 사항이 실측으로 효과가 있는 부분입니다.
+**템플릿**은 `Templates`의 행입니다: Work Note, Decision Record, Thinking Note, Competency Note, Review Template.
 
 ---
 
 ## 📅 일일 워크플로우
 
-**아침**: `/om-standup`을 실행합니다. 에이전트가 North Star, 활성 프로젝트, 미완료 작업, 최근 변경사항을 로드합니다. 구조화된 요약과 추천 우선순위를 받습니다.
+**아침**: `/om-standup`을 실행합니다. 에이전트가 North Star, 활성 프로젝트, 미완료 작업, 최근 변경을 로드합니다. 구조화된 요약과 우선순위 제안을 받습니다.
 
-**하루 중**: 자연스럽게 이야기하세요. 내린 결정, 발생한 인시던트, 방금 마친 1:1, 기억하고 싶은 성과를 언급하세요. 분류 훅이 에이전트가 각 항목을 올바르게 기록하도록 안내합니다. 더 큰 브레인 덤프를 하려면 `/om-dump`을 사용하고 한 번에 모든 것을 이야기하세요.
+**하루 동안**: 자연스럽게 말하세요. 내린 결정, 일어난 인시던트, 방금 한 1:1, 기억하고 싶은 성과를 언급하세요. 분류 훅이 각 내용을 올바른 데이터베이스에 저장하도록 에이전트를 이끕니다. 큰 브레인 덤프에는 `/om-dump`를 쓰고 모든 것을 한 번에 말하세요.
 
-**하루 끝**: "wrap up"이라고 말하면 에이전트가 `/om-wrap-up`을 호출합니다 — 노트 검증, 인덱스 업데이트, 링크 확인, 누락된 성과 발견.
+**하루의 끝**: "wrap up"이라고 말하면 에이전트가 `/om-wrap-up`을 호출합니다. 행을 확인하고, 링크를 검사하고, 기록되지 않은 성과를 찾습니다.
 
-**주간**: `/om-weekly`를 실행하여 세션 간 종합 분석 — North Star 정렬, 패턴, 누락된 성과, 다음 주 우선순위. `/om-vault-audit`를 실행하여 고아 노트, 깨진 링크, 오래된 콘텐츠를 점검합니다.
+**매주**: `/om-weekly`로 세션 전반을 종합합니다. North Star와의 정렬, 패턴, 기록되지 않은 성과, 다음 주 우선순위입니다. `/om-vault-audit`으로 고아 행, 빈 속성, 훅 밖에서 편집된 행을 찾습니다.
 
-**리뷰 시즌**: `/om-review-brief manager`를 실행하면 모든 증거가 이미 링크된 구조화된 리뷰 준비 문서를 받습니다.
+**평가 시즌**: `/om-review-brief manager`를 실행하면 증거가 이미 연결된 평가 준비 문서를 받습니다.
 
 ---
 
-## 🛠️ 명령어
+## 🛠️ 명령
 
-`.claude/commands/`에 정의되어 있습니다. 모든 Claude Code 세션에서 실행할 수 있습니다.
+`.claude/commands/`에 정의되어 있습니다. Claude Code에서 실행합니다.
 
-| 명령어 | 기능 |
+| 명령 | 하는 일 |
 |---------|-------------|
-| `/om-standup` | 아침 킥오프 — 컨텍스트 로드, 어제 리뷰, 작업 표면화, 우선순위 제안 |
-| `/om-dump` | 자유 형식 캡처 — 무엇이든 자연스럽게 이야기하면 올바른 노트로 라우팅 |
-| `/om-wrap-up` | 전체 세션 리뷰 — 노트, 인덱스, 링크 검증, 개선사항 제안 |
-| `/om-humanize` | 목소리 보정 편집 — Claude가 작성한 텍스트를 본인이 쓴 것처럼 수정 |
-| `/om-weekly` | 주간 종합 — 세션 간 패턴, North Star 정렬, 누락된 성과 |
-| `/om-prep-1on1` | 1:1 준비 — 상대방 컨텍스트, 미해결 항목, 제안 안건 로드 |
-| `/om-meeting` | 주제별 미팅 준비 — 미해결 항목, 차단 요소, 고려사항 브리핑 |
-| `/om-intake` | 미팅 노트 수신함 처리 — `work/meetings/`의 파일을 분류하고 적절한 노트로 라우팅 |
-| `/om-capture-1on1` | 1:1 미팅 트랜스크립트를 구조화된 볼트 노트로 캡처 |
-| `/om-incident-capture` | Slack/채널의 인시던트를 구조화된 노트로 캡처 |
-| `/om-slack-scan` | Slack 채널/DM을 깊이 스캔하여 증거 수집 |
-| `/om-peer-scan` | 동료의 GitHub PR을 깊이 스캔하여 리뷰 준비 |
-| `/om-review-brief` | 리뷰 브리프 생성 (매니저 또는 동료 버전) |
-| `/om-self-review` | 리뷰 시즌을 위한 자기 평가 작성 — 프로젝트, 역량, 원칙 |
-| `/om-review-peer` | 동료 리뷰 작성 — 프로젝트, 원칙, 성과 요약 |
-| `/om-correct` | 수정된 사실을 일괄 반영 — 단일 출처에 적용하고, 재진술은 링크로 대체하며, 날짜가 있는 기록은 보존 |
-| `/om-vault-audit` | 인덱스, 링크, 고아 노트, 오래된 컨텍스트 감사 |
-| `/om-vault-upgrade` | 기존 볼트에서 콘텐츠 가져오기 — 버전 감지, 분류, 마이그레이션 |
-| `/om-project-archive` | 완료된 프로젝트를 active/에서 archive/로 이동, 인덱스 업데이트 |
-| `/om-tidy` | 자체 유지보수 — 위생 플래그에 따라 완료 노트 아카이브, 클러스터 폴더화, 비대 노트 분할을 수행. 삭제도 커밋도 하지 않음 |
+| `/om-standup` | 아침 킥오프: 맥락을 로드하고, 어제를 돌아보고, 작업을 보여 주고, 우선순위를 제안합니다 |
+| `/om-dump` | 자유 형식 기록: 무엇이든 자연스럽게 말하면 각 내용을 올바른 행으로 보냅니다 |
+| `/om-wrap-up` | 세션 전체 검토: 행, 링크, 속성을 확인하고 개선을 제안합니다 |
+| `/om-humanize` | 목소리 맞춤 편집: Claude가 쓴 초안을 사용자가 쓴 것처럼 다듬습니다 |
+| `/om-weekly` | 주간 종합: 세션 전반의 패턴, North Star 정렬, 기록되지 않은 성과 |
+| `/om-capture-1on1` | 1:1 회의 기록을 구조화된 `Work` 행으로 저장합니다 |
+| `/om-incident-capture` | Slack의 인시던트를 구조화된 행으로 기록합니다 |
+| `/om-slack-scan` | Slack 채널과 DM에서 증거를 깊이 스캔합니다 |
+| `/om-peer-scan` | 평가 준비를 위해 동료의 GitHub PR을 깊이 스캔합니다 |
+| `/om-review-brief` | 평가 브리프(매니저용 또는 동료용)를 생성합니다 |
+| `/om-self-review` | 평가 시즌의 자기 평가를 씁니다: 프로젝트, 역량, 원칙 |
+| `/om-review-peer` | 동료 평가를 씁니다: 프로젝트, 원칙, 성과 요약 |
+| `/om-tidy` | 자체 유지보수: 모든 위생 지적에 대응합니다. 완료, 묶기, 나누기. 삭제하지 않습니다 |
+| `/om-correct` | 정정된 사실을 일괄 반영합니다: 단일 출처에 적용하고, 반복된 서술은 링크로 바꾸고, 날짜가 있는 기록은 보존합니다 |
+| `/om-vault-audit` | 속성, 링크, 고아, 뷰, 훅 밖에서 편집된 행을 감사합니다 |
+| `/om-prep-1on1` | 1:1 준비: 사람의 맥락, 미해결 항목, 안건 제안 |
+| `/om-meeting` | 주제별 회의 준비: 미해결 항목과 고려 사항이 있는 브리핑 |
+| `/om-intake` | 회의 노트 받은편지함 처리: 받은편지함 항목을 분류하고 올바른 행으로 보냅니다 |
+| `/om-project-archive` | 완료된 프로젝트를 완료로 표시해 활성 뷰에서 뺍니다 |
 
 ---
 
 ## 🤖 서브에이전트
 
-격리된 컨텍스트 윈도우에서 실행되는 전문 에이전트입니다. 메인 대화를 오염시키지 않고 무거운 작업을 처리합니다.
+격리된 컨텍스트 창에서 실행되는 전문 에이전트입니다. 무거운 작업을 메인 대화를 채우지 않고 처리합니다.
 
-| 에이전트 | 용도 | 호출 방법 |
+| 에이전트 | 목적 | 호출 위치 |
 |-------|---------|------------|
-| `brag-spotter` | 누락된 성과와 역량 격차 발견 | `/om-wrap-up`, `/om-weekly` |
-| `context-loader` | 인물, 프로젝트, 개념에 대한 모든 볼트 컨텍스트 로드 | 직접 호출 |
-| `cross-linker` | 누락된 위키링크, 고아 노트, 깨진 백링크 발견 | `/om-vault-audit` |
-| `people-profiler` | Slack 프로필에서 인물 노트를 일괄 생성/업데이트 | `/om-incident-capture` |
-| `review-prep` | 리뷰 기간의 모든 성과 증거 집계 | `/om-review-brief` |
-| `slack-archaeologist` | 전체 Slack 복원 — 모든 메시지, 스레드, 프로필 | `/om-incident-capture` |
-| `vault-librarian` | 심층 볼트 유지보수 — 고아 노트, 깨진 링크, 오래된 노트 | `/om-vault-audit` |
-| `review-fact-checker` | 리뷰 초안의 모든 주장을 볼트 소스와 대조 검증 | `/om-self-review`, `/om-review-peer` |
-| `vault-migrator` | 소스 볼트에서 콘텐츠 분류, 변환, 마이그레이션 | `/om-vault-upgrade` |
+| `brag-spotter` | 기록되지 않은 성과와 역량 격차를 찾습니다 | `/om-wrap-up`, `/om-weekly` |
+| `context-loader` | 사람, 프로젝트, 개념에 대한 Notion 맥락을 모두 로드합니다 | 직접 |
+| `correction-sweep` | 정정된 사실을 다시 서술한 모든 페이지를 찾아 분류합니다. 편집하지 않습니다 | `/om-correct` |
+| `cross-linker` | 없는 관계와 멘션, 고아, 한쪽 방향 링크를 찾습니다 | `/om-vault-audit` |
+| `people-profiler` | Slack 프로필에서 `People` 행을 일괄 생성하거나 갱신합니다 | `/om-incident-capture` |
+| `review-prep` | 평가 기간의 모든 성과 증거를 모읍니다 | `/om-review-brief` |
+| `slack-archaeologist` | Slack 전체 재구성: 모든 메시지, 스레드, 프로필 | `/om-incident-capture` |
+| `vault-librarian` | 워크스페이스 심층 유지보수: 고아, 깨진 링크, 빈 속성, 오래된 행 | `/om-vault-audit` |
+| `review-fact-checker` | 평가 초안의 모든 주장을 Notion 출처와 대조합니다 | `/om-self-review`, `/om-review-peer` |
+| `vault-migrator` | `notion-import.ts`로 Obsidian 템플릿의 Markdown 볼트를 가져옵니다. 승인을 위한 드라이 런, 가져오기, 페이지를 만들지 않아야 하는 두 번째 실행, 각 페이지 검사를 수행합니다 | 직접 |
 
 > [!NOTE]
-> 서브에이전트는 `.claude/agents/`에 정의되어 있습니다. 도메인별 워크플로우를 위해 직접 추가할 수 있습니다.
+> 서브에이전트는 `.claude/agents/`에 정의되어 있습니다. 분야별 워크플로우를 위해 직접 추가할 수 있습니다.
 
 ---
 
 ## 📊 성과 그래프
 
-볼트는 성과 추적 시스템으로도 활용됩니다:
+워크스페이스는 성과 기록 시스템도 겸합니다:
 
-1. **역량 노트**(`perf/competencies/`)가 조직의 역량 프레임워크를 정의합니다 — 역량별로 하나의 노트
-2. **작업 노트**가 `## Related` 섹션에서 역량에 링크하며, 어떤 역량이 발휘되었는지 주석을 답니다
-3. **백링크가 자동으로 축적됩니다** — 리뷰 준비는 각 역량 노트의 백링크 패널을 읽는 것으로 충분합니다
-4. **Brag Doc**가 분기별 성과를 증거 노트 링크와 함께 집계합니다
-5. **`/om-peer-scan`**이 동료의 GitHub PR을 깊이 스캔하고 구조화된 증거를 `perf/evidence/`에 작성합니다
-6. **`/om-review-brief`**가 모든 것을 집계하여 전체 리뷰 브리프를 생성합니다: Brag 항목, 의사결정, 인시던트, 역량 증거, 1:1 피드백
+1. **`Competencies` 행**이 조직의 역량 체계를 정의합니다. 역량마다 한 행입니다
+2. **작업 행**은 `Competencies` 관계를 설정하고, 보여 준 것을 본문에 씁니다
+3. **증거가 자동으로 쌓입니다**: 역관계 `Evidence`와 `Evidence count` 롤업이 채워지고, Competency Map 뷰가 그것으로 정렬합니다
+4. **`Perf docs`의 brag quarter**가 분기별 성과를 `Work evidence`와 함께 모읍니다
+5. **`/om-peer-scan`**은 동료의 GitHub PR을 깊이 스캔하고 `Type`이 PR evidence인 `Perf docs` 행을 씁니다
+6. **`/om-review-brief`**는 brag quarter, 결정, 인시던트, 역량 증거, 1:1 피드백으로 평가 브리프를 만듭니다
 
 > [!TIP]
-> 시작하려면: 템플릿에서 역량 노트를 만들고, 작업하면서 작업 노트에 역량을 링크하세요. 그래프가 나머지를 처리합니다.
+> 시작 방법: 템플릿으로 역량 행을 만들고, 작업 행을 그것에 연결해 나가세요. 나머지는 그래프가 합니다.
 
 ---
 
-## 📋 Bases
+## 🧪 Obsidian 버전과의 동등성
 
-`bases/` 폴더에는 노트의 프론트매터 속성을 쿼리하는 데이터베이스 뷰가 있습니다. 노트가 변경되면 자동으로 업데이트됩니다.
+커밋 `fae7be4`는 마지막 Obsidian 버전이며 각 훅의 기준입니다. `.claude/scripts/parity/`의 동등성 하네스는 그 커밋의 훅을 Markdown 픽스처 볼트에서, 포팅한 훅을 Notion의 같은 노트에서 실행하고 지적, 노트, 개수를 비교합니다:
 
-| Base | 표시 내용 |
-|------|-------|
-| Work Dashboard | 분기별 필터링, 상태별 그룹화된 활성 프로젝트 — 14일 이상 손대지 않은 활성 노트를 보여주는 Stale Actives 뷰 포함 |
-| Recently Touched | 실제 수정 시각 순의 모든 노트 — "최근 무엇을 작업했나"에 대한 정확한 답 (살아있는 노트에서 파일명 날짜는 믿을 수 없음) |
-| Incidents | 심각도와 날짜순으로 정렬된 모든 인시던트 |
-| People Directory | `org/people/`의 모든 인물과 역할, 팀 정보 |
-| 1:1 History | 인물과 날짜로 정렬 가능한 모든 1:1 노트 |
-| Review Evidence | 인물과 주기별로 그룹화된 PR 스캔 및 증거 |
-| Competency Map | 백링크 기반 증거 수를 포함한 역량 목록 |
-| Templates | 모든 템플릿에 대한 빠른 접근 |
-
-`Home.md`가 이 뷰들을 임베드하여 볼트의 대시보드 역할을 합니다.
-
----
-
-## 📁 볼트 구조
-
-```
-Home.md                 볼트 진입점 — 임베드된 Base 뷰, 바로가기 링크
-CLAUDE.md               운영 매뉴얼 — 에이전트가 매 세션마다 읽음
-AGENTS.md               멀티에이전트 가이드 — Codex, Cursor, Windsurf 등
-GEMINI.md               멀티에이전트 가이드 — Gemini CLI
-vault-manifest.json     템플릿 메타데이터 — 버전, 구조, 스키마
-.shardmindignore        `shardmind install`에서 제외되는 파일 (CONTRIBUTING, 번역, 마케팅 미디어)
-CHANGELOG.md            버전 히스토리
-CONTRIBUTING.md         템플릿 개발 체크리스트
-README.md               제품 문서
-LICENSE                 MIT 라이선스
-
-bases/                  동적 데이터베이스 뷰 (Work Dashboard, Incidents, People 등)
-
-work/
-  active/               현재 프로젝트 (한 번에 1–3개 파일)
-  archive/YYYY/         완료된 작업, 연도별 정리
-  incidents/            인시던트 문서 (메인 노트 + RCA + 심층 분석)
-  1-1/                  1:1 미팅 노트 — <Person> YYYY-MM-DD.md 형식
-  Index.md              모든 작업의 Map of Content
-
-org/
-  people/               인물별 노트 — 역할, 팀, 관계, 주요 순간
-  teams/                팀별 노트 — 구성원, 범위, 상호작용
-  People & Context.md   조직 지식의 MOC
-
-perf/
-  Brag Doc.md           증거에 링크된 성과 기록
-  brag/                 분기별 Brag 노트 (분기당 하나)
-  competencies/         역량별 노트 (링크 대상)
-  evidence/             PR 심층 스캔, 리뷰용 데이터 추출
-  <cycle>/              리뷰 주기별 브리프 및 산출물
-
-brain/
-  North Star.md         목표와 집중 영역 — 매 세션마다 읽음
-  Memories.md           메모리 토픽 인덱스
-  Key Decisions.md      중요한 의사결정과 근거
-  Patterns.md           작업 전반에서 관찰된 반복 패턴
-  Gotchas.md            잘못된 것들과 그 이유
-  Skills.md             커스텀 워크플로우와 슬래시 명령어
-
-reference/              코드베이스 지식, 아키텍처 맵, 플로우 문서
-thinking/               초안을 위한 스크래치패드 — 결과 정리 후 삭제
-templates/              YAML 프론트매터가 포함된 Obsidian 템플릿
-
-.claude/
-  commands/             18개 슬래시 명령어
-  agents/               9개 서브에이전트
-  scripts/              훅 스크립트 + charcount.ts 유틸리티
-  skills/               Obsidian + QMD 스킬, obsidian-mind mod
-  settings.json         5개 훅 설정
-
-.scripts/                볼트 수준 도구 — QMD 부트스트랩 (새 클론에서 한 번 실행)
-
-.shardmind/             ShardMind 사이드카 — `shardmind install`로 설치한 경우에만 사용
-  shard.yaml            매니페스트 (이름, 버전, 모듈, 훅)
-  shard-schema.yaml     마법사 값 + 모듈 게이팅
-  hooks/                bootstrap (git 초기화 + QMD), personalize (North Star), post-update
+```bash
+cd .claude/scripts
+node --experimental-strip-types parity/run-parity.ts                       # the reference against itself
+node --experimental-strip-types parity/run-parity.ts --notion --hook validate-write
+node --experimental-strip-types parity/run-mutations.ts --notion --hook validate-write
 ```
 
-> [!NOTE]
-> `.shardmind/`는 **추가 기능이며, 필수 요소가 아닙니다.** 클론하여 열기만 하는 볼트는 이 파일을 읽지 않으며, `shardmind` CLI만 사용합니다. 삭제해도 볼트는 계속 작동합니다. v6 레이아웃 계약은 [shardmind/docs/SHARD-LAYOUT.md](https://github.com/breferrari/shardmind/blob/main/docs/SHARD-LAYOUT.md)를 참조하세요.
+`--notion`에는 픽스처용 두 번째 루트가 필요합니다. `notion-setup.ts --root-title "obsidian-mind parity fixtures" --map notion-map.fixtures.json`으로 만들고 `parity/write-notion-fixture.ts`로 채웁니다. `npm test`는 같은 비교를 대체 런타임으로 오프라인 실행합니다. 라이브 테스트는 `NOTION_LIVE=1`과 맵 파일이 있을 때만 실행되고, 그 밖에는 건너뜁니다. 각 검사와 알려진 차이의 기록은 [`NOTION-PORT-DESIGN.md`](NOTION-PORT-DESIGN.md)의 파트 (d)입니다.
 
 ---
 
-## 📝 템플릿
+## 📥 기존 볼트 가져오기
 
-YAML 프론트매터가 포함된 템플릿으로, 각각 점진적 공개를 위한 `description` 필드를 포함합니다:
+`notion-import.ts`는 Obsidian 템플릿의 Markdown 볼트를 워크스페이스로 옮깁니다 ([#14](https://github.com/willtn/notion-mind/pull/14)). 가져오기에는 맵 파일이 필요하므로 먼저 설정을 실행하세요. 그다음 저장소 루트에서 다음 명령을 실행합니다.
 
-- **Work Note** — 날짜, 설명, 프로젝트, 상태, 분기, 태그
-- **Decision Record** — 날짜, 설명, 상태 (proposed/accepted/deprecated), 담당자, 맥락
-- **Thinking Note** — 날짜, 설명, 맥락, 태그 (스크래치패드 — 정리 후 삭제)
-- **Competency Note** — 날짜, 설명, 현재 레벨, 목표 레벨, 숙련도 표
-- **1:1 Note** — 날짜, 상대방, 핵심 요점, 액션 아이템, 인용, 주시 사항
-- **Incident Note** — 날짜, 티켓, 심각도, 역할, 타임라인, 근본 원인, 영향
+```bash
+node --experimental-strip-types .claude/scripts/notion-import.ts --vault ../my-vault --dry-run
+node --experimental-strip-types .claude/scripts/notion-import.ts --vault ../my-vault
+node --experimental-strip-types .claude/scripts/notion-import.ts --vault ../my-vault --verify
+```
 
----
-
-## 🔧 포함 항목
-
-### 🧩 Obsidian 스킬
-
-[kepano/obsidian-skills](https://github.com/kepano/obsidian-skills)가 `.claude/skills/`에 사전 설치되어 있습니다:
-
-- **obsidian-markdown** — Obsidian 특화 마크다운 (위키링크, 임베드, 콜아웃, 속성)
-- **obsidian-cli** — 볼트 운영을 위한 CLI 명령어
-- **obsidian-bases** — 데이터베이스 스타일 `.base` 파일
-- **json-canvas** — 시각적 `.canvas` 파일 생성
-- **defuddle** — 웹 페이지를 마크다운으로 추출
-
-### 🔍 QMD 스킬
-
-`.claude/skills/qmd/`에 있는 커스텀 스킬로, Claude가 [QMD](https://github.com/tobi/qmd) 시맨틱 검색을 능동적으로 사용하도록 합니다 — 파일을 읽기 전, 노트 생성 전(중복 확인), 노트 생성 후(링크할 관련 콘텐츠 탐색).
+드라이 런은 Notion을 호출하지 않습니다. 각 노트의 위치, 가져오기가 제외하는 각 파일, 형식을 잃는 각 구문을 출력합니다. 가져오기는 볼트를 읽기만 하고 변경하지 않습니다. 각 노트는 자신의 경로를 `Source path` 속성에 가진 행이 됩니다. 그래서 두 번째 실행은 페이지를 만들지 않고, 변경된 노트만 씁니다. `--verify`는 각 페이지를 가져와 계획과 비교합니다. `vault-migrator` 서브에이전트가 이 단계들을 실행하고, 드라이 런 뒤에 승인을 요청합니다.
 
 ---
 
-## 🎨 커스터마이즈
+## ⚠️ 알려진 제한
 
-이것은 출발점입니다. 자신의 업무 방식에 맞게 조정하세요:
+아래 각 제한은 링크된 풀 리퀘스트의 측정에서 나왔습니다.
 
-| 항목 | 위치 |
+- **가드는 협조적인 에이전트를 전제로 합니다.** `notion`이나 `mcporter`라는 단어를 일부러 숨긴 명령, 또는 호출을 담은 스크립트 파일은 가드를 통과합니다. 그런 쓰기는 `Hook stamp` 감사가 나중에 지적합니다. 5초 제한 시간을 넘긴 가드는 호출을 실행되게 둡니다. ([#6](https://github.com/willtn/notion-mind/pull/6))
+- **`mcporter`와 `notion`을 모두 담은 텍스트는 거부되는 명령입니다.** 커밋 메시지나 PR 본문은 파일에 쓰고 `git commit -F`나 `gh pr create --body-file`을 사용하세요. ([#6](https://github.com/willtn/notion-mind/pull/6))
+- **Notion은 클라이언트를 구별하지 못합니다.** 다른 MCP 클라이언트의 쓰기는 훅을 거친 쓰기와 똑같이 보입니다. `Hook stamp` 뷰만 그것을 보여 줍니다. ([#5](https://github.com/willtn/notion-mind/pull/5), [#8](https://github.com/willtn/notion-mind/pull/8))
+- **select는 쓰기에서 새 옵션을 받지 않습니다.** `Quarter`, `Project`, `Cycle`, 레벨 select는 비어 있는 상태로 시작합니다. 새 옵션이 있는 첫 쓰기는 실패하고, 복구 훅이 옵션을 추가하며, 에이전트가 명령을 다시 실행합니다. ([#5](https://github.com/willtn/notion-mind/pull/5), [#8](https://github.com/willtn/notion-mind/pull/8))
+- **빈 속성과 없는 속성은 같은 상태입니다.** 빠진 필드 검사(VW-08)는 빈 속성에서 발동합니다. ([#8](https://github.com/willtn/notion-mind/pull/8))
+- **페이지 멘션은 제목으로 셉니다.** 크기와 링크 검사는 이름 있는 멘션을 `[[Title]]`로 읽습니다. 제목 없는 멘션은 약 60바이트를 더합니다. 관계는 텍스트를 더하지 않습니다. ([#8](https://github.com/willtn/notion-mind/pull/8))
+- **쓰기 훅은 `Quarter`를 설정하지 않습니다.** 기준과 같이, 빠진 `Quarter`는 지적으로 남습니다. ([#8](https://github.com/willtn/notion-mind/pull/8))
+- **요청 한도는 60초에 180회입니다.** 클라이언트는 기다렸다가 다시 시도합니다. 긴 대기는 행에 `Hook stamp`가 없게 만들 수 있고, 훅이 그것을 알립니다. ([#8](https://github.com/willtn/notion-mind/pull/8))
+- **Stop 훅은 매 턴 시간이 듭니다.** 위생 뷰를 병렬로 읽고, 제한 시간은 15초입니다. 데이터베이스 밖의 페이지에는 `Bytes`가 없어서 크기 검사가 지적하지 못합니다. ([#11](https://github.com/willtn/notion-mind/pull/11))
+- **최근 변경은 커밋 제목이 아니라 페이지 제목입니다.** SessionStart는 `Changed`를 읽으므로 Home이나 North Star의 변경은 그 섹션에 나오지 않습니다. 미완료 작업 섹션은 최대 10개 행을 가져옵니다. ([#12](https://github.com/willtn/notion-mind/pull/12))
+- **완료된 노트가 활성 폴더에 남을 수 없습니다.** 상태의 유일한 자리는 `Status`이므로 그 위생 검사(HY-01)에는 Notion 형태가 없습니다. 설계 기록 파트 (f)의 선택 2를 참고하세요.
+- **별칭과 데일리 노트가 없습니다.** 콘텐츠 모델에 별칭 속성과 데일리 노트 유형이 없어서 `cross-linker`, `/om-standup`, `/om-weekly`에서 그 단계가 빠졌습니다. ([#9](https://github.com/willtn/notion-mind/pull/9))
+- **Notion은 수식 텍스트를 돌려주지 않습니다.** 모델의 수식을 바꾼 뒤에는 `--reapply-formulas`로 설정을 실행하세요. ([#5](https://github.com/willtn/notion-mind/pull/5))
+- **루트를 처음 만들 때 응답이 사라지면 그 원장 줄이 남지 않습니다.** 설정은 그래도 수렴합니다. ([#5](https://github.com/willtn/notion-mind/pull/5))
+- **기록 백업은 로컬에 남습니다**. 위치는 `.claude/state/session-logs/`입니다. ([#10](https://github.com/willtn/notion-mind/pull/10))
+
+---
+
+## 📁 저장소 구조
+
+```
+obsidian-mind/
+├── AGENTS.md                      # The operating manual, read every session
+├── vault-manifest.json            # Root marker of the hooks, and hook settings
+├── notion-map.example.json        # Shape of notion-map.json (the real one is not committed)
+├── NOTION-PORT-DESIGN.md          # The design record of the Notion port
+├── brain/Skills.md                # The command catalog
+└── .claude/
+    ├── commands/                  # Slash commands
+    ├── agents/                    # Subagents
+    ├── rules/                     # Rules that Claude Code loads beside AGENTS.md
+    ├── skills/                    # defuddle, mermaid-visualizer, and the obsidian-mind mod
+    ├── settings.json              # Hook configuration
+    └── scripts/
+        ├── session-start.ts, classify-message.ts, guard-notion-write.ts,
+        │   validate-write.ts, pre-compact.ts, stop-checklist.ts   # The hooks
+        ├── notion-setup.ts        # Builds the workspace and writes notion-map.json
+        ├── notion-import.ts       # Moves a Markdown vault of the Obsidian template into the workspace
+        ├── scaffold/              # Source text of the scaffold pages and the templates
+        ├── lib/                   # The Notion client, the model, the checks
+        ├── parity/                # The parity harness
+        └── tests/                 # npm test
+```
+
+---
+
+## 🎨 사용자 지정
+
+이것은 출발점입니다. 일하는 방식에 맞게 바꾸세요:
+
+| 대상 | 위치 |
 |------|-------|
-| 목표 | `brain/North Star.md` — 모든 세션의 기준 |
-| 조직 | `org/` — 매니저, 팀, 핵심 협력자 추가 |
-| 역량 | `perf/competencies/` — 조직의 프레임워크에 맞추기 |
-| 도구 | `.claude/commands/` — GitHub 조직, Slack 워크스페이스에 맞게 편집 |
-| 규칙 | `CLAUDE.md` — 운영 매뉴얼, 진행하면서 발전시키기 |
-| 도메인 | 폴더 추가, `.claude/agents/`에 서브에이전트 추가, `.claude/scripts/`에 분류 규칙 추가 |
+| 목표 | North Star 페이지: 모든 세션의 기반입니다 |
+| 조직 | `People`, `Teams`, People & Context 페이지 |
+| 역량 | `Competencies`: 조직의 체계에 맞춥니다 |
+| 도구 | `.claude/commands/`: GitHub 조직과 Slack 워크스페이스에 맞게 편집합니다 |
+| 규칙 | `AGENTS.md`: 운영 매뉴얼. 사용하면서 발전시킵니다(Claude Code 전용 추가는 `.claude/rules/`) |
+| 모델 | `.claude/scripts/lib/notion-model.ts`: 데이터베이스, 속성, 뷰. 바꾼 뒤 설정을 다시 실행합니다 |
 
 > [!IMPORTANT]
-> `CLAUDE.md`는 운영 매뉴얼입니다. 규칙을 변경하면 이 파일을 업데이트하세요 — 에이전트가 매 세션마다 읽습니다.
+> `AGENTS.md`는 운영 매뉴얼입니다. 규칙을 바꾸면 업데이트하세요. 에이전트는 매 세션 그것을 읽습니다.
 
 ---
 
-## 🔄 업그레이드
-
-### 에이전트에게 요청하기
-
-가장 간단한 방법 — 에이전트에게 말하세요:
-
-```
-이 볼트를 최신 obsidian-mind로 업데이트해줘 https://github.com/breferrari/obsidian-mind
-```
-
-에이전트가 최신 변경사항을 가져오고, 충돌을 해결하고, 인프라 파일을 업데이트합니다. Claude Code, Codex CLI, Gemini CLI 모두에서 작동합니다.
-
-### 기존 클론 업데이트
-
-리포지토리를 직접 클론한 경우:
+## 🔄 업데이트
 
 ```bash
-cd your-vault
-git pull origin main
+git pull
+node --experimental-strip-types .claude/scripts/notion-setup.ts
 ```
 
-새 파일(`AGENTS.md`, `GEMINI.md`, `.codex/`, `.gemini/`)이 자동으로 추가되고 훅 스크립트도 업데이트됩니다.
+pull은 훅, 명령, 규칙을 업데이트합니다. 설정은 새 버전의 모델에 필요한 것만 추가하고 다른 것은 만들지 않습니다. 노트는 Notion에 남고 변경되지 않습니다.
 
-### 포크 업데이트
+---
 
-리포지토리를 포크한 경우:
+## 🩺 문제 해결
 
-```bash
-git remote add upstream https://github.com/breferrari/obsidian-mind.git
-git fetch upstream
-git merge upstream/main
-```
+**Claude Code가 규칙을 무시합니다.** Claude Code는 `AGENTS.md` 대신 `CLAUDE.md`를 읽고 `AGENTS.md`를 말없이 건너뜁니다. 저장소 루트에 `CLAUDE.md`가 있으면 위생 지적에 `CLAUDE.md present beside AGENTS.md`가 나옵니다. 추가한 내용을 `.claude/rules/local.md`나 `AGENTS.md`로 옮기고 `CLAUDE.md`를 삭제하세요. 저장소보다 위 폴더의 `CLAUDE.md`도 같은 결과를 내며, 이 지적으로는 보이지 않습니다.
 
-커스터마이징한 파일(일반적으로 `CLAUDE.md`, `brain/` 노트)의 충돌을 해결하세요. 인프라 파일(`.claude/scripts/`, `.codex/`, `.gemini/`)은 깔끔하게 병합됩니다.
+**Notion 명령이 거부됩니다.** 이유를 읽으세요. 허용된 형식이 나와 있습니다. 대부분 읽기에 파이프나 리다이렉트가 있거나, 커밋 메시지에 `mcporter`와 `notion`이 모두 있습니다. [`.claude/rules/notion-calls.md`](.claude/rules/notion-calls.md)를 참고하세요.
 
-### 기존 클론을 ShardMind로 채택 (v5.x → v6)
+**섹션에 `(not read: …)`가 나옵니다.** SessionStart나 Stop이 워크스페이스의 그 부분을 읽지 못했습니다. `mcporter auth notion`을 확인한 뒤 `node --experimental-strip-types .claude/scripts/notion-setup.ts --check`를 실행하세요.
 
-이미 obsidian-mind를 클론했고 커스터마이징을 잃지 않고 마법사, 선택적 모듈, 3-way 머지 업그레이드를 원하시나요? `shardmind adopt`가 기존 볼트를 관리되는 v6 설치로 조정해줍니다 — 편집한 모든 바이트를 유지하면서 `.shardmind/` 사이드카와 `shard-values.yaml`만 추가합니다:
-
-```bash
-npm install -g shardmind
-shardmind adopt github:breferrari/obsidian-mind
-```
-
-2-way diff UI가 로컬 변경 사항을 안내하고, 파일별로 무엇을 유지할지 묻고, 엔진 메타데이터를 작성합니다. 결과: 기존 콘텐츠가 그대로 유지된 v6 관리 볼트, 이후로는 `shardmind update`를 사용할 수 있습니다. 다시 클론할 필요 없음.
-
-### 이전 볼트에서 마이그레이션 (또는 다른 볼트)
-
-v5 이전 버전의 obsidian-mind를 사용 중이거나, 완전히 다른 Obsidian 볼트에서 마이그레이션하시나요? `/om-vault-upgrade` 명령어가 최신 템플릿으로 콘텐츠를 마이그레이션합니다:
-
-```bash
-# 1. 최신 obsidian-mind 클론
-git clone https://github.com/breferrari/obsidian-mind.git ~/new-vault
-
-# 2. 에이전트로 열기
-cd ~/new-vault && claude   # 또는 codex, gemini
-
-# 3. 이전 볼트를 지정하여 업그레이드 실행
-/om-vault-upgrade ~/my-old-vault
-```
-
-에이전트가 수행하는 작업:
-1. **감지** — 볼트 버전 확인 (v1–v3.x, 또는 obsidian-mind가 아닌 볼트 식별)
-2. **인벤토리** — 모든 파일을 사용자 콘텐츠, 스캐폴드, 인프라, 미분류로 분류
-3. **마이그레이션 계획 제시** — 복사, 변환, 건너뛸 항목을 정확히 보여줌
-4. **승인 후 실행** — 프론트매터 변환, 위키링크 수정, 인덱스 재구축
-5. **검증** — 고아 노트, 깨진 링크, 누락된 프론트매터 확인
-
-기존 볼트는 **절대 수정되지 않습니다**. `--dry-run`을 사용하면 실행 없이 계획만 미리 볼 수 있습니다.
-
-> [!NOTE]
-> obsidian-mind뿐만 아니라 모든 Obsidian 볼트에서 작동합니다. obsidian-mind가 아닌 볼트의 경우, 에이전트가 각 노트를 읽고 의미적으로 분류합니다 — 작업 노트, 인물, 인시던트, 1:1, 의사결정을 올바른 폴더로 라우팅합니다.
+**설정이 워크스페이스에서 멈춥니다.** `--workspace-id`와 맵 파일은 둘 다 워크스페이스를 지정합니다. 로그인이 다른 워크스페이스이면 설정이 멈춥니다. 올바른 워크스페이스에 로그인하거나 이전 `notion-map.json`을 옮기세요.
 
 ---
 
 ## 🗺️ 로드맵
 
-**이슈와 버그 보고를 환영합니다.** 코드 기여는 할당제로 진행됩니다. 이슈에 댓글로 작업 의사를 밝히고, 할당된 뒤에 PR을 열어 주세요. 본인에게 할당되지 않은 이슈에 대한 PR은 리뷰 없이 닫힙니다. 자세한 내용은 [CONTRIBUTING.md](CONTRIBUTING.md)를 참고하세요.
+**이슈와 버그 보고를 환영합니다.** 코드 기여는 배정 방식입니다. 이슈에 댓글로 요청하고, 배정된 뒤 PR을 여세요. 배정되지 않은 이슈의 PR은 리뷰 없이 닫힙니다. [CONTRIBUTING.md](CONTRIBUTING.md)를 참고하세요.
 
 ---
 
-## 🙏 디자인 영향
+## 🙏 설계에 영향을 준 것
 
-- [kepano/obsidian-skills](https://github.com/kepano/obsidian-skills) — 공식 Obsidian 에이전트 스킬
-- [James Bedford](https://x.com/jameesy) — 볼트 구조 철학, AI 생성 콘텐츠 분리
-- [arscontexta](https://github.com/agenticnotetaking/arscontexta) — description 필드를 통한 점진적 공개, 세션 훅
+- [kepano/obsidian-skills](https://github.com/kepano/obsidian-skills): Obsidian 버전의 에이전트 스킬
+- [James Bedford](https://x.com/jameesy): 볼트 구조 철학, AI 생성 콘텐츠의 분리
+- [arscontexta](https://github.com/agenticnotetaking/arscontexta): description 필드를 통한 점진적 공개, 세션 훅
 
 ---
 
-## 👤 저자
+## 👤 만든 사람
 
-**[Brenno Ferrari](https://brennoferrari.com)** 제작 — 베를린의 시니어 iOS 엔지니어, Claude Code로 개발자 도구를 구축하고 있습니다.
+**[Brenno Ferrari](https://brennoferrari.com)**가 만들었습니다. 베를린의 시니어 iOS 엔지니어로, Claude Code로 개발자 도구를 만듭니다.
 
 ---
 

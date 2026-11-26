@@ -61,27 +61,21 @@ describe("AGENTS.md is the one instruction file (#321)", () => {
 	const pointerTargets = (): string[] => [
 		...new Set([...readFileSync(agentsPath, "utf-8").matchAll(/`(\.claude\/rules\/[\w.-]+\.md)`/g)].map((m) => m[1]!)),
 	];
-	const SHARED_LINE =
-		"Shared section: Claude Code and Grok load it at session start; other agents read it when AGENTS.md points here.";
-
-	test("every rules file AGENTS.md points at exists, is non-empty, and says it is shared", () => {
+	test("every rules file AGENTS.md points at exists and is non-empty", () => {
 		const targets = pointerTargets();
 		assert.ok(targets.length > 0, "AGENTS.md names no .claude/rules/ file: the moved sections have no pointer");
 		for (const t of targets) {
 			const p = resolve(repoRoot, t);
 			assert.ok(existsSync(p), `AGENTS.md points at ${t}, which does not exist`);
-			const text = readFileSync(p, "utf-8");
-			assert.ok(text.trim().length > 0, `${t} is empty`);
-			assert.equal(text.split("\n")[0], SHARED_LINE, `${t} does not open with the shared-section line`);
+			assert.ok(readFileSync(p, "utf-8").trim().length > 0, `${t} is empty`);
 		}
 	});
 
-	test("every shared rules file is pointed at by AGENTS.md, so no agent but Claude Code and Grok is cut off from it", () => {
+	test("AGENTS.md points at every rules file, so it is the index of the rules", () => {
 		const targets = new Set(pointerTargets());
 		const dir = resolve(repoRoot, ".claude/rules");
 		for (const f of readdirSync(dir).filter((n) => n.endsWith(".md"))) {
-			const shared = readFileSync(resolve(dir, f), "utf-8").startsWith(SHARED_LINE);
-			assert.equal(targets.has(`.claude/rules/${f}`), shared, `.claude/rules/${f}: ${shared ? "shared but AGENTS.md never points at it" : "Claude-only but AGENTS.md points at it"}`);
+			assert.ok(targets.has(`.claude/rules/${f}`), `.claude/rules/${f}: AGENTS.md never points at it`);
 		}
 	});
 

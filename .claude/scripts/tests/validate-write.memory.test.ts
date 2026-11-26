@@ -30,7 +30,7 @@ describe("validate-write memory guard — fires on misplaced memory files", () =
 		assert.equal(code, 0);
 		assert.match(stdout, /Memory location violation/);
 		assert.match(stdout, /feedback_x\.md/);
-		assert.match(stdout, /brain\//);
+		assert.match(stdout, /the `Patterns` row of `Knowledge`/);
 	});
 
 	test("emits the machine-readable policy result next to the prose (#117)", () => {
@@ -45,7 +45,7 @@ describe("validate-write memory guard — fires on misplaced memory files", () =
 				policy_id: "memory-location",
 				path: "/Users/foo/.claude/projects/-Users-foo-dev-bar/memory/notes.md",
 				classification: "misplaced-memory",
-				suggested_target: "brain/",
+				suggested_target: "the brain topic rows of `Knowledge`",
 				action: "warn",
 			},
 		]);

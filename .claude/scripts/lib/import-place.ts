@@ -10,7 +10,7 @@
  *     destinationOf(note("Home.md"))               // { kind: "skip", reason: "The setup builds the Home page from linked views." }
  */
 
-import { PAGES, SCAFFOLD_SOURCES, type DatabaseKey, type PageKey } from "./notion-model.ts";
+import { PAGES, type DatabaseKey, type PageKey, type ScaffoldSource } from "./notion-model.ts";
 import type { FieldValue, SourceNote } from "./import-source.ts";
 
 export type Destination =
@@ -77,9 +77,30 @@ interface PagePart {
 	readonly section: string | undefined;
 }
 
-/** The part of the body of a page of the setup that each file gives, from the `body` of `PAGES`. */
+/**
+ * The path in a vault of the template of each scaffold file that is the
+ * body of a page of the setup. The import reads a vault, so it needs this
+ * path. `SCAFFOLD_SOURCES` has the path of the copy that the setup reads
+ * from the repository.
+ */
+const VAULT_PATH_OF_SOURCE: Readonly<Partial<Record<ScaffoldSource, string>>> = {
+	north_star: "brain/North Star.md",
+	memories: "brain/Memories.md",
+	key_decisions: "brain/Key Decisions.md",
+	patterns: "brain/Patterns.md",
+	gotchas: "brain/Gotchas.md",
+	people_and_context: "org/People & Context.md",
+	work_index: "work/Index.md",
+};
+
+/** The part of the body of a page of the setup that each file gives, from the `body` of `PAGES`. A source with no file in a vault gives no part. */
 const PAGE_PART_OF_FILE: ReadonlyMap<string, PagePart> = new Map(
-	PAGES.flatMap((page) => page.body.map((part) => [SCAFFOLD_SOURCES[part.source], { page: page.key, parent: page.parent, type: page.properties?.["Type"] ?? null, section: part.section }] as const)),
+	PAGES.flatMap((page) =>
+		page.body.flatMap((part) => {
+			const path = VAULT_PATH_OF_SOURCE[part.source];
+			return path === undefined ? [] : [[path, { page: page.key, parent: page.parent, type: page.properties?.["Type"] ?? null, section: part.section }] as const];
+		}),
+	),
 );
 
 /** The page of the setup that a link to `path` names when the import makes no page for that file, or `undefined`. */

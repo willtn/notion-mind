@@ -20,7 +20,7 @@ A PR for an issue that isn't assigned to you is closed without review. Trivial t
 **Small fixes need an assigned issue too.** For bigger changes, agree the approach on the issue before writing code, such as:
 
 - Rewrites, migrations, or language swaps
-- New commands, agents, hooks, or vault structure
+- New commands, agents, hooks, or changes to the Notion content model
 - Anything that touches the install story or runtime requirements
 - Anything listed as self-owned in the [Roadmap](README.md#roadmap) section of the README
 
@@ -95,17 +95,17 @@ type: short description
 
 ## Template Development Checklist
 
-When adding or modifying commands, agents, hooks, or vault structure, **all of these files must stay in sync**:
+When adding or modifying commands, agents, hooks, or the content model, **all of these files must stay in sync**:
 
 | File | What to update |
 |------|---------------|
-| `AGENTS.md` | Vault structure table (no command table and no counts: Write-Correctness law 6) |
+| `AGENTS.md` | Vault structure table and note types (no command table and no counts: Write-Correctness law 6) |
 | `.claude/rules/subagents.md` | Agent table |
-| `.claude/rules/hooks-per-agent.md`, `.claude/rules/hooks-and-mod.md` | Hook tables, when a hook or its event changes |
-| `README.md` | Command table, agent table, vault structure diagram, counts |
+| `.claude/rules/hooks-and-mod.md`, `ARCHITECTURE.md` | Hook tables, when a hook, its event, or its timeout changes |
+| `README.md` | Command table, agent table, workspace and repository structure, known limits |
 | `README.ja.md`, `README.ko.md`, `README.zh-CN.md` | Same as README, in the respective language |
 | `brain/Skills.md` | Command tables (by category), subagents table, workflows |
-| `bases/*.base` | If new properties or note types are added |
+| `.claude/scripts/lib/notion-model.ts` | If new databases, properties, views, or note types are added. Run the setup again |
 
 ## What NOT to Update
 
@@ -122,9 +122,9 @@ The release pipeline handles these automatically — **do not include in your PR
 - [ ] A code change comes with a test that fails on `main` and passes with it
 - [ ] Counts match everywhere (commands, agents) if you added/removed any
 - [ ] New command/agent appears in ALL doc tables (README + Skills.md, and `.claude/rules/subagents.md` for an agent)
-- [ ] New, renamed or removed command: its Gemini wrapper is regenerated (`node --experimental-strip-types .scripts/gemini-commands.ts`)
+- [ ] New or changed command or agent: `node --experimental-strip-types .claude/scripts/check-commands-agents.ts` finds nothing
 - [ ] Translations flagged if you changed README.md (maintainer can handle these)
-- [ ] Tests pass: `cd .claude/scripts && npm test`
+- [ ] Tests and typecheck pass: `cd .claude/scripts && npm test && npm run typecheck`
 - [ ] Any NEW guard, check, or config constraint has [demonstrated a red](#new-guards-must-demonstrate-a-red), recorded in the PR
 - [ ] Examples use generic dates and names, not specific to any company or person
 
@@ -132,9 +132,12 @@ The release pipeline handles these automatically — **do not include in your PR
 
 ```bash
 cd .claude/scripts && npm test
+cd .claude/scripts && npm run typecheck   # after: npm install --no-save typescript@5.6.3 @types/node@22.9.0
 ```
 
-Tests run automatically on PRs that touch `.claude/scripts/`.
+Tests run automatically on PRs that touch `.claude/scripts/`, the settings, the manifest, `AGENTS.md`, the rules, the commands, or the agents.
+
+The live tests run only with `NOTION_LIVE=1` and a map file, and skip in each other run. The parity tests need the reference commit `fae7be4` in the clone, so CI makes a full checkout. To run a hook against the live workspace, see the parity section of the README: it needs a second root for the fixtures, and one live run at a time, because a run makes about 180 calls in a minute.
 
 ### New guards must demonstrate a red
 
@@ -152,7 +155,12 @@ This is **not** a demand for permanent negative-fixture CI jobs on every guard �
 
 Every other check confirms that a hook **ran**. The delivery gate confirms what **arrived**: it runs real Claude Code sessions in throwaway vaults and asks the model to quote the end of its session context and a marker from its middle, at startup, after `/compact`, after `/clear` and (with the mod) from a general-purpose subagent, with the `obsidian-mind` mod and with the settings hooks alone. Hook output past 10,000 characters once reached the model as a 2,000-character preview while every log said success (#254); this is the check that catches that class.
 
-It needs a logged-in `claude` and costs model turns, so it runs by hand, not in CI. Before the README or `mod.yml` pins a Claude Code version:
+It needs a logged-in `claude` and costs model turns, so it runs by hand, not in CI.
+
+> [!WARNING]
+> The gate builds its throwaway vaults from local files. After the Notion port, SessionStart reads the workspace through `notion-map.json`, so a throwaway vault with no map file gives a context of `(not read: …)` sections. The gate needs a fixture root before it proves delivery again. Until that rework, its result is not verified for this version.
+
+Before the README or `mod.yml` pins a Claude Code version:
 
 1. Once: make an empty folder, open it in Claude Code and accept the trust prompt. The gate builds its vaults there, so the mod loads the way a user's does (a headless session cannot accept trust).
 2. Run:

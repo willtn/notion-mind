@@ -475,6 +475,14 @@ describe("expectedViewRows", () => {
 		assert.deepEqual(loops.hookLeavesOut, ["Legacy Importer"]);
 	});
 
+	test("the watched folders are the `open_loop_dirs` of the manifest of the spec", () => {
+		const manifest = JSON.parse(SPEC.repoFiles.find(({ path }) => path === "vault-manifest.json")?.content ?? assert.fail("no manifest")) as Record<string, unknown>;
+		const incidentsOnly: FixtureSpec = { ...SPEC, repoFiles: [{ path: "vault-manifest.json", content: JSON.stringify({ ...manifest, open_loop_dirs: ["work/incidents"] }) }] };
+		const loops = expectedViewRows(incidentsOnly).find(({ view }) => view === "Hygiene: open loops") ?? assert.fail("no view");
+		assert.deepEqual(loops.titles, ["Ada Park 2026-02-07", "Outage"]);
+		assert.deepEqual(loops.hookLeavesOut, ["Ada Park 2026-02-07"]);
+	});
+
 	test("each expected view is a view of the model", () => {
 		for (const expectation of expectedViewRows(FIXTURE)) {
 			const database = DATABASES.find((d) => d.key === expectation.database) ?? assert.fail(`no database ${expectation.database}`);

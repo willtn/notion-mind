@@ -1,12 +1,10 @@
-Shared section: Claude Code and Grok load it at session start; other agents read it when AGENTS.md points here.
-
 ## Thinking Workflow
 
-Use `thinking/` for drafts, reasoning, and analysis before writing final notes. **Thinking notes are scratchpads, not storage.** They exist to help you reason -- once the reasoning produces durable knowledge, promote it to proper notes and delete the scratchpad.
+Use a `Work` row with `Type` Thinking for drafts, reasoning, and analysis before you write final notes. **Thinking rows are scratchpads, not storage.** They help you reason. When the reasoning gives durable knowledge, promote it to proper rows and archive the scratchpad.
 
-1. Create a thinking note: `thinking/YYYY-MM-DD-descriptive-name.md`
+1. Create a `Work` row with `Type` Thinking and a dated title, such as `YYYY-MM-DD descriptive name`
 2. Use the Thinking Note template
 3. Reason through the problem, analyze options, draft content
-4. Promote findings to atomic notes in the correct folder (not one monolith -- one note per distinct concept)
-5. Delete the thinking note -- it served its purpose
-6. If the thinking process itself is worth preserving (unusual), keep it but link to the promoted notes
+4. Promote findings to atomic rows in the correct database (not one monolith: one row per distinct concept). Set `Feeds into` to each row that the thinking feeds
+5. Set the `Status` of the thinking row to `archived`. It served its purpose
+6. If the thinking process itself is worth keeping (unusual), keep it active and mention the promoted rows

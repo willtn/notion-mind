@@ -177,7 +177,7 @@ export const SIGNALS: readonly Signal[] = [
 	{
 		name: "ARCHITECTURE",
 		message:
-			"ARCHITECTURE discussion — consider creating a reference note in reference/ or a decision record",
+			"ARCHITECTURE discussion — consider creating a `Knowledge` row with `Type` Reference or a decision record",
 		patterns: [
 			// English
 			"architecture",

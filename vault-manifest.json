@@ -2,11 +2,6 @@
   "template": "obsidian-mind",
   "version": "10.0.0",
   "released": "2026-10-12",
-  "open_loop_dirs": [
-    "work/1-1",
-    "work/meetings",
-    "work/incidents"
-  ],
   "open_loop_types": [
     "1:1",
     "Inbox item",
@@ -19,52 +14,6 @@
   "eager_layer_budget_bytes": 9000,
   "eager_layer_instruction_budget_bytes": 20000,
   "listing_collapse_threshold": 12,
-  "infrastructure": [
-    "AGENTS.md",
-    "Home.md",
-    "README.md",
-    "README.*.md",
-    "CHANGELOG.md",
-    "CONTRIBUTING.md",
-    "ARCHITECTURE.md",
-    "LICENSE",
-    ".gitignore",
-    ".claude/**",
-    "templates/**",
-    "bases/**",
-    "vault-manifest.json",
-    "obsidian-mind-logo.png",
-    "obsidian-mind-demo.gif",
-    "brain/Skills.md",
-    "perf/competencies/README.md",
-    "thinking/README.md",
-    "work/meetings/README.md"
-  ],
-  "scaffold": {
-    "brain/North Star.md": "Personal goals — replace if source has real content",
-    "brain/Memories.md": "Memory index — replace if source has entries beyond template stubs",
-    "brain/Key Decisions.md": "Decision log — replace if non-empty",
-    "brain/Patterns.md": "Observed patterns — replace if non-empty",
-    "brain/Gotchas.md": "Known gotchas — replace if non-empty",
-    "work/Index.md": "Work notes MOC — replace if has real entries",
-    "org/People & Context.md": "People MOC — replace if has real entries",
-    "perf/Brag Doc.md": "Brag doc index — replace if has entries"
-  },
-  "user_content_roots": [
-    "work/active/",
-    "work/archive/",
-    "work/incidents/",
-    "work/1-1/",
-    "org/people/",
-    "org/teams/",
-    "perf/brag/",
-    "perf/evidence/",
-    "perf/h*-*/",
-    "perf/competencies/*.md",
-    "brain/*.md",
-    "reference/",
-    "memories/"
-  ],
   "frontmatter_required": {
     "global": [
       "date",

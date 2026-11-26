@@ -10,6 +10,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { countTicketIdWikilinks, isBlockedMemoryPath, parseFrontmatterRequired } from "../lib/frontmatter.ts";
+import { SCAFFOLD_SOURCES } from "../lib/notion-model.ts";
 
 const VAULT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 
@@ -33,7 +34,7 @@ describe("parseFrontmatterRequired", () => {
 	test("the shipped Work Note template declares every field the shipped manifest requires of a work note", () => {
 		const manifest = JSON.parse(readFileSync(join(VAULT, "vault-manifest.json"), "utf-8"));
 		const required = parseFrontmatterRequired(manifest);
-		const template = readFileSync(join(VAULT, "templates", "Work Note.md"), "utf-8");
+		const template = readFileSync(join(VAULT, SCAFFOLD_SOURCES.template_work_note), "utf-8");
 		const block = template.split(/\r?\n/).slice(1, template.split(/\r?\n/).indexOf("---", 1));
 		const keys = new Set(block.flatMap((line) => /^([A-Za-z_][\w-]*)\s*:/.exec(line)?.[1] ?? []));
 		const missing = [...(required["global"] ?? []), ...(required["work-note"] ?? [])].filter((field) => !keys.has(field));

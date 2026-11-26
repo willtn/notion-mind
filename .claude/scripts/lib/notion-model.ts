@@ -93,21 +93,21 @@ export interface TemplateSpec {
  * changes only this table.
  */
 export const SCAFFOLD_SOURCES = {
-	north_star: "brain/North Star.md",
-	memories: "brain/Memories.md",
-	key_decisions: "brain/Key Decisions.md",
-	patterns: "brain/Patterns.md",
-	gotchas: "brain/Gotchas.md",
-	people_and_context: "org/People & Context.md",
-	work_index: "work/Index.md",
-	competencies_readme: "perf/competencies/README.md",
-	thinking_readme: "thinking/README.md",
-	meetings_readme: "work/meetings/README.md",
-	template_work_note: "templates/Work Note.md",
-	template_decision_record: "templates/Decision Record.md",
-	template_thinking_note: "templates/Thinking Note.md",
-	template_competency_note: "templates/Competency Note.md",
-	template_review: "templates/Review Template.md",
+	north_star: ".claude/scripts/scaffold/North Star.md",
+	memories: ".claude/scripts/scaffold/Memories.md",
+	key_decisions: ".claude/scripts/scaffold/Key Decisions.md",
+	patterns: ".claude/scripts/scaffold/Patterns.md",
+	gotchas: ".claude/scripts/scaffold/Gotchas.md",
+	people_and_context: ".claude/scripts/scaffold/People & Context.md",
+	work_index: ".claude/scripts/scaffold/Work Index.md",
+	competencies_readme: ".claude/scripts/scaffold/Competencies README.md",
+	thinking_readme: ".claude/scripts/scaffold/Thinking README.md",
+	meetings_readme: ".claude/scripts/scaffold/Meetings README.md",
+	template_work_note: ".claude/scripts/scaffold/Template Work Note.md",
+	template_decision_record: ".claude/scripts/scaffold/Template Decision Record.md",
+	template_thinking_note: ".claude/scripts/scaffold/Template Thinking Note.md",
+	template_competency_note: ".claude/scripts/scaffold/Template Competency Note.md",
+	template_review: ".claude/scripts/scaffold/Template Review.md",
 } as const;
 
 export type ScaffoldSource = keyof typeof SCAFFOLD_SOURCES;
