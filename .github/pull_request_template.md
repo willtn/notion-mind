@@ -24,5 +24,5 @@
 - [ ] A code change comes with a test that fails on `main` and passes with it
 - [ ] Tests pass (`cd .claude/scripts && npm test`)
 - [ ] Any NEW guard, check, or config constraint has demonstrated a red — broken deliberately, seen to fire, reverted. Say which, in one line
-- [ ] Doc tables updated if adding commands/agents (AGENTS.md, README, Skills.md, translations)
+- [ ] Doc tables updated if adding commands/agents (README and translations, brain/Skills.md, .claude/rules/subagents.md)
 - [ ] No changes to CHANGELOG.md or vault-manifest.json version (automated by release pipeline)

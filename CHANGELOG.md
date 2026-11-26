@@ -1,5 +1,33 @@
 # Changelog
 
+## v11.0.0 — unreleased
+
+The Notion port. One Notion workspace is now the only store of notes. Obsidian and the local Markdown notes are no longer a source of truth. The release job replaces this section with the generated one.
+
+### Changed
+- store every note in one Notion workspace: seven databases, scaffold pages, saved views, and templates under one root page
+- write only from a Claude Code session that loads the hooks, through `mcporter`, with the JSON arguments in an outbox file
+- read the workspace from any client through Notion MCP
+- check each Notion write after the call and set the derived properties of its row (`Bytes`, `Open tasks`, `Open loops`, `Has content`, `Changed`, `Hook stamp`)
+- read the workspace in the SessionStart and Stop hooks, and raise the Stop timeout from 5 s to 15 s
+- back up the transcript before compaction to `.claude/state/session-logs/`
+- port the commands and the subagents to Notion rows, relations, mentions, and views
+- describe the Notion architecture in the README, its translations, `ARCHITECTURE.md`, `AGENTS.md`, and the rules
+
+### Added
+- add `notion-setup.ts`, which builds the content model and writes `notion-map.json`
+- add the `PreToolUse` guard that passes a Notion command only in a form that a hook can read
+- add the `PostToolUseFailure` repair that adds a missing select option
+- add the parity harness that compares each ported hook with the hook at `fae7be4`
+- add `check-commands-agents.ts`, the static check and the link check of the commands and the subagents
+- add `.claude/rules/notion-calls.md` with the write form, the read form, and the forms for text that names both words
+
+### Removed
+- remove the local search tool, the `om` server, cross-repository memory, and the hooks for other agents
+- remove ShardMind, the upgrade path, the Obsidian CLI rules, and the Obsidian skills
+- remove the local note tree, the Bases, and the vault zip of the release
+- remove `tidy-fix.ts` and the auto-memory index script
+
 ## v10.0.0 — 2026-10-12
 
 ### Added
