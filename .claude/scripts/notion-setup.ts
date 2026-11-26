@@ -33,6 +33,7 @@ import {
 	columnType,
 	DATABASES,
 	droppedDirectives,
+	extraFilters,
 	firstParagraph,
 	mergeOptions,
 	PAGES,
@@ -395,12 +396,14 @@ export async function runSetup(client: NotionClient, options: SetupOptions): Pro
 		if (found !== undefined) {
 			reconcile("view", notionId(found.url), `${where}: ${found.name}`);
 			const wasPending = found.name === pendingName || (options.reapplyFormulas === true && view.probe !== undefined);
-			const modelChanged = droppedDirectives(view, found).length > 0;
+			const modelChanged = droppedDirectives(view, found).length > 0 || extraFilters(view, found).length > 0;
 			if (!modelChanged) return { saved: found, pending: wasPending, created: false };
 			await client.call("notion-update-view", { view_id: found.url, configure: viewDirectives(view) });
 			const saved = parseViews(await client.call("notion-fetch", { id: found.url }))[0] ?? fail(`Notion did not return the view "${found.name}" of ${where} after its update.`);
 			options.log(`updated view: ${where}: ${found.name}`);
 			checkSaved(view, saved, where);
+			const extra = extraFilters(view, saved);
+			if (extra.length > 0) fail(`The view "${saved.name}" of ${where} still filters these properties after its update: ${extra.join(", ")}.`);
 			const mustRunTestRowsAgain = view.probe !== undefined;
 			return { saved, pending: wasPending || mustRunTestRowsAgain, created: false };
 		}

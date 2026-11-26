@@ -7,6 +7,11 @@
     "work/meetings",
     "work/incidents"
   ],
+  "open_loop_types": [
+    "1:1",
+    "Inbox item",
+    "Incident"
+  ],
   "open_loop_sections": [
     "action items",
     "what to watch"

@@ -120,6 +120,9 @@ export function classifyReply(raw: unknown): ReplyOutcome {
 		const body = parseJson(text);
 		const code = isRecord(body) && typeof body["code"] === "string" ? body["code"] : "";
 		const message = isRecord(body) && typeof body["message"] === "string" ? body["message"] : text;
+		// A view query that Notion limits fails inside the query: the message ends with the HTTP status, and it names no wait
+		// (measured: 233 such replies in a run of about 150 view queries in each 60 s).
+		if (/\(429\)\s*$/.test(message)) return { kind: "rate_limited", waitMs: DEFAULT_WAIT_MS };
 		if (/plan_required|upgrade_required|full_version_required/.test(text)) {
 			return { kind: "error", code: "plan_required", message };
 		}

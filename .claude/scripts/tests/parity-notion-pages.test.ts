@@ -467,6 +467,14 @@ describe("expectedViewRows", () => {
 		assert.deepEqual(expectedViewRows(SPEC).flatMap((expectation) => expectation.hookLeavesOut), []);
 	});
 
+	test("an old note with open loops outside the watched folders is a row of the open-loops view, and the expectation names it for the hook", () => {
+		const archived: FixtureNote = { ...note("Export Pipeline"), title: "Legacy Importer", fields: { ...note("Export Pipeline").fields, status: "completed" }, body: "# Legacy Importer\n\nWaiting on the data team.\n", changedDaysAgo: 90 };
+		const young: FixtureNote = { ...archived, title: "New Importer", changedDaysAgo: 13 };
+		const loops = expectedViewRows({ ...SPEC, notes: [...SPEC.notes, archived, young] }).find(({ view }) => view === "Hygiene: open loops") ?? assert.fail("no view");
+		assert.deepEqual(loops.titles, ["Ada Park 2026-02-07", "Legacy Importer", "Outage"]);
+		assert.deepEqual(loops.hookLeavesOut, ["Legacy Importer"]);
+	});
+
 	test("each expected view is a view of the model", () => {
 		for (const expectation of expectedViewRows(FIXTURE)) {
 			const database = DATABASES.find((d) => d.key === expectation.database) ?? assert.fail(`no database ${expectation.database}`);

@@ -3,16 +3,22 @@
  * IDs, and each hook process calls the stand-in runtime of
  * `_fake-notion.ts`. A test of a ported hook runs the parity comparison on
  * it, so `npm test` shows a difference before a live run does.
+ *
+ * A view query gets the rows that the filters of the model give for the
+ * fixture notes. This file has a stand-in for each formula that a filter
+ * reads, because the formula text runs only in Notion. The run on the real
+ * workspace is the proof of the formulas.
  */
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseOpenLoopConfig } from "../lib/active-hygiene.ts";
 import type { NotionMap } from "../lib/notion-map.ts";
+import { DATABASES, type Filter, type ViewSpec } from "../lib/notion-model.ts";
 import { createArguments, hookFormOf } from "../parity/notion-form.ts";
-import { storedBody, targetOf, type NoteContext, type PageRef } from "../parity/notion-pages.ts";
-import { isLooseActive, type FixtureNote, type FixtureSpec, type HookForm } from "../parity/spec.ts";
-import { fakeMap, fakeNotion, fakeUrl, fetchedPage, type FakeCall } from "./_fake-notion.ts";
+import { desiredValues, propertyArguments, storedBody, targetOf, type NoteContext, type PageRef, type Values } from "../parity/notion-pages.ts";
+import { changedAt, isLooseActive, type FixtureNote, type FixtureSpec, type HookForm } from "../parity/spec.ts";
+import { fakeMap, fakeNotion, fakeUrl, fetchedPage, viewRows, type FakeCall } from "./_fake-notion.ts";
 
 export interface OfflineNotion {
 	readonly map: NotionMap;
@@ -38,6 +44,27 @@ export function storedPageReply(note: FixtureNote, id: string, map: NotionMap, c
 	});
 }
 
+const DAY_MS = 86_400_000;
+const yesNo = (test: boolean): string => (test ? "yes" : "no");
+
+/** The value of each formula that a view of the model filters, for one note. */
+const FORMULAS: Readonly<Record<string, (note: FixtureNote, values: Values, now: Date) => string>> = {
+	Stale: (note, _values, now) => yesNo(Math.floor((now.getTime() - changedAt(note, now).getTime()) / DAY_MS) >= 14),
+	"Older than 7 days": (note, _values, now) => yesNo(Math.floor((now.getTime() - changedAt(note, now).getTime()) / DAY_MS) >= 7),
+	Oversized: (note, values) => yesNo(typeof values["Bytes"] === "number" && values["Bytes"] >= 25_000 && !note.title.includes("Archive")),
+};
+
+function passes(filter: Filter, note: FixtureNote, values: Values, now: Date): boolean {
+	const value = FORMULAS[filter.property]?.(note, values, now) ?? values[filter.property] ?? null;
+	if ("is" in filter) return value === filter.is;
+	if ("in" in filter) return typeof value === "string" && filter.in.includes(value);
+	if ("empty" in filter) return value === null;
+	if ("above" in filter) return typeof value === "number" && value > filter.above;
+	throw new Error(`The stand-in has no test for the filter of "${filter.property}".`);
+}
+
+const inView = (view: ViewSpec, note: FixtureNote, values: Values, now: Date): boolean => (view.filters ?? []).every((filter) => passes(filter, note, values, now));
+
 /** `dir` gets the map file. `now` is the instant that the note ages count from. */
 export function offlineNotion(spec: FixtureSpec, dir: string, now: Date): OfflineNotion {
 	const { map, nextId } = fakeMap();
@@ -47,11 +74,23 @@ export function offlineNotion(spec: FixtureSpec, dir: string, now: Date): Offlin
 			return [note.title, { id, url: fakeUrl(id), target: targetOf(note) }] as const;
 		}),
 	);
-	const looseActive = spec.notes.filter(isLooseActive).map((note) => ({ Name: note.title, url: pages.get(note.title)?.url }));
+	const context = { now, openLoopSections: parseOpenLoopConfig(spec.repoFiles.find((file) => file.path === "vault-manifest.json")?.content ?? null).sectionRe, pages };
+	const byView: Record<string, string> = {};
+	for (const database of DATABASES) {
+		const rows = spec.notes.flatMap((note) => {
+			const target = targetOf(note);
+			if (target.kind !== "row" || target.database !== database.key) return [];
+			const values = desiredValues(note, database.key, context);
+			return [{ note, values, row: { Name: note.title, url: pages.get(note.title)?.url, ...propertyArguments(values, database.key) } }];
+		});
+		for (const view of database.views) {
+			const url = map.databases[database.key].views[view.name];
+			if (url !== undefined) byView[url] = viewRows(rows.filter(({ note, values }) => inView(view, note, values, now)).map(({ row }) => row));
+		}
+	}
 	const mapFile = join(dir, "notion-map.offline.json");
 	writeFileSync(mapFile, JSON.stringify(map));
 
-	const context = { now, openLoopSections: parseOpenLoopConfig(spec.repoFiles.find((file) => file.path === "vault-manifest.json")?.content ?? null).sectionRe, pages };
 	const stored = Object.fromEntries(
 		spec.notes
 			.filter((note) => targetOf(note).kind !== "scaffold")
@@ -66,7 +105,7 @@ export function offlineNotion(spec: FixtureSpec, dir: string, now: Date): Offlin
 	const notionEnv = (tools: string): Record<string, string> => {
 		mkdirSync(tools, { recursive: true });
 		const fake = fakeNotion(tools, {
-			"notion-query-data-sources": JSON.stringify({ results: looseActive, has_more: false }),
+			"notion-query-data-sources": { byView },
 			"notion-update-page": JSON.stringify({ result: "ok" }),
 			"notion-fetch": { byId: stored },
 		});

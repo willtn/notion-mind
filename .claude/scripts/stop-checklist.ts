@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Conversation-boundary hook: the wrap-up checklist plus concrete
- * vault-hygiene findings.
+ * Conversation-boundary hook: the wrap-up checklist plus the hygiene
+ * findings of the Notion workspace (lib/hygiene-scan.ts).
  *
  * Claude Code calls it on Stop, which fires after EVERY response, not at the
  * end of the session. An unconditional report there repeats unchanged drift on
@@ -51,17 +51,13 @@ import { readOmMod } from "./lib/om-mod.ts";
 import { envPath } from "./lib/env-path.ts";
 import { HANDOFF_DIR, pruneHandoffs, writeHandoff } from "./lib/stop-handoff.ts";
 import { AGENT_PREFACE, FEEDBACK_PREFACE, FEEDBACK_TRAILER, MOD_PREFACE, stopSummary } from "./lib/stop-report.ts";
-import {
-	formatActiveHygiene,
-	HYGIENE_VOLATILE_FIELDS,
-	hygieneClaims,
-	parseOpenLoopConfig,
-	scanActiveHygiene,
-} from "./lib/active-hygiene.ts";
-import { parseInfraRootFilenames } from "./lib/session-start.ts";
+import { parseOpenLoopConfig } from "./lib/active-hygiene.ts";
+import { formatHygiene, HYGIENE_VOLATILE_FIELDS, hygieneClaims, hygieneNotRead, scanHygiene, type HygieneReport } from "./lib/hygiene-scan.ts";
 import { claimChanged } from "./lib/hint-state.ts";
+import { notionMapPath, readNotionMap, type NotionMap } from "./lib/notion-map.ts";
 import { reportKey } from "./lib/report-key.ts";
 import { resolveProjectDir } from "./lib/project-dir.ts";
+import { lazyNotion, NOTION_BUDGET_MS } from "./lib/write-hook.ts";
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 // The last report each session was shown (lib/hint-state.ts, the same
@@ -99,8 +95,8 @@ if ((input?.stop_hook_active === true || input?.stopHookActive === true) && omMo
 
 // Each item as the full report says it and as the user's summary says it.
 const CHECKLIST_ITEMS: readonly (readonly [full: string, short: string])[] = [
-	["Archive completed projects? (work/active/ -> work/archive/YYYY/)", "archive completed work"],
-	["Update indexes? (Index.md, Memories.md, People & Context, Brag Doc)", "update indexes"],
+	["Archive completed projects? (`Status` active -> completed or archived)", "archive completed work"],
+	["Update indexes? (Home, North Star, People & Context)", "update indexes"],
 	["New notes linked? (orphans are bugs)", "link new notes"],
 	["Ask the agent to run om-vault-audit if many notes were created/modified", "om-vault-audit if many notes changed"],
 	["To act on any drift, ask the agent to run om-tidy", "ask the agent to run om-tidy for drift"],
@@ -120,20 +116,30 @@ try {
 } catch {
 	/* missing manifest → default open-loop config */
 }
-const report = scanActiveHygiene(
-	vaultRoot,
-	Date.now(),
-	parseOpenLoopConfig(manifestJson),
-	parseInfraRootFilenames(manifestJson),
-);
-const hygieneLines = formatActiveHygiene(report);
+
+/** Without the map file the scan cannot start. The checklist and the findings of the local files still go out. */
+async function scan(): Promise<HygieneReport> {
+	let map: NotionMap;
+	try {
+		map = readNotionMap(notionMapPath(vaultRoot));
+	} catch (error) {
+		return hygieneNotRead(vaultRoot, "the Notion map file", error);
+	}
+	// The scan sends 9 view queries at one time. With 4 at one time it took 1.4 s, and with all at one time 0.9 to 1.1 s (measured).
+	const notion = lazyNotion(NOTION_BUDGET_MS, { concurrency: 9 });
+	const found = await scanHygiene({ call: notion.call, map, projectDir: vaultRoot, nowMs: Date.now(), watchedTypes: parseOpenLoopConfig(manifestJson).types });
+	await notion.close();
+	return found;
+}
+const report = await scan();
+const hygieneLines = formatHygiene(report);
 
 // No trailing newline: this is a message rendered by the agent's UI, not a
 // line written to a stream.
 const message =
 	checklist +
 	(hygieneLines.length > 0
-		? "\n\nVault Hygiene (drift detected):\n" + hygieneLines.join("\n")
+		? "\n\nWorkspace Hygiene (drift detected):\n" + hygieneLines.join("\n")
 		: "");
 
 // SessionEnd (and any input without a recognisable event, the safe default)

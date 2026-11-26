@@ -13,16 +13,19 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { NotionMap } from "../lib/notion-map.ts";
-import { DATABASES } from "../lib/notion-model.ts";
-import { LOOSE_ACTIVE_VIEW } from "../lib/write-check.ts";
+import { NOTION_MAP_FILE, type NotionMap } from "../lib/notion-map.ts";
+import { DATABASES, type DatabaseKey } from "../lib/notion-model.ts";
 
 /**
  * The reply of each tool: the text of the reply, or `{ error }` for a tool
- * error. A table by ID answers a `notion-fetch` call. A tool that the
- * table does not hold fails, so a test sees each call that it did not plan.
+ * error. A table by ID answers a `notion-fetch` call. A table by view URL
+ * answers a view query, and a view that it does not hold has no rows. A
+ * tool that the table does not hold fails, so a test sees each call that it
+ * did not plan.
  */
-export type FakeReplies = Readonly<Record<string, string | { readonly error: string } | { readonly byId: Readonly<Record<string, string>> }>>;
+export type FakeReplies = Readonly<
+	Record<string, string | { readonly error: string } | { readonly byId: Readonly<Record<string, string>> } | { readonly byView: Readonly<Record<string, string | { readonly error: string }>> }>
+>;
 
 export interface FakeCall {
 	readonly tool: string;
@@ -46,6 +49,10 @@ exports.createRuntime = async () => ({
 		if (reply === undefined) return result(JSON.stringify({ code: "not_planned", message: "the test has no reply for " + tool }), true);
 		if (typeof reply === "string") return result(reply);
 		if (typeof reply.error === "string") return result(reply.error, true);
+		if (reply.byView !== undefined) {
+			const rows = reply.byView[String(args.data && args.data.view_url)] ?? JSON.stringify({ results: [], has_more: false });
+			return typeof rows === "string" ? result(rows) : result(rows.error, true);
+		}
 		const text = reply.byId[String(args.id ?? args.page_id).replace(/-/g, "")];
 		return text === undefined ? result(JSON.stringify({ code: "object_not_found", message: "no page" }), true) : result(text);
 	},
@@ -89,7 +96,10 @@ export function fakeMap(): { readonly map: NotionMap; readonly nextId: () => str
 		workspace_id: "offline",
 		root: ref("offline root"),
 		databases: Object.fromEntries(
-			DATABASES.map((database) => [database.key, { ...ref(database.title), data_source: `collection://${nextId()}`, views: { [LOOSE_ACTIVE_VIEW]: `view://${nextId()}` } }]),
+			DATABASES.map((database) => [
+				database.key,
+				{ ...ref(database.title), data_source: `collection://${nextId()}`, views: Object.fromEntries(database.views.map(({ name }) => [name, `view://${nextId()}`])) },
+			]),
 		),
 		pages: { home: ref("Home"), north_star: ref("North Star") },
 		templates: {},
@@ -139,4 +149,49 @@ export function fetchedPage(page: {
 		"</page>",
 	].join("\n");
 	return JSON.stringify({ metadata: { type: "page" }, title: page.title, url: `${url}?pvs=204`, text, ...(titles.length === 0 ? {} : { path: titles.join(" / ") }) });
+}
+
+/** The reply of a view query with these rows on one page. */
+export const viewRows = (rows: readonly Readonly<Record<string, unknown>>[]): string => JSON.stringify({ results: rows, has_more: false });
+
+/**
+ * A project directory with a map file, a manifest, and a stand-in runtime
+ * that answers each view query. A hook that runs with `env` reads only
+ * these rows.
+ *
+ *     const workspace = fakeWorkspace(dir);
+ *     workspace.setRows("knowledge", "Hygiene: oversized", [{ Name: "Runbook", Bytes: 26_000 }]);
+ *     runScript(HOOK, payload, workspace.env);
+ */
+export interface FakeWorkspace {
+	readonly root: string;
+	/** The variables of the hook process. `CLAUDE_PROJECT_DIR` names `root`. */
+	readonly env: Record<string, string>;
+	readonly map: NotionMap;
+	/** The rows that one view returns from now on, or the error of its query. */
+	readonly setRows: (database: DatabaseKey, view: string, rows: readonly Readonly<Record<string, unknown>>[] | { readonly error: string }) => void;
+	readonly calls: () => FakeCall[];
+}
+
+export function fakeWorkspace(root: string, manifest: Readonly<Record<string, unknown>> = {}): FakeWorkspace {
+	mkdirSync(root, { recursive: true });
+	const { map } = fakeMap();
+	writeFileSync(join(root, "vault-manifest.json"), JSON.stringify(manifest));
+	writeFileSync(join(root, NOTION_MAP_FILE), JSON.stringify(map));
+	const byView: Record<string, string | { readonly error: string }> = {};
+	const tools = join(root, ".fake-notion");
+	const fake = (): FakeNotion => fakeNotion(tools, { "notion-query-data-sources": { byView } });
+	const { env, calls } = fake();
+	return {
+		root,
+		env: { ...env, CLAUDE_PROJECT_DIR: root },
+		map,
+		setRows: (database, view, rows) => {
+			const url = map.databases[database].views[view];
+			if (url === undefined) throw new Error(`The model has no view "${view}" of ${database}.`);
+			byView[url] = "error" in rows ? rows : viewRows(rows);
+			fake();
+		},
+		calls,
+	};
 }
