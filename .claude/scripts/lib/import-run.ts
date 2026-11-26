@@ -264,19 +264,22 @@ const UNDERSCORE_ITALIC = /(^|[^\w*\\])_([^_\s][^_\n]*?)_(?![\w])/g;
 
 /**
  * `content` with the forms that Notion stores in place of what a write
- * sends (measured on the pages of the setup): an empty bullet comes back
- * as a `<ul>` block, `_text_` as `<i>text</i>`, and a table row with each
- * cell trimmed and each separator cell as `---`. A link that `plainText`
- * removes is text on both sides. A line in a code block stays as it is.
+ * sends (measured on the pages of the setup): `_text_` comes back as
+ * `<i>text</i>`, and a table row with each cell trimmed and each separator
+ * cell as `---`. An empty bullet is no text on both sides: Notion stores it
+ * as a `<ul>` block, and drops it at the end of a synced block. A link that
+ * `plainText` removes is text on both sides. A line in a code block stays
+ * as it is.
  */
 function storedForm(content: string): string {
 	let fence = false;
 	return plainText(content)
-		.replace(/<ul>\n<li><\/li>\n<\/ul>/g, "-")
+		.replace(/<ul>\n<li><\/li>\n<\/ul>/g, "")
 		.split("\n")
 		.map((line) => {
 			if (/^\s*(```|~~~)/.test(line)) fence = !fence;
 			if (fence) return line;
+			if (/^\s*-\s*$/.test(line)) return "";
 			if (!TABLE_ROW.test(line)) return line.replace(UNDERSCORE_ITALIC, "$1<i>$2</i>");
 			const cells = line.trim().slice(1, -1).split("|").map((cell) => cell.trim());
 			return `| ${cells.map((cell) => (/^:?-+:?$/.test(cell) ? "---" : cell)).join(" | ")} |`;

@@ -101,6 +101,17 @@ describe("runImport", () => {
 		assert.match(home.content, /<database url="[^"]+" data-source-url="collection:\/\/[^"]+" inline="true"><\/database>\n$/, "the linked view stays");
 	});
 
+	test("an empty bullet at the end of the synced section of North Star makes no write on a second run (measured: Notion drops it)", async () => {
+		const notion = memoryNotion();
+		const files = { ...FILES, "brain/North Star.md": note("tags: [brain]", "# North Star\n\n## Current Focus\n\n_What now?_\n\n-\n\n## Goals\n\n-\n") };
+		await run(notion, files);
+		assert.doesNotMatch(notion.setupPages.north_star.content, /<li><\/li>\n<\/ul>\n<\/synced-block>/);
+		assert.match(notion.setupPages.north_star.content, /## Goals\n\n<ul>\n<li><\/li>\n<\/ul>/);
+		const before = notion.calls.length;
+		assert.deepEqual(counts(await run(notion, files)), { created: 0, updated: 0, unchanged: PLANNED, failed: 0 });
+		assert.deepEqual(writes(notion.calls, before), []);
+	});
+
 	test("a second run makes no write and reports zero new pages", async () => {
 		const notion = memoryNotion();
 		await run(notion);

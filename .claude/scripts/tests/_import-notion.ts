@@ -5,7 +5,8 @@
  * stores a written body in the measured ways of the live runs: a mention
  * gets the title of its page, bold, italic, and code become tags, the
  * lines of one paragraph join with `<br />`, an empty bullet becomes a
- * `<ul>` block, and a table row gets trimmed cells. A text property makes a
+ * `<ul>` block or goes at the end of a synced block, and a table row gets
+ * trimmed cells. A text property makes a
  * link of a token such as `Runbook.md`, as Notion does with a domain.
  * `failAfter` makes a write fail at a chosen point, as a crash or a lost
  * connection does.
@@ -96,7 +97,7 @@ export function memoryNotion(options: { readonly rootTitle?: string; readonly pa
 		const out: string[] = [];
 		let fence = false;
 		let proseAbove = false;
-		for (const line of content.split("\n")) {
+		for (const line of content.replace(/\n-\n<\/synced-block>/g, "\n</synced-block>").split("\n")) {
 			if (line.startsWith("```")) fence = !fence;
 			if (fence || line.startsWith("```")) {
 				out.push(line);
