@@ -1,111 +1,53 @@
 /**
- * Unit tests for lib/active-hygiene.ts — the drift detectors behind the
- * SessionStart/Stop hygiene section and validate-write's write-time flags.
- * Temp-dir fixtures with utimesSync-backdated mtimes; `now` is injected so
- * age thresholds are deterministic.
+ * Unit tests for lib/active-hygiene.ts: the rules and the wording that the
+ * hygiene scan of Notion and the write check share.
  */
 
-import { test, describe, before, after } from "node:test";
+import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import {
-	existsSync,
-	mkdirSync,
-	readdirSync,
-	mkdtempSync,
-	rmSync,
-	symlinkSync,
-	utimesSync,
-	writeFileSync,
-} from "node:fs";
-import { dirname, join } from "node:path";
+import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
 	HYGIENE_LIST_CAP,
-	HYGIENE_VOLATILE_FIELDS,
-	MONOLITH_BYTES,
-	OPEN_LOOP_DAYS,
+	agentsMdLine,
+	agentsMdPastFlag,
 	countOpenLoops,
-	formatActiveHygiene,
 	formatMonolithHint,
+	instructionFileFindings,
+	leftoverLine,
 	namesCapped,
 	isMonolithExempt,
 	topicClusters,
 	parseOpenLoopConfig,
-	scanActiveHygiene,
-	walkMarkdown,
 } from "../lib/active-hygiene.ts";
 
 import { AGENTS_MD_FLAG_BYTES, AGENTS_MD_MAX_BYTES } from "../lib/instruction-files.ts";
-import { reportKey } from "../lib/report-key.ts";
 import { rmTemp } from "./_helpers.ts";
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-const NOW = Date.UTC(2026, 6, 13);
 const DEFAULTS = parseOpenLoopConfig(null);
-
-let ROOT: string;
-
-function writeAged(rel: string, content: string, ageDays: number): void {
-	const full = join(ROOT, rel);
-	writeFileSync(full, content);
-	const t = new Date(NOW - ageDays * DAY_MS);
-	utimesSync(full, t, t);
-}
-
-before(() => {
-	ROOT = mkdtempSync(join(tmpdir(), "active-hygiene-test-"));
-	for (const d of [
-		"work/active/Grouped Topic",
-		"work/1-1",
-		"work/meetings",
-		"work/incidents",
-		"templates",
-	]) {
-		mkdirSync(join(ROOT, d), { recursive: true });
-	}
-});
-
-after(() => {
-	rmTemp(ROOT);
-});
 
 describe("parseOpenLoopConfig", () => {
 	test("defaults when manifest is null or lacks the fields", () => {
 		const cfg = parseOpenLoopConfig(null);
-		assert.deepEqual(cfg.dirs, ["work/1-1", "work/meetings", "work/incidents"]);
 		assert.equal(cfg.sectionRe.test("## Action Items"), true);
 		assert.equal(cfg.sectionRe.test("### What to Watch"), true);
 		assert.equal(cfg.sectionRe.test("## Notes"), false);
 	});
-	test("manifest overrides both dirs and sections", () => {
+	test("manifest overrides the sections", () => {
 		const cfg = parseOpenLoopConfig(
 			JSON.stringify({
-				open_loop_dirs: ["people", "outreach"],
 				open_loop_sections: ["next steps"],
 			}),
 		);
-		assert.deepEqual(cfg.dirs, ["people", "outreach"]);
 		assert.equal(cfg.sectionRe.test("## Next Steps"), true);
 		assert.equal(cfg.sectionRe.test("## Action Items"), false);
 	});
-	test("rejects traversal-shaped dirs: absolute, dot-dot, backslash, drive-letter", () => {
-		const cfg = parseOpenLoopConfig(
-			JSON.stringify({
-				open_loop_dirs: ["../outside", "/etc", "C:evil", "ok/dir", "a\\b", "x/../y"],
-			}),
-		);
-		assert.deepEqual(cfg.dirs, ["ok/dir"]);
-		const allBad = parseOpenLoopConfig(
-			JSON.stringify({ open_loop_dirs: ["../a", "/b"] }),
-		);
-		assert.deepEqual(allBad.dirs, ["work/1-1", "work/meetings", "work/incidents"]);
-	});
-
 	test("malformed values fall back to defaults (incl. regex metachars escaped)", () => {
 		const cfg = parseOpenLoopConfig(
-			JSON.stringify({ open_loop_dirs: [], open_loop_sections: [42] }),
+			JSON.stringify({ open_loop_sections: [42] }),
 		);
-		assert.deepEqual(cfg.dirs, ["work/1-1", "work/meetings", "work/incidents"]);
+		assert.equal(cfg.sectionRe.test("## Action Items"), true);
 		const meta = parseOpenLoopConfig(
 			JSON.stringify({ open_loop_sections: ["a.b (c)"] }),
 		);
@@ -137,169 +79,6 @@ describe("countOpenLoops", () => {
 	});
 });
 
-describe("scanActiveHygiene — detectors", () => {
-	test("flags completed notes in active/ (recursively), ignores active ones", () => {
-		writeAged(
-			"work/active/Live Project.md",
-			"---\nstatus: active\n---\n# live\n",
-			1,
-		);
-		writeAged(
-			"work/active/Grouped Topic/Done Sub.md",
-			"---\nstatus: completed\n---\n# done\n",
-			1,
-		);
-		const report = scanActiveHygiene(ROOT, NOW, DEFAULTS);
-		assert.deepEqual(report.completedInActive, [
-			"work/active/Grouped Topic/Done Sub.md",
-		]);
-	});
-
-	test("clusters loose root notes sharing a distinctive token; DF guard rejects common words", () => {
-		for (const f of [
-			"Payments Migration.md",
-			"Payments Rollout.md",
-			"Hiring Loop.md",
-			"Vendor Selection.md",
-			"Quarterly Budget.md",
-		]) {
-			writeAged(`work/active/${f}`, "# x\n", 1);
-		}
-		const report = scanActiveHygiene(ROOT, NOW, DEFAULTS);
-		const tokens = report.ungroupedClusters.map((c) => c.token);
-		assert.ok(tokens.includes("payments"), `expected payments in ${tokens}`);
-		// Subfoldered notes never cluster; a token in >half the root is rejected.
-		for (const c of report.ungroupedClusters) {
-			assert.ok(!c.files.some((f) => f.includes("/")));
-		}
-	});
-
-	test("flags oversized notes vault-wide, exempts Archive names and skip dirs", () => {
-		writeAged("work/Fat Log.md", "x".repeat(MONOLITH_BYTES + 1000), 1);
-		writeAged("work/Fat Log Archive.md", "x".repeat(60_000), 1);
-		writeAged("templates/Huge Template.md", "x".repeat(60_000), 1);
-		const report = scanActiveHygiene(ROOT, NOW, DEFAULTS);
-		const paths = report.oversizedNotes.map((o) => o.path);
-		assert.ok(paths.includes("work/Fat Log.md"));
-		assert.ok(!paths.some((p) => p.includes("Archive")));
-		assert.ok(!paths.some((p) => p.startsWith("templates/")));
-	});
-
-	test("open loops: quiet notes with live signals flagged; 1:1 dirs reduce to latest per person", () => {
-		writeAged(
-			"work/1-1/Alice 2026-05-01.md",
-			"## Action Items\n- [ ] old carried item\n",
-			70,
-		);
-		writeAged(
-			"work/1-1/Alice 2026-06-20.md",
-			"## Action Items\n- [ ] current item\n",
-			23,
-		);
-		writeAged("work/incidents/Payment Outage.md", "watch for regression\n", 30);
-		writeAged("work/meetings/Fresh Sync.md", "waiting on vendor\n", 2);
-		const report = scanActiveHygiene(ROOT, NOW, DEFAULTS);
-		const paths = report.openLoops.map((l) => l.path);
-		assert.ok(paths.includes("work/1-1/Alice 2026-06-20.md"));
-		assert.ok(!paths.includes("work/1-1/Alice 2026-05-01.md")); // older 1:1 skipped
-		assert.ok(paths.includes("work/incidents/Payment Outage.md"));
-		assert.ok(!paths.includes("work/meetings/Fresh Sync.md")); // too fresh
-		// Oldest first.
-		const ages = report.openLoops.map((l) => l.ageDays);
-		assert.deepEqual(ages, [...ages].sort((a, b) => b - a));
-	});
-
-	test("overlapping configured dirs do not double-count a file", () => {
-		const cfg = parseOpenLoopConfig(
-			JSON.stringify({ open_loop_dirs: ["work", "work/incidents"] }),
-		);
-		const report = scanActiveHygiene(ROOT, NOW, cfg);
-		const hits = report.openLoops.filter(
-			(l) => l.path === "work/incidents/Payment Outage.md",
-		);
-		assert.equal(hits.length, 1);
-	});
-
-	test("meetings-inbox pressure counts week-old raw exports", () => {
-		writeAged("work/meetings/2026-06-01 Raw Export.md", "raw dump", 40);
-		const report = scanActiveHygiene(ROOT, NOW, DEFAULTS);
-		assert.ok(report.inboxPressure !== null);
-		assert.ok(report.inboxPressure!.count >= 1);
-		assert.ok(report.inboxPressure!.oldestDays >= 40);
-	});
-
-	test("the shipped inbox README never counts as pressure (#155)", () => {
-		// Isolated root: the shared fixture already holds a real export, and
-		// the point here is what an *untouched* inbox reports.
-		const solo = mkdtempSync(join(tmpdir(), "active-hygiene-scaffold-"));
-		try {
-			mkdirSync(join(solo, "work/meetings"), { recursive: true });
-			const scaffold = join(solo, "work/meetings/README.md");
-			writeFileSync(scaffold, "# Meeting Notes Inbox\n\nDrop exports here.\n");
-			// Well past the 7-day threshold — the age the flag kept climbing to.
-			const t = new Date(NOW - 96 * DAY_MS);
-			utimesSync(scaffold, t, t);
-
-			// The bug: an inbox holding nothing but its own scaffold flagged
-			// forever, and /om-intake could never clear it.
-			assert.equal(scanActiveHygiene(solo, NOW, DEFAULTS).inboxPressure, null);
-
-			// …while a genuine export beside it still counts, and counts once.
-			const real = join(solo, "work/meetings/2026-04-01 Standup.md");
-			writeFileSync(real, "raw dump");
-			utimesSync(real, t, t);
-			const withExport = scanActiveHygiene(solo, NOW, DEFAULTS).inboxPressure;
-			assert.ok(withExport !== null);
-			assert.equal(withExport!.count, 1);
-		} finally {
-			rmTemp(solo);
-		}
-	});
-
-	test("each previously uncapped hygiene list prints ten entries, then a count of the rest (#254)", () => {
-		const report = (n: number) =>
-			formatActiveHygiene({
-				completedInActive: Array.from({ length: n }, (_, i) => `work/active/Done ${i}.md`),
-				ungroupedClusters: Array.from({ length: n }, (_, i) => ({ token: `topic${i}`, files: ["a.md", "b.md"] })),
-				oversizedNotes: Array.from({ length: n }, (_, i) => ({ path: `notes/Big ${i}.md`, sizeKb: 30 })),
-				openLoops: [],
-				inboxPressure: null,
-				leftoverInstructionFiles: [],
-				agentsMd: null,
-			});
-		const atCap = report(HYGIENE_LIST_CAP);
-		assert.equal(atCap.filter((l) => l.startsWith("   - ")).length, 3 * HYGIENE_LIST_CAP);
-		assert.ok(!atCap.some((l) => l.includes("more")), "a full list at the cap gets no count line");
-
-		const over = report(HYGIENE_LIST_CAP + 1).join("\n");
-		assert.match(over, /11 note\(s\) marked done/, "the headline keeps the full count");
-		assert.match(over, /11 note\(s\) past the/);
-		assert.equal(over.match(/^ {3}- … and 1 more$/gm)?.length, 3, "one count line per list");
-		assert.doesNotMatch(over, /Done 10\.md|topic10|Big 10\.md/);
-	});
-
-	test("a cluster's file names are capped on its line (#254)", () => {
-		const files = Array.from({ length: HYGIENE_LIST_CAP + 3 }, (_, i) => `n${i}.md`);
-		assert.equal(namesCapped(files.slice(0, HYGIENE_LIST_CAP)), files.slice(0, HYGIENE_LIST_CAP).join(", "));
-		assert.match(namesCapped(files), /, n9\.md, … and 3 more$/);
-	});
-
-	test("missing folders produce an empty report, not errors", () => {
-		const empty = mkdtempSync(join(tmpdir(), "active-hygiene-empty-"));
-		try {
-			const report = scanActiveHygiene(empty, NOW, DEFAULTS);
-			assert.deepEqual(report.completedInActive, []);
-			assert.deepEqual(report.ungroupedClusters, []);
-			assert.deepEqual(report.oversizedNotes, []);
-			assert.deepEqual(report.openLoops, []);
-			assert.equal(report.inboxPressure, null);
-			assert.deepEqual(formatActiveHygiene(report), []);
-		} finally {
-			rmTemp(empty);
-		}
-	});
-});
-
 describe("write-time detectors", () => {
 	test("topicClusters gives the cluster of each title word that 2 or more names share, and none for fewer than 4 names", () => {
 		const names = ["Payments Migration", "Payments Ledger", "Search Ranking", "Login Latency"];
@@ -321,60 +100,11 @@ describe("write-time detectors", () => {
 		assert.equal(isMonolithExempt("Delivery Log Archive.md"), true);
 		assert.equal(isMonolithExempt("Delivery Log.md"), false);
 	});
-});
 
-describe("walkMarkdown", () => {
-	test("recurses into subfolders and tolerates missing dirs", () => {
-		const files = walkMarkdown(ROOT, "work/active");
-		assert.ok(files.includes("work/active/Grouped Topic/Done Sub.md"));
-		assert.deepEqual(walkMarkdown(ROOT, "no/such/dir"), []);
-	});
-});
-
-describe("formatActiveHygiene", () => {
-	test("renders one block per drift mode, silent segments omitted", () => {
-		const lines = formatActiveHygiene({
-			completedInActive: ["work/active/Done.md"],
-			ungroupedClusters: [],
-			oversizedNotes: [{ path: "work/Fat.md", sizeKb: 40 }],
-			openLoops: [{ path: "work/1-1/A 2026-01-01.md", ageDays: 20, openItems: 2 }],
-			inboxPressure: null,
-			leftoverInstructionFiles: [],
-			agentsMd: null,
-		});
-		const text = lines.join("\n");
-		assert.match(text, /marked done but still in active\//);
-		assert.match(text, /SPLIT/);
-		assert.match(text, new RegExp(`${OPEN_LOOP_DAYS}\\+ days`));
-		assert.doesNotMatch(text, /om-intake/); // silent segment omitted
-	});
-});
-
-describe("open loops — a capped list keeps its membership as time passes", () => {
-	test("two loops that floor to the same day do not swap across the cap hours later", () => {
-		// Ages 20.9d and 20.1d both floor to 20 and tie; twelve hours later they
-		// floor to 21 and 20. Sorted on floored days, which loop takes the last
-		// slot flips with nothing new; on raw time the older one always wins.
-		const root = mkdtempSync(join(tmpdir(), "open-loop-cap-"));
-		try {
-			const day = 24 * 60 * 60 * 1000;
-			const now = Date.UTC(2026, 6, 13);
-			const aged = (rel: string, ageDays: number) => {
-				const full = join(root, rel);
-				mkdirSync(dirname(full), { recursive: true });
-				writeFileSync(full, "watch for regression\n");
-				const t = new Date(now - ageDays * day);
-				utimesSync(full, t, t);
-			};
-			for (const n of ["One", "Two", "Three", "Four"]) aged(`work/incidents/${n}.md`, 40);
-			aged(`work/incidents/Zed.md`, 20.9);
-			aged(`work/incidents/Abe.md`, 20.1);
-			const at = (t: number) => ((r: string, t: number) => scanActiveHygiene(r, t, DEFAULTS))(root, t).openLoops.map((l) => l.path).sort();
-			assert.deepEqual(at(now), at(now + day / 2));
-			assert.ok(at(now).includes(`work/incidents/Zed.md`));
-		} finally {
-			rmSync(root, { recursive: true, force: true });
-		}
+	test("a cluster's file names are capped on its line (#254)", () => {
+		const files = Array.from({ length: HYGIENE_LIST_CAP + 3 }, (_, i) => `n${i}.md`);
+		assert.equal(namesCapped(files.slice(0, HYGIENE_LIST_CAP)), files.slice(0, HYGIENE_LIST_CAP).join(", "));
+		assert.match(namesCapped(files), /, n9\.md, … and 3 more$/);
 	});
 });
 
@@ -395,11 +125,9 @@ describe("leftover CLAUDE.md beside AGENTS.md (#321)", () => {
 
 	test("flags a CLAUDE.md sitting beside AGENTS.md, with what to do about it", () => {
 		withFiles(["AGENTS.md", "CLAUDE.md"], (root) => {
-			const report = scanActiveHygiene(root, NOW, DEFAULTS);
-			assert.equal(report.leftoverInstructionFiles.includes("CLAUDE.md"), true);
-			const text = formatActiveHygiene(report).join("\n");
+			assert.equal(instructionFileFindings(root).leftoverInstructionFiles.includes("CLAUDE.md"), true);
 			assert.match(
-				text,
+				leftoverLine("CLAUDE.md"),
 				/CLAUDE\.md present beside AGENTS\.md — Claude Code reads CLAUDE\.md and skips AGENTS\.md; move your additions to \.claude\/rules\/ and delete it\./,
 			);
 		});
@@ -407,22 +135,8 @@ describe("leftover CLAUDE.md beside AGENTS.md (#321)", () => {
 
 	test("silent with AGENTS.md alone", () => {
 		withFiles(["AGENTS.md"], (root) => {
-			const report = scanActiveHygiene(root, NOW, DEFAULTS);
-			assert.equal(report.leftoverInstructionFiles.includes("CLAUDE.md"), false);
-			assert.deepEqual(formatActiveHygiene(report), []);
-		});
-	});
-
-	test("a large leftover CLAUDE.md is the leftover flag only, never a note to SPLIT", () => {
-		// CLAUDE.md left the manifest's infrastructure list in the same release,
-		// so the root-infra exemption no longer covers it. Telling the user to
-		// split a file the other flag says to move out and delete would be two
-		// contradictory instructions about one file.
-		withFiles(["AGENTS.md"], (root) => {
-			writeFileSync(join(root, "CLAUDE.md"), "x".repeat(MONOLITH_BYTES + 1000));
-			const report = scanActiveHygiene(root, NOW, DEFAULTS, ["AGENTS.md"]);
-			assert.equal(report.leftoverInstructionFiles.includes("CLAUDE.md"), true);
-			assert.deepEqual(report.oversizedNotes, []);
+			assert.equal(instructionFileFindings(root).leftoverInstructionFiles.includes("CLAUDE.md"), false);
+			assert.equal(agentsMdPastFlag(root), null);
 		});
 	});
 
@@ -432,36 +146,19 @@ describe("leftover CLAUDE.md beside AGENTS.md (#321)", () => {
 		// a case-sensitive filesystem neither finds it.
 		withFiles(["AGENTS.md", "claude.md"], (root) => {
 			const resolves = existsSync(join(root, "CLAUDE.md"));
-			assert.equal(scanActiveHygiene(root, NOW, DEFAULTS).leftoverInstructionFiles.includes("CLAUDE.md"), resolves);
-		});
-	});
-
-	test("a large claude.md is the leftover flag where it resolves as CLAUDE.md, and an oversized note where it does not", () => {
-		withFiles(["AGENTS.md"], (root) => {
-			writeFileSync(join(root, "claude.md"), "x".repeat(MONOLITH_BYTES + 1000));
-			const report = scanActiveHygiene(root, NOW, DEFAULTS, ["AGENTS.md"]);
-			if (existsSync(join(root, "CLAUDE.md"))) {
-				// Windows, macOS: Claude Code loads it, so it is a leftover, never a note to split.
-				assert.equal(report.leftoverInstructionFiles.includes("CLAUDE.md"), true);
-				assert.deepEqual(report.oversizedNotes, []);
-			} else {
-				// A case-sensitive filesystem: no agent loads it, so it is a plain note, and still seen.
-				assert.equal(report.leftoverInstructionFiles.includes("CLAUDE.md"), false);
-				assert.deepEqual(report.oversizedNotes.map((n) => n.path), ["claude.md"]);
-			}
+			assert.equal(instructionFileFindings(root).leftoverInstructionFiles.includes("CLAUDE.md"), resolves);
 		});
 	});
 
 	test("AGENTS.md near where Antigravity stops reading is flagged, with the agent that cuts it off", () => {
 		withFiles([], (root) => {
 			writeFileSync(join(root, "AGENTS.md"), "x".repeat(AGENTS_MD_FLAG_BYTES));
-			const report = scanActiveHygiene(root, NOW, DEFAULTS, ["AGENTS.md"]);
-			assert.deepEqual(report.agentsMd, { sizeKb: 23 });
-			assert.match(formatActiveHygiene(report).join("\n"), /AGENTS\.md is 23KB[\s\S]*Antigravity stopped reading it at ~24,000 bytes/);
+			assert.deepEqual(agentsMdPastFlag(root), { sizeKb: 23 });
+			assert.match(agentsMdLine(23), /AGENTS\.md is 23KB[\s\S]*Antigravity stopped reading it at ~24,000 bytes/);
 		});
 		withFiles([], (root) => {
 			writeFileSync(join(root, "AGENTS.md"), "x".repeat(AGENTS_MD_FLAG_BYTES - 1));
-			assert.equal(scanActiveHygiene(root, NOW, DEFAULTS, ["AGENTS.md"]).agentsMd, null);
+			assert.equal(agentsMdPastFlag(root), null);
 		});
 	});
 
@@ -473,48 +170,9 @@ describe("leftover CLAUDE.md beside AGENTS.md (#321)", () => {
 		assert.ok(AGENTS_MD_FLAG_BYTES < 23_860);
 	});
 
-	test("editing an AGENTS.md that is already flagged is not a new finding (#252)", () => {
-		const keyAt = (bytes: number) =>
-			withScan(bytes, (report) => reportKey({ report }, HYGIENE_VOLATILE_FIELDS));
-		const withScan = <T,>(bytes: number, run: (r: ReturnType<typeof scanActiveHygiene>) => T): T => {
-			let out!: T;
-			withFiles([], (root) => {
-				writeFileSync(join(root, "AGENTS.md"), "x".repeat(bytes));
-				out = run(scanActiveHygiene(root, NOW, DEFAULTS, ["AGENTS.md"]));
-			});
-			return out;
-		};
-		assert.equal(keyAt(AGENTS_MD_FLAG_BYTES + 10), keyAt(AGENTS_MD_FLAG_BYTES + 900));
-		assert.notEqual(keyAt(AGENTS_MD_FLAG_BYTES - 1), keyAt(AGENTS_MD_FLAG_BYTES + 10));
-	});
-
-	test("a CLAUDE.md symlinked to a large claude.md is the leftover flag only, never a note to SPLIT", () => {
-		withFiles(["AGENTS.md"], (root) => {
-			writeFileSync(join(root, "claude.md"), "x".repeat(MONOLITH_BYTES + 1000));
-			try {
-				symlinkSync("claude.md", join(root, "CLAUDE.md"));
-			} catch {
-				return; // no symlink rights (Windows without developer mode), or the name is taken (case-insensitive)
-			}
-			const report = scanActiveHygiene(root, NOW, DEFAULTS, ["AGENTS.md"]);
-			assert.equal(report.leftoverInstructionFiles.includes("CLAUDE.md"), true);
-			assert.deepEqual(report.oversizedNotes, []);
-		});
-	});
-
-	test("on a case-sensitive filesystem, a claude.md beside a real CLAUDE.md is still a note that can be oversized", () => {
-		withFiles(["AGENTS.md", "CLAUDE.md"], (root) => {
-			writeFileSync(join(root, "claude.md"), "x".repeat(MONOLITH_BYTES + 1000));
-			const caseSensitive = readdirSync(root).includes("claude.md") && readdirSync(root).includes("CLAUDE.md");
-			if (!caseSensitive) return; // Windows, macOS: the write above went to CLAUDE.md itself
-			const report = scanActiveHygiene(root, NOW, DEFAULTS, ["AGENTS.md"]);
-			assert.deepEqual(report.oversizedNotes.map((n) => n.path), ["claude.md"]);
-		});
-	});
-
 	test("silent for a vault that has not upgraded yet (CLAUDE.md, no AGENTS.md)", () => {
 		withFiles(["CLAUDE.md"], (root) => {
-			assert.equal(scanActiveHygiene(root, NOW, DEFAULTS).leftoverInstructionFiles.includes("CLAUDE.md"), false);
+			assert.equal(instructionFileFindings(root).leftoverInstructionFiles.includes("CLAUDE.md"), false);
 		});
 	});
 });

@@ -130,8 +130,16 @@ const STOP_CHANGES: Readonly<Record<string, PortChange>> = {
 
 const SESSION = "session-start.ts";
 
+/** The reference change edits the scan of the files, which the port does not have. So the run has no edit. */
+const NO_INBOX_README: PortChange = {
+	edits: [],
+	notSeen: "The README of the inbox is not a row in Notion. The setup folds it into the description of the Work database (lib/notion-model.ts), so the port has no rule that leaves it out.",
+};
+
 const SESSION_CHANGES: Readonly<Record<string, PortChange>> = {
 	...SCAN_CHANGES,
+	A08: NO_INBOX_README,
+	A09: NO_INBOX_README,
 	X6: { rows: ["SS-19"] },
 	E10: {
 		rows: [],

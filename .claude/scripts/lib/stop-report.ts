@@ -38,7 +38,7 @@ export const FEEDBACK_TRAILER = "The full report went to the agent now, as Stop 
 
 /**
  * The user's copy: the checklist reduced to one line, one line naming each
- * hygiene finding by its claim (`hygieneClaims` in lib/active-hygiene.ts: no
+ * hygiene finding by its claim (`hygieneClaims` in lib/hygiene-scan.ts: no
  * file lists, no instructions), and where the full report went (`trailer`).
  */
 export function stopSummary(checklistLine: string, claims: readonly string[], trailer: string = SUMMARY_TRAILER): string {

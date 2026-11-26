@@ -2,11 +2,6 @@
   "template": "obsidian-mind",
   "version": "10.0.0",
   "released": "2026-10-12",
-  "open_loop_dirs": [
-    "work/1-1",
-    "work/meetings",
-    "work/incidents"
-  ],
   "open_loop_types": [
     "1:1",
     "Inbox item",
