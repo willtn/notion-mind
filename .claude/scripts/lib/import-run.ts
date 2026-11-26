@@ -192,7 +192,7 @@ export async function runImport(client: NotionClient, vault: Vault, map: NotionM
 			return true;
 		}
 		const wanted = isFresh ? page.body : composeContent(page.body, live);
-		if (!isFresh && sameContent(wanted, live)) return false;
+		if (!isFresh && sameStored(wanted, live)) return false;
 		await client.call("notion-update-page", { page_id: id, command: "replace_content", new_str: wanted });
 		return true;
 	};
@@ -237,6 +237,34 @@ export async function runImport(client: NotionClient, vault: Vault, map: NotionM
 	return { plan, refs, created: fresh.size, updated, unchanged, propertiesAdded: counts.property, optionsAdded, failed, notInVault };
 }
 
+const TABLE_ROW = /^\s*\|.*\|\s*$/;
+const UNDERSCORE_ITALIC = /(^|[^\w*\\])_([^_\s][^_\n]*?)_(?![\w])/g;
+
+/**
+ * `content` with the forms that Notion stores in place of what a write
+ * sends (measured on the pages of the setup): an empty bullet comes back
+ * as a `<ul>` block, `_text_` as `<i>text</i>`, and a table row with each
+ * cell trimmed and each separator cell as `---`. A line in a code block
+ * stays as it is.
+ */
+function storedForm(content: string): string {
+	let fence = false;
+	return content
+		.replace(/<ul>\n<li><\/li>\n<\/ul>/g, "-")
+		.split("\n")
+		.map((line) => {
+			if (/^\s*(```|~~~)/.test(line)) fence = !fence;
+			if (fence) return line;
+			if (!TABLE_ROW.test(line)) return line.replace(UNDERSCORE_ITALIC, "$1<i>$2</i>");
+			const cells = line.trim().slice(1, -1).split("|").map((cell) => cell.trim());
+			return `| ${cells.map((cell) => (/^:?-+:?$/.test(cell) ? "---" : cell)).join(" | ")} |`;
+		})
+		.join("\n");
+}
+
+/** True when `a` and `b` are one content after a write: `sameContent` with the measured forms of `storedForm`. */
+const sameStored = (a: string, b: string): boolean => sameContent(storedForm(a), storedForm(b));
+
 /** The lines of the `##` section `heading`: from the heading to its last line of text, before the next heading or block of the setup. */
 function sectionSpan(content: string, heading: string): string | undefined {
 	const lines = content.split("\n");
@@ -258,7 +286,7 @@ export function sectionEdit(live: string, planned: string, heading: string): { r
 	if (planned.trim() === "") return null;
 	const current = sectionSpan(live, heading);
 	if (current === undefined) return { append: planned };
-	return sameContent(current, planned) ? null : { old_str: current, new_str: planned.trimEnd() };
+	return sameStored(current, planned) ? null : { old_str: current, new_str: planned.trimEnd() };
 }
 
 const DERIVED: readonly string[] = ["Changed", "Bytes", "Open tasks", "Open loops", "Has content"];
@@ -336,11 +364,11 @@ export async function verifyImport(client: NotionClient, map: NotionMap, plan: I
 	);
 }
 
-/** "same", or the first line where the two contents differ in the form that `sameContent` compares. */
+/** "same", or the first line where the two contents differ in the form that `sameStored` compares. */
 function firstDifference(planned: string, live: string): string {
-	if (sameContent(planned, live)) return "same";
-	const a = canonicalContent(planned).split("\n");
-	const b = canonicalContent(live).split("\n");
+	if (sameStored(planned, live)) return "same";
+	const a = canonicalContent(storedForm(planned)).split("\n");
+	const b = canonicalContent(storedForm(live)).split("\n");
 	const index = a.findIndex((line, i) => line !== b[i]);
 	const at = index === -1 ? a.length : index;
 	const clip = (line: string | undefined): string => (line === undefined ? "(none)" : line.length > 80 ? `${line.slice(0, 77)}...` : line);

@@ -3,9 +3,10 @@
  * of the model with their columns and select options, the rows, and the
  * pages of the setup, and it answers each tool that the import calls. It
  * stores a written body in the measured ways of the live runs: a mention
- * gets the title of its page, bold and code become tags, and the lines of
- * one paragraph join with `<br />`. `failAfter` makes a write fail at a
- * chosen point, as a crash or a lost connection does.
+ * gets the title of its page, bold, italic, and code become tags, the
+ * lines of one paragraph join with `<br />`, an empty bullet becomes a
+ * `<ul>` block, and a table row gets trimmed cells. `failAfter` makes a
+ * write fail at a chosen point, as a crash or a lost connection does.
  */
 
 import assert from "node:assert/strict";
@@ -96,9 +97,16 @@ export function memoryNotion(options: { readonly rootTitle?: string; readonly pa
 				proseAbove = false;
 				continue;
 			}
-			const text = line
+			if (line === "-") {
+				out.push("<ul>", "<li></li>", "</ul>");
+				proseAbove = false;
+				continue;
+			}
+			const cells = /^\|.*\|$/.test(line) ? line.slice(1, -1).split("|").map((cell) => cell.trim()) : undefined;
+			const text = (cells === undefined ? line : `| ${cells.map((cell) => (/^-+$/.test(cell) ? "---" : cell)).join(" | ")} |`)
 				.replace(/<mention url="([^"]+)">[^<]*<\/mention>/g, (_, url: string) => `<mention url="${url}">${titleOfUrl(url)}</mention>`)
 				.replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
+				.replace(/(^|\s)_([^_]+)_(?=\s|$)/g, "$1<i>$2</i>")
 				.replace(/`([^`]+)`/g, "<code>$1</code>");
 			const prose = text !== "" && !BLOCK.test(text);
 			if (prose && proseAbove) out[out.length - 1] += `<br />${text}`;
