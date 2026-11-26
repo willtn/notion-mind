@@ -194,6 +194,12 @@ export const NEUTRAL_NAMES = [
 	"{people notes}",
 	"{brag doc}",
 	"{links}",
+	"{patterns note}",
+	"{gotchas note}",
+	"{decisions note}",
+	"{recent context}",
+	"{new brain topic}",
+	"{reference notes}",
 ] as const;
 
 export type NeutralName = (typeof NEUTRAL_NAMES)[number];

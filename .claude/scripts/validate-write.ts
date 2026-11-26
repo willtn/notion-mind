@@ -41,7 +41,7 @@ function checkFile(filePath: string): NoteFindings {
 	const policyResults: PolicyResult[] = [];
 
 	// Only MEMORY.md (the auto-loaded index) belongs in the auto-memory
-	// directory — durable knowledge goes to brain/ topic notes per
+	// directory — durable knowledge goes to the brain topic rows of Knowledge per
 	// .claude/rules/memory.md. PostToolUse can't block the write, but a loud
 	// warning makes the violation immediately visible so the file gets
 	// migrated before the index drifts. The predicate checks the
@@ -62,13 +62,13 @@ function checkFile(filePath: string): NoteFindings {
 				`⚠️  Memory location violation: \`${file}\` was written to \`~/.claude/.../memory/\`.`,
 				"",
 				"Per .claude/rules/memory.md, this directory should contain only MEMORY.md (the auto-loaded index).",
-				"All durable knowledge belongs in the vault under `brain/` topic notes:",
+				"All durable knowledge belongs in the brain topic rows of `Knowledge`:",
 				"",
-				"- Patterns/conventions → `brain/Patterns.md`",
-				"- Things that bit before → `brain/Gotchas.md`",
-				"- Architectural/workflow decisions → `brain/Key Decisions.md`",
-				"- Recent context, relationships, tools → `brain/Memories.md`",
-				"- New topic → new `brain/<Topic>.md` note + index in `brain/Memories.md`",
+				"- Patterns/conventions → the `Patterns` row of `Knowledge`",
+				"- Things that bit before → the `Gotchas` row of `Knowledge`",
+				"- Architectural/workflow decisions → the `Key Decisions` row of `Knowledge`",
+				"- Recent context, relationships, tools → the Recent Context section of `North Star`",
+				"- New topic → a new `Knowledge` row with `Type` Brain topic",
 				"",
 				`Migrate the content from \`${file}\` into the right brain note, then delete the file from \`~/.claude/\`.`,
 				"`MEMORY.md` itself can keep an index pointer to the brain note(s).",
@@ -78,7 +78,7 @@ function checkFile(filePath: string): NoteFindings {
 			policy_id: "memory-location",
 			path: filePath,
 			classification: "misplaced-memory",
-			suggested_target: "brain/",
+			suggested_target: "the brain topic rows of `Knowledge`",
 			action: "warn",
 		});
 	}

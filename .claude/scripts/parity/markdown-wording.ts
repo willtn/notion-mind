@@ -106,6 +106,12 @@ const names: readonly ObjectName[] = [
 	["work/active/ -> work/archive/YYYY/", "{the archive move}"],
 	["Index.md, Memories.md, People & Context, Brag Doc", "{indexes}"],
 	["brain/North Star.md", "{North Star}"],
+	["the vault under `brain/` topic notes", "{brain topics}"],
+	["`brain/Patterns.md`", "{patterns note}"],
+	["`brain/Gotchas.md`", "{gotchas note}"],
+	["`brain/Key Decisions.md`", "{decisions note}"],
+	["`brain/Memories.md`", "{recent context}"],
+	["new `brain/<Topic>.md` note + index in `brain/Memories.md`", "{new brain topic}"],
 	["brain/", "{brain topics}"],
 	["work/active/", "{active work}"],
 	["work/Index.md Decisions Log", "{decisions log}"],
@@ -116,6 +122,7 @@ const names: readonly ObjectName[] = [
 	["perf/Brag Doc.md", "{brag doc}"],
 	["brag doc", "{brag doc}"],
 	["[[wikilinks]]", "{links}"],
+	["a reference note in reference/", "{reference notes}"],
 ];
 
 export const MARKDOWN_WORDING = { patterns, names };

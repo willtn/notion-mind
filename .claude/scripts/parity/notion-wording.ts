@@ -88,7 +88,7 @@ export const NOTION_WORDING: Wording = {
 		// Part d.2 gives this line: `- Name — description`, with " (empty)" as a part of the description.
 		"brain topic": /^- (?<note>.+?) — (?<detail>.+)$/,
 
-		// The check of the memory directory reads a local file, so its text is the text of the Markdown form.
+		// The check of the memory directory reads a local file, and its text names the Knowledge rows that take the content.
 		"memory file": /^⚠️ {2}Memory location violation: `(?<detail>[^`]+)`[\s\S]*brain note\(s\)\.$/,
 		"warnings": /^Workspace hygiene warnings for `(?<note>[^`]+)`:\n(?<items>(?: {2}- .+\n)+).+$/,
 		"oversized note": /^📐 `(?<note>[^`]+)` is now (?<sizeKb>\d+)KB .+$/,
@@ -139,5 +139,12 @@ export const NOTION_WORDING: Wording = {
 		["the People database", "{people notes}"],
 		["the Brag quarter row of Perf docs", "{brag doc}"],
 		["mentions or relations", "{links}"],
+		["the brain topic rows of `Knowledge`", "{brain topics}"],
+		["the `Patterns` row of `Knowledge`", "{patterns note}"],
+		["the `Gotchas` row of `Knowledge`", "{gotchas note}"],
+		["the `Key Decisions` row of `Knowledge`", "{decisions note}"],
+		["the Recent Context section of `North Star`", "{recent context}"],
+		["a new `Knowledge` row with `Type` Brain topic", "{new brain topic}"],
+		["a `Knowledge` row with `Type` Reference", "{reference notes}"],
 	],
 };
