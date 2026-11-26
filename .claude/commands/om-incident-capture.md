@@ -1,6 +1,12 @@
 # Incident Capture
 
-Capture an incident from Slack channels, DMs, and threads into structured vault notes. Produces a complete incident work note with timeline, people, analysis, and brag doc entry.
+Capture an incident from Slack channels, DMs, and threads into structured Notion rows. Produces a complete incident row with timeline, people, analysis, and brag entry.
+
+## Notion access
+
+Read with `mcporter call notion.<tool> --args '<JSON>' --output json`. Use no pipe and no redirect. Put no single quote in the JSON. Read `notion-map.json` in the project root for the `data_source` URL and the view URLs of each database.
+
+Write in two steps. First use the `Write` tool to make `.claude/state/outbox/<name>.json` with the JSON arguments. Then run `mcporter call notion.<tool> --args "$(cat .claude/state/outbox/<name>.json)"`. `notion-create-pages` needs `"allow_async": false`.
 
 ## Usage
 
@@ -14,7 +20,7 @@ Provide one or more Slack URLs: incident channels, DM conversations, threads. Th
 
 This command orchestrates two subagents for heavy lifting:
 - **`slack-archaeologist`** — reads all Slack sources, builds unified timeline with attribution
-- **`people-profiler`** — bulk creates/updates person notes for everyone involved
+- **`people-profiler`** — bulk creates/updates `People` rows for everyone involved
 
 Launch both in parallel when starting the capture.
 
@@ -32,7 +38,7 @@ For each Slack URL provided:
 
 For every person who posted or was mentioned:
 - Fetch their Slack profile (`slack_read_user_profile`)
-- Check if they have a person note in `org/people/`
+- Check if they have a row in `People` (`notion-search` with the name)
 - Note their role, team, and title
 - Track who did what (reported, investigated, fixed, confirmed, etc.)
 
@@ -44,60 +50,59 @@ Reconstruct a detailed timeline from all sources:
 - Cross-reference between channels (same person posting in incident channel + DMs)
 - Key moments: first report, incident declared, root cause identified, fix created, fix merged, resolution confirmed
 
-### 4. Create the Work Note
+### 4. Create the Incident Row
 
-Create `work/incidents/<Incident Name>.md` with:
+Create a row in the `Work` database with `notion-create-pages`. The title is the incident name. Set these properties:
 
-```yaml
----
-date: "YYYY-MM-DD"
-quarter: QN-YYYY
-description: "~150 chars"
-project: <relevant project>
-status: active
-ticket: TICKET-XXXX
-severity: high/medium/low
-role: <your role>
-tags:
-  - work-note
-  - incident
----
-```
+- `Work.Type = Incident`
+- `Date` as `date:Date:start`, `YYYY-MM-DD`
+- `Work.Quarter`, for example `Q1-2026`
+- `Description`, about 150 characters
+- `Work.Project`, the relevant project
+- `Work.Status = active`
+- `Work.Ticket`, `TICKET-XXXX`
+- `Work.Severity`, `high`, `medium`, or `low`
+- `Work.Role`, your role
+- `Tags`, with `work-note` and `incident`
+- `Work.Person`, a relation to the `People` rows of everyone involved
+- `Work.Competencies`, a relation to the `Competencies` rows that the incident shows
 
-Sections:
+Sections of the body:
 - **Context** — what happened, what triggered it, who was involved
 - **Root Cause** — technical explanation
 - **Resolution** — fix PR(s), what changed
 - **Timeline** — full detailed table with timestamps
 - **Impact** — users affected, business impact
-- **Involved Personnel** — with wikilinks to person notes
+- **Involved Personnel** — with a page mention of each `People` row
 - **Notes** — key actions by the user, analysis
 - **Analysis** — what this means strategically (pattern, visibility, competencies)
-- **Related** — wikilinks to all related notes, competencies
+- **Related** — page mentions of all related rows and competencies. Set `Work.Related` as well
 
-### 5. Create/Update People Notes
+Each page mention is `<mention url="<page URL>">Title</mention>` and holds the page title.
 
-For key people involved who don't have person notes:
-- Create in `org/people/` with proper frontmatter (`date`, `title`, `description`, `team`, `tags: [person]`)
-- Add to `org/People & Context.md`
+### 5. Create/Update People Rows
 
-For existing people notes:
-- Add the incident as a Key Moment
+For key people involved who don't have a row in `People`:
+- Create the row with `Name`, `Description`, `People.Role` (the title of the person), `People.Team` (a relation to the `Teams` row), and `Tags` with `person`
+- `Page > People & Context` shows the new row through its linked view, so add nothing to an index
 
-### 6. Update Indexes
+For existing `People` rows:
+- Add the incident as a Key Moment with `notion-update-page` and `insert_content`
 
-- `work/Index.md` — add to Incidents section
-- `brain/Memories.md` — add incident summary to Recent Context
-- `brain/Patterns.md` — if this reveals a recurring pattern
-- `brain/Gotchas.md` — if this reveals a technical gotcha
-- `perf/Brag Doc.md` — add to relevant quarter with competency links
-- `perf/brag/QN YYYY.md` — add detailed brag entry
+### 6. Update Related Pages
+
+- `Work > Incidents` lists the new row. Add nothing to an index
+- `Page > North Star` — add the incident summary to the Recent Context section
+- `Page > Patterns` — if this reveals a recurring pattern
+- `Page > Gotchas` — if this reveals a technical gotcha
+- `Perf docs > Brag quarters` — add to the row of the relevant quarter, and set `Perf docs.Work evidence` and `Perf docs.Competencies`
+- Add the detailed brag entry to the body of that quarter row
 
 ### 7. Prepare Incident Report Draft (if applicable)
 
 If you are or may lead the post-mortem:
-- Check your org's post-mortem template (add it to `reference/` if you have one)
-- Create `work/incidents/TICKET-XXXX Post-Mortem Draft.md` following your org's post-mortem template
+- Check your org's post-mortem template (add it as a `Knowledge` row with `Knowledge.Type = Reference` if you have one)
+- Create a `Work` row titled `TICKET-XXXX Post-Mortem Draft` with `Work.Type = Incident`, `Work.Status = draft`, and `Work.Parent` set to the incident row. Follow your org's post-mortem template
 - Include: Executive Summary, Narrative Timeline (4-column), 5 Whys analysis, Action Items table
 
 ### 8. Offer Next Steps
@@ -116,4 +121,4 @@ After capturing, suggest:
 - **Cross-reference** — the same event may be described differently in DMs vs incident channel
 - **Check Slack profiles** — roles and teams matter for the story
 - **Be blameless in public docs** — use commit SHAs, not names, in shareable documents
-- **Private analysis is honest** — the vault work note can include strategic analysis about credit, visibility, etc.
+- **Private analysis is honest** — the Notion row can include strategic analysis about credit, visibility, etc.
