@@ -1,31 +1,32 @@
 # Auto Memory
 
-All project memories live in the vault (git-tracked). This file is a lightweight index.
+All project memories live in the Notion workspace of obsidian-mind. This file is a small index.
 
-## Rule: Vault-First Memories
+## Rule: Workspace-First Memories
 
-**All new memories for this project MUST be written to vault notes in `brain/`, NOT to files in this directory.**
+**All new memories for this project MUST go to Notion rows, NOT to files in this directory.**
 
-- Durable knowledge → `brain/` notes (git-tracked, Obsidian-browsable, linked)
-- This `MEMORY.md` → index only, pointers to vault locations
-- Never create new `.md` files in this `~/.claude/` memory directory — they aren't version-controlled
+- Durable knowledge → the brain topic rows of `Knowledge` (searchable, linked, with page history)
+- This `MEMORY.md` → index only, with links to Notion pages
+- Never create new `.md` files in this `~/.claude/` memory directory. They are outside the note store, so no view, search, or hook sees them
 
 ## Where to Find Things
 
-| Topic | Vault Location |
-|-------|---------------|
-| Technical gotchas | `brain/Gotchas.md` |
-| Patterns and conventions | `brain/Patterns.md` |
-| Key decisions | `brain/Key Decisions.md` |
-| Goals and focus | `brain/North Star.md` |
-| Slash commands and skills | `brain/Skills.md` |
-| People and org context | `org/People & Context.md` |
-| Active work and projects | `work/Index.md` |
-| Performance evidence | `perf/Brag Doc.md` |
+| Topic | Notion location |
+|-------|-----------------|
+| Technical gotchas | The Gotchas row of `Knowledge` |
+| Patterns and conventions | The Patterns row of `Knowledge` |
+| Key decisions | The Key Decisions row of `Knowledge` |
+| Goals and focus | The North Star page |
+| Slash commands and skills | `brain/Skills.md` in the repository |
+| People and org context | The People & Context page |
+| Active work and projects | The Active Work view of `Work` |
+| Performance evidence | The Brag quarters view of `Perf docs` |
 
 ## Setup
 
 1. Find your project memory path: `~/.claude/projects/<encoded-path>/memory/`
 2. Copy this file there as `MEMORY.md`
-3. Claude Code will auto-load it at the start of every conversation
-4. When Claude creates memories, they go to vault notes — not this directory
+3. Replace each Notion location with the link of the page or view from your workspace
+4. Claude Code auto-loads it at the start of every conversation
+5. When Claude makes memories, they go to Notion rows, not to this directory

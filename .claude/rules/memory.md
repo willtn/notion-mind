@@ -1,15 +1,11 @@
 # Auto-Memory Index (Claude Code)
 
-Claude-only: Claude Code loads this file beside `AGENTS.md` and the shared files in this folder, which hold every convention the other agents share.
-
-**All project memories live in the vault.** The `~/.claude/` MEMORY.md is an auto-loaded index that points to vault locations. The `~/.claude/` MEMORY.md is the only file that should exist there -- it is an auto-loaded index. Never create additional memory files in that directory.
+**All project memories live in the Notion workspace.** `~/.claude/projects/.../memory/MEMORY.md` is an auto-loaded index that points to Notion pages. It is the only file in that folder. Never make another memory file there. The `PostToolUse` hook warns when one appears.
 
 | System | Location | Purpose |
 |--------|----------|---------|
-| **MEMORY.md** | `~/.claude/projects/.../memory/MEMORY.md` | Auto-loaded index only. Pointers to vault notes. |
+| **MEMORY.md** | `~/.claude/projects/.../memory/MEMORY.md` | Auto-loaded index only. Links to Notion pages. |
 
-When asked to "remember" something (steps 1–3 are in `AGENTS.md` → **Memory System**):
+When asked to "remember" something (steps 1 to 3 are in `AGENTS.md` → **Memory System**):
 
-4. Do NOT create additional files in `~/.claude/projects/.../memory/` beyond MEMORY.md -- they are not version-controlled
-
-From `AGENTS.md` → **Rules**: Never create memory files in `~/.claude/` -- they are not git-tracked.
+4. Do NOT make other files in `~/.claude/projects/.../memory/` beyond MEMORY.md. They are outside the note store, so no view, search, or hook sees them.
