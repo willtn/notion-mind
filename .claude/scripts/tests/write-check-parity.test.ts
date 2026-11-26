@@ -8,12 +8,13 @@
 
 import { test, describe, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseOpenLoopConfig } from "../lib/active-hygiene.ts";
 import { noteMarkdown } from "../lib/notion-note.ts";
+import { parseCommand } from "../lib/notion-write.ts";
 import { writtenNotes } from "../lib/notion-written.ts";
 import { comparePasses, formatDifference, type Comparison } from "../parity/compare.ts";
 import { passOf } from "../parity/findings.ts";
@@ -35,7 +36,7 @@ const skip = referenceCommitExists() ? false : `this clone does not hold the ref
 describe("the note that the hook reads against the Markdown file of the same note", () => {
 	const dir = mkdtempSync(join(tmpdir(), "write-check-measure-"));
 	after(() => rmTemp(dir));
-	const { map, pages } = offlineNotion(FIXTURE, dir, new Date());
+	const { map, pages, form } = offlineNotion(FIXTURE, dir, new Date());
 	const context = { now: new Date(), openLoopSections: parseOpenLoopConfig(FIXTURE.repoFiles.find((file) => file.path === "vault-manifest.json")?.content ?? null).sectionRe, pages };
 
 	async function written(note: FixtureNote): Promise<string> {
@@ -62,6 +63,15 @@ describe("the note that the hook reads against the Markdown file of the same not
 		const note = FIXTURE.notes.find(({ title }) => title === "Undated Plan");
 		assert.ok(note !== undefined);
 		assert.equal(await written(note), renderNote(note).replace("update: 2026-01-05\n", ""));
+	});
+
+	test("the port reads the command of a write payload as a write on each OS", () => {
+		const note = FIXTURE.notes.find(({ title }) => title === "Runbook");
+		assert.ok(note !== undefined);
+		const environment = form(SCRIPTS)(join(dir, "form"));
+		const { command } = environment.writePayload([note])["tool_input"] as { readonly command: string };
+		const parsed = parseCommand(command, { readOutbox: (outbox) => readFileSync(resolve(environment.projectDir, outbox), "utf-8"), runtimePaths: [] });
+		assert.equal(parsed.kind, "write", command);
 	});
 });
 
